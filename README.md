@@ -45,15 +45,15 @@ Windows, tick "Add python.exe to PATH"). Then, from the project folder:
 | System | Command |
 |---|---|
 | macOS / Linux | `./start.sh` |
-| Windows | double-click `start.bat` (or run it in a terminal) |
+| Windows | double-click `start.bat`, or run `.\start.bat` in PowerShell (`start.bat` in Command Prompt) |
 
 The first run sets up a `.venv`, installs the app, creates a `.env` from `.env.example`,
 asks you to create your login, then opens http://127.0.0.1:8000 in your browser. Later
 runs start in a few seconds. Press Ctrl+C to stop it. Add `--port 9000` to use another port.
 
 Put your `ANTHROPIC_API_KEY` in `.env` to enable the assistant page. Everything else works
-without it. Add more accounts with `.venv/bin/grc-web adduser NAME` (Windows:
-`.venv\Scripts\grc-web adduser NAME`), and change a password with `grc-web passwd NAME`.
+without it. Add more accounts with `.venv/bin/grc-web adduser NAME` (Windows PowerShell:
+`.\.venv\Scripts\grc-web adduser NAME`), and change a password with `grc-web passwd NAME`.
 
 Data (SQLite database and session secret) lives in `./var/`. It's git-ignored, so back up
 that folder. To update, run `git pull` and then start the app again.
