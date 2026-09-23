@@ -10,3 +10,6 @@ dist/
 # Environments
 .venv/
 .env
+
+# Real engagement records (client data)
+/engagements/

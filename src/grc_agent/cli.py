@@ -9,6 +9,8 @@ import anthropic
 
 from grc_agent.agent import Agent
 
+AUTH_HELP = "Authentication failed. Set ANTHROPIC_API_KEY or run `ant auth login`."
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="grc-agent", description=__doc__)
@@ -38,9 +40,12 @@ def main(argv: list[str] | None = None) -> int:
             if prompt:
                 _answer(agent, prompt, args.verbose)
     except anthropic.AuthenticationError:
-        print(
-            "Authentication failed. Set ANTHROPIC_API_KEY or run `ant auth login`.", file=sys.stderr
-        )
+        print(AUTH_HELP, file=sys.stderr)
+    except TypeError as exc:
+        # The SDK raises a plain TypeError when it finds no credentials at all.
+        if "authentication method" not in str(exc):
+            raise
+        print(AUTH_HELP, file=sys.stderr)
     except anthropic.RateLimitError:
         print("Rate limited by the API. Try again shortly.", file=sys.stderr)
     except anthropic.APIStatusError as exc:
