@@ -37,17 +37,28 @@ dashboard. Each engagement follows these steps:
 The dashboard shows the North Star, the pilot KPIs and recent activity. There's also a
 Claude assistant page.
 
-```bash
-pip install -e .
-grc-web adduser harshit          # prompts for a password (10+ characters)
-grc-web serve                    # http://127.0.0.1:8000
-```
+### Run it on your computer
 
-Data (SQLite database and session secret) lives in `./var/`, or set `--data-dir` or
-`GRC_DATA_DIR`. It's git-ignored. Set `ANTHROPIC_API_KEY` for the assistant page. Everything
-else works without it.
+You need Python 3.10 or newer ([python.org](https://www.python.org/downloads/); on
+Windows, tick "Add python.exe to PATH"). Then, from the project folder:
 
-With Docker:
+| System | Command |
+|---|---|
+| macOS / Linux | `./start.sh` |
+| Windows | double-click `start.bat` (or run it in a terminal) |
+
+The first run sets up a `.venv`, installs the app, creates a `.env` from `.env.example`,
+asks you to create your login, then opens http://127.0.0.1:8000 in your browser. Later
+runs start in a few seconds. Press Ctrl+C to stop it. Add `--port 9000` to use another port.
+
+Put your `ANTHROPIC_API_KEY` in `.env` to enable the assistant page. Everything else works
+without it. Add more accounts with `.venv/bin/grc-web adduser NAME` (Windows:
+`.venv\Scripts\grc-web adduser NAME`), and change a password with `grc-web passwd NAME`.
+
+Data (SQLite database and session secret) lives in `./var/`. It's git-ignored, so back up
+that folder. To update, run `git pull` and then start the app again.
+
+To keep it running in the background and restart it after a reboot, use Docker:
 
 ```bash
 docker compose up -d --build

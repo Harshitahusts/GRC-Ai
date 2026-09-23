@@ -104,3 +104,10 @@ def test_failed_request_rolls_back_history():
         agent.ask("second")
 
     assert [m["role"] for m in agent.messages] == ["user", "assistant"]
+
+
+def test_api_key_from_dotenv_is_used(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    (tmp_path / ".env").write_text("ANTHROPIC_API_KEY=sk-ant-from-dotenv\n")
+    assert Agent().client.api_key == "sk-ant-from-dotenv"

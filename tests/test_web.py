@@ -277,3 +277,12 @@ def test_assistant_conversation(authed, monkeypatch):
     page = post(authed, "/assistant", {"question": "hello <b>"}).text
     assert "hello &lt;b&gt;" in page and "Hi there" in page and "Tools used: score_risk" in page
     assert "Hi there" not in post(authed, "/assistant/reset").text
+
+
+def test_init_creates_first_account_only_once(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr("builtins.input", lambda prompt: "priya")
+    monkeypatch.setattr("getpass.getpass", lambda prompt: PASSWORD)
+    assert web_cli.main(["--data-dir", str(tmp_path), "init"]) == 0
+    assert "Created user 'priya'" in capsys.readouterr().out
+    assert web_cli.main(["--data-dir", str(tmp_path), "init"]) == 0
+    assert "already exist" in capsys.readouterr().out

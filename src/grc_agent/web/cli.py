@@ -34,6 +34,9 @@ def main(argv: list[str] | None = None) -> int:
     serve.add_argument("--host", default="127.0.0.1", help="Default 127.0.0.1 (this machine only).")
     serve.add_argument("--port", type=int, default=8000)
     serve.add_argument("--reload", action="store_true", help="Restart on code changes (dev).")
+    serve.add_argument("--open", action="store_true", help="Open the app in a browser.")
+
+    sub.add_parser("init", help="Create the first account if none exist.")
 
     for name, text in (("adduser", "Create an account."), ("passwd", "Change a password.")):
         p = sub.add_parser(name, help=text)
@@ -46,17 +49,26 @@ def main(argv: list[str] | None = None) -> int:
     data_dir = Path(args.data_dir)
 
     if args.command == "serve":
-        return _serve(data_dir, args.host, args.port, args.reload)
+        return _serve(data_dir, args.host, args.port, args.reload, args.open)
+    if args.command == "init":
+        return _init(data_dir)
     return _set_password(
         data_dir, args.username, args.password_stdin, create=args.command == "adduser"
     )
 
 
-def _serve(data_dir: Path, host: str, port: int, reload: bool) -> int:
+def _serve(data_dir: Path, host: str, port: int, reload: bool, open_browser: bool) -> int:
     import uvicorn
 
     os.environ["GRC_DATA_DIR"] = str(data_dir)
-    print(f"GRC agent running at http://{host}:{port}  (data: {data_dir.resolve()})")
+    url = f"http://{'127.0.0.1' if host in ('0.0.0.0', '::') else host}:{port}"
+    print(f"GRC agent running at {url}  (data: {data_dir.resolve()})")
+    print("Press Ctrl+C to stop.")
+    if open_browser:
+        import threading
+        import webbrowser
+
+        threading.Timer(1.5, webbrowser.open, args=(url,)).start()
     uvicorn.run(
         "grc_agent.web.app:create_app",
         factory=True,
@@ -66,6 +78,19 @@ def _serve(data_dir: Path, host: str, port: int, reload: bool) -> int:
         log_level="info",
     )
     return 0
+
+
+def _init(data_dir: Path) -> int:
+    db_path = data_dir / "grc.db"
+    db.init_db(db_path)
+    with db.connect(db_path) as conn:
+        count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    if count:
+        print(f"{count} account(s) already exist. Skipping.")
+        return 0
+    print("No accounts yet. Create the first one.")
+    username = input("Username: ").strip()
+    return _set_password(data_dir, username, from_stdin=False, create=True)
 
 
 def _set_password(data_dir: Path, username: str, from_stdin: bool, create: bool) -> int:

@@ -34,8 +34,9 @@ class Agent:
         tools: list[Tool] | None = None,
         system_prompt: str = SYSTEM_PROMPT,
     ) -> None:
-        self.client = client or anthropic.Anthropic()
+        # Settings first: loading them reads .env, which may hold ANTHROPIC_API_KEY.
         self.settings = settings or Settings.from_env()
+        self.client = client or anthropic.Anthropic()
         self.tools = {tool.name: tool for tool in (TOOLS if tools is None else tools)}
         self.system_prompt = system_prompt
         # Append-only history. Assistant turns keep their full content blocks
