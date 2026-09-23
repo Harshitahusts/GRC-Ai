@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% from "_macros.html" import kpi_badge %}
+{% block title %}KPIs{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Pilot KPIs</h1></div>
+
+<section class="card north-star">
+  <small>North Star</small>
+  <h2>Verified Engagements Delivered: {{ card.verified_engagements }} <span class="muted">of {{ card.agent_engagements }}</span></h2>
+  <p class="muted small">Delivered, every finding cites a provision that resolves, every document passed human review, and no fallback to manual drafting.</p>
+  {% if card.engagements %}
+  <table><tbody>
+  {% for e in card.engagements %}
+  <tr>
+    <td class="nowrap"><a href="/engagements/{{ e.id[4:]|int }}">{{ e.id }}</a> {{ e.client }}</td>
+    <td>{% if e.verified %}<span class="badge badge-pass">Verified</span>{% else %}<span class="muted small">{{ e.blockers|join("; ") }}</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+  </tbody></table>
+  {% endif %}
+</section>
+
+<section class="card">
+  <table>
+    <thead><tr><th>KPI</th><th>Result</th><th class="num">Value</th><th>Target</th><th>Detail</th></tr></thead>
+    <tbody>
+    {% for k in card.kpis %}
+    <tr><td>{{ k.name }}</td><td>{{ kpi_badge(k.passed) }}</td><td class="num nowrap">{{ k.display }}</td><td class="nowrap">{{ k.target }}</td><td class="muted small">{{ k.detail }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% for w in card.warnings %}<p class="flash flash-warn small">{{ w }}</p>{% endfor %}
+  <p class="muted small">Definitions: <code>docs/kpis.md</code>. Record a manual engagement's hours as a "Manual baseline" engagement.</p>
+</section>
+{% endblock %}

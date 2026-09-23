@@ -21,6 +21,54 @@ cp .env.example .env             # then put your ANTHROPIC_API_KEY in .env
 Get an API key at <https://console.anthropic.com>, or run `ant auth login` instead of
 setting a key.
 
+## Web app (local)
+
+A local web app for running DPDPA engagements end to end. You log in and work from a
+dashboard. Each engagement follows these steps:
+
+1. **Intake:** business-language questions, with follow-ups that appear only when relevant.
+2. **Findings:** a rule-based assessment gives one finding per obligation, and each
+   finding's citation is checked against the corpus. The findings page is also where the
+   consultant scores accuracy.
+3. **Documents:** a gap report, RoPA, privacy notice, breach playbook and a DPA marked
+   draft-for-lawyer. A person has to review each one before it can be downloaded as .docx.
+4. **Delivery:** blocked until every check passes (the plan's "hard stop"), with no override.
+
+The dashboard shows the North Star, the pilot KPIs and recent activity. There's also a
+Claude assistant page.
+
+### Run it on your computer
+
+You need Python 3.10 or newer ([python.org](https://www.python.org/downloads/); on
+Windows, tick "Add python.exe to PATH"). Then, from the project folder:
+
+| System | Command |
+|---|---|
+| macOS / Linux | `./start.sh` |
+| Windows | double-click `start.bat` (or run it in a terminal) |
+
+The first run sets up a `.venv`, installs the app, creates a `.env` from `.env.example`,
+asks you to create your login, then opens http://127.0.0.1:8000 in your browser. Later
+runs start in a few seconds. Press Ctrl+C to stop it. Add `--port 9000` to use another port.
+
+Put your `ANTHROPIC_API_KEY` in `.env` to enable the assistant page. Everything else works
+without it. Add more accounts with `.venv/bin/grc-web adduser NAME` (Windows:
+`.venv\Scripts\grc-web adduser NAME`), and change a password with `grc-web passwd NAME`.
+
+Data (SQLite database and session secret) lives in `./var/`. It's git-ignored, so back up
+that folder. To update, run `git pull` and then start the app again.
+
+To keep it running in the background and restart it after a reboot, use Docker:
+
+```bash
+docker compose up -d --build
+docker compose exec web grc-web adduser harshit
+```
+
+The app binds to this machine only (127.0.0.1) by default. It uses the **sample** register
+in `src/grc_agent/data/`. Point `GRC_REGISTER` and `GRC_CORPUS_INDEX` at the reviewed
+register and the real corpus index before any client use.
+
 ## Usage
 
 ```bash
@@ -61,6 +109,10 @@ src/grc_agent/
   config.py         settings from environment variables
   cli.py            `grc-agent` command
   kpis/             citation verifier, engagement records, KPI scorecard, `grc-kpis`
+  web/              local web app (`grc-web`): FastAPI, templates, SQLite
+  register.py       obligation register and intake questions
+  assessment.py     rule-based gap assessment and readiness score
+  documents.py      draft documents (gap report, RoPA, notice, playbook, DPA)
   data/controls.json  sample control catalog
 tests/              unit tests (use a fake client; no API key needed)
 docs/kpis.md        KPI definitions and dictionary

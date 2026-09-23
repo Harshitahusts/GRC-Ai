@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Assistant{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Assistant</h1>
+    <p class="muted">Ask Claude about controls, risks and DPDPA concepts. General guidance only: findings for clients come from the assessment, not from chat.</p>
+  </div>
+  <form method="post" action="/assistant/reset">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button>New conversation</button>
+  </form>
+</div>
+
+<section class="card chat">
+  {% for role, text in history %}
+  <div class="msg msg-{{ role }}"><small>{{ "You" if role == "user" else "Claude" }}</small><div>{{ text }}</div></div>
+  {% else %}
+  <p class="muted">No messages yet. Try "Score a risk with likelihood 4 and impact 3" or "Which controls cover MFA?".</p>
+  {% endfor %}
+  <form method="post" action="/assistant" class="ask">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <textarea name="question" rows="3" maxlength="4000" required placeholder="Ask a question" aria-label="Question"></textarea>
+    <button class="primary">Send</button>
+  </form>
+</section>
+{% endblock %}

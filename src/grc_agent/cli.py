@@ -41,6 +41,9 @@ def main(argv: list[str] | None = None) -> int:
                 _answer(agent, prompt, args.verbose)
     except anthropic.AuthenticationError:
         print(AUTH_HELP, file=sys.stderr)
+    except anthropic.CredentialsError:
+        # A configured credentials profile is missing or unreadable.
+        print(AUTH_HELP, file=sys.stderr)
     except TypeError as exc:
         # The SDK raises a plain TypeError when it finds no credentials at all.
         if "authentication method" not in str(exc):

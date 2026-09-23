@@ -1,3 +1,4 @@
+import anthropic
 import pytest
 
 from grc_agent import cli
@@ -19,6 +20,11 @@ def run_with(monkeypatch, exc):
 def test_missing_credentials_prints_help(monkeypatch, capsys):
     exc = TypeError('"Could not resolve authentication method. Expected one of api_key..."')
     assert run_with(monkeypatch, exc) == 1
+    assert "ANTHROPIC_API_KEY" in capsys.readouterr().err
+
+
+def test_missing_profile_prints_help(monkeypatch, capsys):
+    assert run_with(monkeypatch, anthropic.CredentialsError("Config file not found")) == 1
     assert "ANTHROPIC_API_KEY" in capsys.readouterr().err
 
 

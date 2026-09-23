@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% from "_macros.html" import engagement_header %}
+{% block title %}Findings · {{ eng.client }}{% endblock %}
+{% block content %}
+{{ engagement_header(eng, s, tab) }}
+
+<section class="card">
+  <div class="row">
+    <div>
+      <h2>Findings</h2>
+      <p class="muted small">One finding per obligation in register {{ register.version }}, from rules, not a model. Each citation is checked against the corpus index.</p>
+    </div>
+    {% if not eng.delivered_at %}
+    <form method="post" action="/engagements/{{ eng.id }}/assess">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="primary" {% if not eng.intake_submitted_at %}disabled title="Submit the intake first"{% endif %}>
+        {{ "Re-run assessment" if eng.assessed_at else "Run assessment" }}</button>
+    </form>
+    {% endif %}
+  </div>
+  {% if register.notice %}<p class="flash flash-warn small">{{ register.notice }}</p>{% endif %}
+
+  {% if findings %}
+  <table class="findings">
+    <thead><tr><th>Obligation</th><th>Status</th><th>Severity</th><th>Provision</th><th>Accuracy scoring</th></tr></thead>
+    <tbody>
+    {% for f in findings %}
+    {% set o = obligations.get(f.obligation_id) %}
+    <tr id="f{{ f.id }}" class="status-{{ f.status }}">
+      <td><strong>{{ f.obligation_id }}</strong> {{ o.obligation if o else "" }}
+        <p class="muted small">{{ f.summary }}</p>
+        {% if f.remediation %}<p class="small"><strong>Next step:</strong> {{ f.remediation }}</p>{% endif %}
+        {% if o and f.status in ("gap", "open_item") %}<p class="small muted">Evidence to ask for: {{ o.evidence }}</p>{% endif %}
+      </td>
+      <td><span class="badge status-badge-{{ f.status }}">{{ f.status.replace("_", " ") }}</span></td>
+      <td><span class="badge sev-{{ f.severity }}">{{ f.severity }}</span></td>
+      <td class="nowrap">{{ f.citation }}
+        {% if f.citation_resolves %}<span class="badge badge-pass" title="Found in the corpus index">✓ resolves</span>
+        {% else %}<span class="badge badge-fail" title="Not in the corpus index. Blocks delivery.">✗ unresolved</span>{% endif %}
+      </td>
+      <td>
+        <form method="post" action="/engagements/{{ eng.id }}/findings/{{ f.id }}" class="verdict">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <select name="verdict" aria-label="Verdict for {{ f.obligation_id }}">
+            <option value="">Unscored</option>
+            {% for v in verdicts %}<option value="{{ v }}" {% if f.verdict == v %}selected{% endif %}>{{ v|capitalize }}</option>{% endfor %}
+          </select>
+          <label class="inline small"><input type="checkbox" name="hallucination" {% if f.hallucination %}checked{% endif %}> Hallucination</label>
+          <button class="small">Save</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if not eng.delivered_at %}
+  <form method="post" action="/engagements/{{ eng.id }}/documents/generate" class="actions">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="primary" {% if s.stale %}disabled{% endif %}>{{ "Regenerate draft pack" if s.documents else "Generate draft pack" }}</button>
+    {% if s.documents %}<span class="muted small">Regenerating clears existing reviews.</span>{% endif %}
+  </form>
+  {% endif %}
+  {% else %}
+  <p class="muted">No findings yet. {% if eng.intake_submitted_at %}Run the assessment.{% else %}Submit the <a href="/engagements/{{ eng.id }}/intake">intake</a> first.{% endif %}</p>
+  {% endif %}
+</section>
+{% endblock %}

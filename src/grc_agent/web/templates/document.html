@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% from "_macros.html" import engagement_header %}
+{% block title %}{{ document_types[doc.type] }} · {{ eng.client }}{% endblock %}
+{% block content %}
+{{ engagement_header(eng, s, tab) }}
+
+<div class="grid-2 wide-left">
+  <article class="card doc">
+    {% for b in blocks %}
+      {% if b.kind == "h1" %}<h1>{{ b.text }}</h1>
+      {% elif b.kind == "h2" %}<h2>{{ b.text }}</h2>
+      {% elif b.kind == "p" %}<p>{{ b.text }}</p>
+      {% elif b.kind == "warning" %}<p class="flash flash-warn"><strong>{{ b.text }}</strong></p>
+      {% elif b.kind == "bullets" %}<ul>{% for i in b.items %}<li>{{ i }}</li>{% endfor %}</ul>
+      {% elif b.kind == "table" %}
+        <table><thead><tr>{% for h in b.headers %}<th>{{ h }}</th>{% endfor %}</tr></thead>
+        <tbody>{% for r in b.rows %}<tr>{% for c in r %}<td>{{ c }}</td>{% endfor %}</tr>{% endfor %}</tbody></table>
+      {% endif %}
+    {% endfor %}
+  </article>
+
+  <aside class="card">
+    <h2>Review</h2>
+    {% if doc.reviewed_at %}
+      <p><span class="badge badge-pass">Reviewed</span></p>
+      <p>{{ outcome_labels[doc.outcome] }}<br><span class="muted small">by {{ doc.reviewed_by }}, {{ doc.reviewed_at[:16].replace("T", " ") }} UTC</span></p>
+      <p><a class="button primary" href="/engagements/{{ eng.id }}/documents/{{ doc.id }}/download">Download .docx</a></p>
+    {% endif %}
+    {% if not eng.delivered_at %}
+    <form method="post" action="/engagements/{{ eng.id }}/documents/{{ doc.id }}/review">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <fieldset>
+        <legend>{{ "Change the review" if doc.reviewed_at else "How usable is this draft?" }}</legend>
+        {% for o in outcomes %}
+        <label class="inline block"><input type="radio" name="outcome" value="{{ o }}" required {% if doc.outcome == o %}checked{% endif %}> {{ outcome_labels[o] }}</label>
+        {% endfor %}
+      </fieldset>
+      <label class="inline block"><input type="checkbox" name="confirm" required> I read the whole document and checked every provision it cites.</label>
+      {% if doc.type == "dpa" %}<p class="small muted">A DPA also needs a lawyer's sign-off before it goes to the client.</p>{% endif %}
+      <button class="primary">Record review</button>
+    </form>
+    {% endif %}
+    <p class="small"><a href="/engagements/{{ eng.id }}/documents">Back to all documents</a></p>
+  </aside>
+</div>
+{% endblock %}
