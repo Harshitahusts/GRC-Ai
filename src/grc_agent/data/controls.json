@@ -1,0 +1,72 @@
+[
+  {
+    "id": "AC-01",
+    "title": "Access control policy",
+    "domain": "Access Control",
+    "summary": "Define and approve who may access which systems and data, and review the policy at least annually.",
+    "mappings": {"ISO27001": "A.5.15", "SOC2": "CC6.1", "NIST_CSF": "PR.AA"}
+  },
+  {
+    "id": "AC-02",
+    "title": "Multi-factor authentication",
+    "domain": "Access Control",
+    "summary": "Require MFA for remote access, privileged accounts, and access to sensitive systems.",
+    "mappings": {"ISO27001": "A.8.5", "SOC2": "CC6.1", "NIST_CSF": "PR.AA"}
+  },
+  {
+    "id": "AC-03",
+    "title": "Access reviews",
+    "domain": "Access Control",
+    "summary": "Review user and privileged access periodically and remove access that is no longer needed.",
+    "mappings": {"ISO27001": "A.5.18", "SOC2": "CC6.2", "NIST_CSF": "PR.AA"}
+  },
+  {
+    "id": "AM-01",
+    "title": "Asset inventory",
+    "domain": "Asset Management",
+    "summary": "Maintain an up-to-date inventory of hardware, software, and data assets with named owners.",
+    "mappings": {"ISO27001": "A.5.9", "SOC2": "CC6.1", "NIST_CSF": "ID.AM"}
+  },
+  {
+    "id": "IR-01",
+    "title": "Incident response plan",
+    "domain": "Incident Management",
+    "summary": "Document how incidents are detected, triaged, escalated, contained, and reviewed; test the plan.",
+    "mappings": {"ISO27001": "A.5.24", "SOC2": "CC7.3", "NIST_CSF": "RS.MA"}
+  },
+  {
+    "id": "LM-01",
+    "title": "Security logging and monitoring",
+    "domain": "Operations",
+    "summary": "Collect security-relevant logs centrally, protect them from tampering, and alert on anomalies.",
+    "mappings": {"ISO27001": "A.8.15", "SOC2": "CC7.2", "NIST_CSF": "DE.CM"}
+  },
+  {
+    "id": "VM-01",
+    "title": "Vulnerability management",
+    "domain": "Operations",
+    "summary": "Scan systems regularly and remediate vulnerabilities within risk-based timeframes.",
+    "mappings": {"ISO27001": "A.8.8", "SOC2": "CC7.1", "NIST_CSF": "ID.RA"}
+  },
+  {
+    "id": "BC-01",
+    "title": "Backup and recovery",
+    "domain": "Resilience",
+    "summary": "Back up critical data, store copies separately, and test restores on a schedule.",
+    "mappings": {"ISO27001": "A.8.13", "SOC2": "A1.2", "NIST_CSF": "PR.DS"}
+  },
+  {
+    "id": "VR-01",
+    "title": "Third-party risk management",
+    "domain": "Supplier Management",
+    "summary": "Assess vendors before onboarding and periodically, based on the data and access they receive.",
+    "mappings": {"ISO27001": "A.5.19", "SOC2": "CC9.2", "NIST_CSF": "GV.SC"}
+  },
+  {
+    "id": "DP-01",
+    "title": "Data classification",
+    "domain": "Data Protection",
+    "summary": "Classify data by sensitivity and apply handling rules (encryption, retention, sharing) per class.",
+    "mappings": {"ISO27001": "A.5.12", "SOC2": "C1.1", "NIST_CSF": "ID.AM"}
+  }
+]
