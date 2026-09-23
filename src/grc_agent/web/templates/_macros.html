@@ -1,0 +1,34 @@
+{% macro kpi_badge(passed) -%}
+{% if passed is none %}<span class="badge badge-none">No data</span>
+{% elif passed %}<span class="badge badge-pass">Pass</span>
+{% else %}<span class="badge badge-fail">Fail</span>{% endif %}
+{%- endmacro %}
+
+{% macro stage_badge(s) -%}
+<span class="badge stage-{{ s.stage|lower|replace(' ', '-') }}">{{ s.stage }}</span>
+{%- if s.stale %} <span class="badge badge-fail">Stale</span>{% endif %}
+{%- endmacro %}
+
+{% macro engagement_header(eng, s, tab) -%}
+<div class="page-head">
+  <div>
+    <p class="crumb"><a href="/engagements">Engagements</a> / ENG-{{ '%03d' % eng.id }}</p>
+    <h1>{{ eng.client }}</h1>
+    <p class="muted">{{ eng.sector }} · {{ "Agent-assisted" if eng.mode == "agent" else "Manual (baseline)" }} · {{ stage_badge(s) }}</p>
+  </div>
+  {% if s.score is not none %}
+  <div class="score"><span>{{ s.score }}</span><small>readiness</small></div>
+  {% endif %}
+</div>
+{% if eng.mode == "agent" %}
+<nav class="tabs">
+  <a href="/engagements/{{ eng.id }}" {% if tab == "overview" %}aria-current="page"{% endif %}>Overview</a>
+  <a href="/engagements/{{ eng.id }}/intake" {% if tab == "intake" %}aria-current="page"{% endif %}>1. Intake</a>
+  <a href="/engagements/{{ eng.id }}/findings" {% if tab == "findings" %}aria-current="page"{% endif %}>2. Findings{% if s.unresolved %} <span class="badge badge-fail">{{ s.unresolved }}</span>{% endif %}</a>
+  <a href="/engagements/{{ eng.id }}/documents" {% if tab == "documents" %}aria-current="page"{% endif %}>3. Documents &amp; review{% if s.documents %} <span class="muted">{{ s.reviewed }}/{{ s.documents }}</span>{% endif %}</a>
+</nav>
+{% endif %}
+{% if s.stale %}
+<div class="flash flash-warn">Intake answers changed after the assessment. Re-run the assessment on the Findings tab before delivery.</div>
+{% endif %}
+{%- endmacro %}

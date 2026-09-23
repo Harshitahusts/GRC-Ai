@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% from "_macros.html" import engagement_header %}
+{% block title %}Documents · {{ eng.client }}{% endblock %}
+{% block content %}
+{{ engagement_header(eng, s, tab) }}
+
+<section class="card">
+  <h2>Draft pack and review gate</h2>
+  <p class="muted small">Read each document in full and record a review. A document can't be exported until it's reviewed, and the engagement can't be delivered until all of them are.</p>
+  {% if documents %}
+  <table>
+    <thead><tr><th>Document</th><th>Generated</th><th>Review</th><th></th></tr></thead>
+    <tbody>
+    {% for d in documents %}
+    <tr>
+      <td><a href="/engagements/{{ eng.id }}/documents/{{ d.id }}">{{ document_types[d.type] }}</a>
+        {% if d.type == "dpa" %}<br><span class="badge badge-fail">Draft for lawyer</span>{% endif %}</td>
+      <td class="muted small">{{ d.generated_at[:16].replace("T", " ") }} UTC</td>
+      <td>{% if d.reviewed_at %}<span class="badge badge-pass">Reviewed</span> <span class="small">{{ d.outcome.replace("_", " ") }} · {{ d.reviewed_by }}</span>
+          {% else %}<span class="badge badge-none">Needs review</span>{% endif %}</td>
+      <td class="nowrap">
+        <a href="/engagements/{{ eng.id }}/documents/{{ d.id }}">{{ "View" if d.reviewed_at else "Review" }}</a>
+        {% if d.reviewed_at %} · <a href="/engagements/{{ eng.id }}/documents/{{ d.id }}/download">Download .docx</a>{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">No documents yet. Generate the draft pack from the <a href="/engagements/{{ eng.id }}/findings">Findings</a> tab.</p>
+  {% endif %}
+</section>
+{% endblock %}

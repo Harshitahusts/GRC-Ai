@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% from "_macros.html" import kpi_badge, stage_badge %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Dashboard</h1>
+  <a class="button primary" href="/engagements#new">New engagement</a>
+</div>
+
+<section class="stats">
+  <div class="card stat north-star">
+    <small>North Star · Verified Engagements Delivered</small>
+    <strong>{{ card.verified_engagements }}</strong>
+    <span class="muted">of {{ card.agent_engagements }} agent engagement(s)</span>
+  </div>
+  <div class="card stat"><small>In progress</small><strong>{{ in_progress }}</strong></div>
+  <div class="card stat"><small>Delivered</small><strong>{{ delivered }}</strong></div>
+  <div class="card stat">
+    <small>Pilot KPIs passing</small>
+    <strong>{{ card.kpis|selectattr("passed")|list|length }}/{{ card.kpis|length }}</strong>
+    <a href="/kpis" class="small">View scorecard</a>
+  </div>
+</section>
+
+<div class="grid-2">
+  <section class="card">
+    <h2>Engagements</h2>
+    {% if summaries %}
+    <table>
+      <thead><tr><th>Client</th><th>Stage</th><th class="num">Readiness</th><th class="num">Gaps</th><th class="num">Open</th></tr></thead>
+      <tbody>
+      {% for s in summaries %}
+      <tr>
+        <td><a href="/engagements/{{ s.id }}">{{ s.client }}</a><br><span class="muted small">{{ s.sector }}</span></td>
+        <td>{{ stage_badge(s) }}</td>
+        <td class="num">{{ s.score if s.score is not none else "–" }}</td>
+        <td class="num">{{ s.gaps if s.mode == "agent" else "–" }}</td>
+        <td class="num">{{ s.open_items if s.mode == "agent" else "–" }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="muted">No engagements yet. <a href="/engagements#new">Create the first one</a>.</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>Pilot KPIs</h2>
+    <ul class="kpi-list">
+      {% for k in card.kpis %}
+      <li>{{ kpi_badge(k.passed) }} <span>{{ k.name }}</span> <strong>{{ k.display }}</strong></li>
+      {% endfor %}
+    </ul>
+    {% for w in card.warnings %}<p class="flash flash-warn small">{{ w }}</p>{% endfor %}
+  </section>
+</div>
+
+<section class="card">
+  <h2>Recent activity</h2>
+  {% if activity %}
+  <table>
+    <tbody>
+    {% for a in activity %}
+    <tr>
+      <td class="muted small nowrap">{{ a.at[:16].replace("T", " ") }} UTC</td>
+      <td>{{ a.username }}</td>
+      <td>{{ a.action.replace("_", " ") }}</td>
+      <td>{% if a.engagement_id %}<a href="/engagements/{{ a.engagement_id }}">{{ a.client }}</a>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted">Nothing yet.</p>{% endif %}
+</section>
+{% endblock %}

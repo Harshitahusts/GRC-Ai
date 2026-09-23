@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% from "_macros.html" import engagement_header %}
+{% block title %}{{ eng.client }}{% endblock %}
+{% block content %}
+{{ engagement_header(eng, s, tab) }}
+
+<div class="grid-2">
+  <section class="card">
+    <h2>Delivery checklist</h2>
+    <p class="muted small">All checks must pass. There is no override.</p>
+    <ul class="checks">
+      {% for label, ok in checks %}
+      <li class="{{ 'ok' if ok else 'todo' }}"><span aria-hidden="true">{{ "✓" if ok else "○" }}</span> {{ label }}</li>
+      {% endfor %}
+    </ul>
+    {% if eng.delivered_at %}
+    <p class="flash flash-info">Delivered {{ eng.delivered_at[:16].replace("T", " ") }} UTC. Intake, assessment and documents are locked.</p>
+    {% else %}
+    <form method="post" action="/engagements/{{ eng.id }}/deliver">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="primary" {% if not can_deliver %}disabled{% endif %}>Mark as delivered</button>
+    </form>
+    {% endif %}
+    {% if eng.mode == "agent" %}
+    <p class="small"><a href="/engagements/{{ eng.id }}/export.json">Export KPI record (JSON)</a></p>
+    {% endif %}
+  </section>
+
+  <form method="post" action="/engagements/{{ eng.id }}/details" class="card">
+    <h2>KPI details</h2>
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Consultant hours (first call to delivery, including review)
+      <input name="consultant_hours" type="number" step="0.25" min="0" value="{{ eng.consultant_hours if eng.consultant_hours is not none else '' }}">
+    </label>
+    {% if eng.mode == "agent" %}
+    <fieldset>
+      <legend>Did the client complete the intake without help?</legend>
+      {% set u = eng.intake_completed_unaided %}
+      <label class="inline"><input type="radio" name="intake_completed_unaided" value="yes" {% if u == 1 %}checked{% endif %}> Yes</label>
+      <label class="inline"><input type="radio" name="intake_completed_unaided" value="no" {% if u == 0 %}checked{% endif %}> No</label>
+      <label class="inline"><input type="radio" name="intake_completed_unaided" value="" {% if u is none %}checked{% endif %}> Not recorded</label>
+    </fieldset>
+    <label class="inline"><input type="checkbox" name="fell_back_to_manual" {% if eng.fell_back_to_manual %}checked{% endif %}> Consultant fell back to manual drafting</label>
+    {% endif %}
+    <button>Save details</button>
+  </form>
+</div>
+
+<section class="card">
+  <h2>Activity</h2>
+  {% if activity %}
+  <table><tbody>
+    {% for a in activity %}
+    <tr><td class="muted small nowrap">{{ a.at[:16].replace("T", " ") }} UTC</td><td>{{ a.username }}</td><td>{{ a.action.replace("_", " ") }}</td></tr>
+    {% endfor %}
+  </tbody></table>
+  {% else %}<p class="muted">Nothing yet.</p>{% endif %}
+</section>
+{% endblock %}

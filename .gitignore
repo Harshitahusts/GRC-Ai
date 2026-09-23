@@ -13,3 +13,6 @@ dist/
 
 # Real engagement records (client data)
 /engagements/
+
+# Local app data (database, secret key)
+/var/

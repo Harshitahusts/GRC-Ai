@@ -1,0 +1,14 @@
+services:
+  web:
+    build: .
+    # Published on this machine only. Change to "8000:8000" to expose it on your network.
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes:
+      - grc-data:/data
+    restart: unless-stopped
+
+volumes:
+  grc-data:

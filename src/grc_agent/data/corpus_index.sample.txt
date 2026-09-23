@@ -1,0 +1,16 @@
+# SAMPLE corpus index for the prototype. Illustrative only: NOT checked against
+# the gazetted DPDP Act 2023 or DPDP Rules 2025. The real index comes from the
+# corpus ingestion pipeline (ticket H2). Override with GRC_CORPUS_INDEX.
+Section 5(1)
+Section 6(1)
+Section 6(4)
+Section 8(2)
+Section 8(5)
+Section 8(6)
+Section 8(7)
+Section 8(9)
+Section 8(10)
+Section 9(1)
+Section 11(1)
+Section 12(1)
+Section 16(1)

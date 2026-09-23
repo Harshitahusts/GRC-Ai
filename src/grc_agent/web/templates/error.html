@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Error{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Something's not right</h1>
+  <p>{{ message }}</p>
+  <p><a href="javascript:history.back()">Go back</a> · <a href="/">Dashboard</a></p>
+</div>
+{% endblock %}
