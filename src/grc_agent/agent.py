@@ -57,7 +57,16 @@ class Agent:
         )
 
     def ask(self, prompt: str) -> AgentResult:
+        start = len(self.messages)
         self.messages.append({"role": "user", "content": prompt})
+        try:
+            return self._run()
+        except BaseException:
+            # Roll back so a failed question doesn't leave half a turn in the history.
+            del self.messages[start:]
+            raise
+
+    def _run(self) -> AgentResult:
         tool_calls: list[str] = []
 
         for turn in range(1, self.settings.max_turns + 1):

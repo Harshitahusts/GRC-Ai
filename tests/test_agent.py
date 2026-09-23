@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+import pytest
+
 from grc_agent.agent import Agent
 from grc_agent.config import Settings
 
@@ -17,7 +19,7 @@ def response(stop_reason, *content):
 
 
 class FakeClient:
-    """Stands in for anthropic.Anthropic; returns scripted responses in order."""
+    """Stands in for anthropic.Anthropic; returns (or raises) scripted responses in order."""
 
     def __init__(self, responses):
         self.responses = list(responses)
@@ -26,7 +28,10 @@ class FakeClient:
 
     def _create(self, **kwargs):
         self.calls.append({**kwargs, "messages": list(kwargs["messages"])})
-        return self.responses.pop(0)
+        next_response = self.responses.pop(0)
+        if isinstance(next_response, Exception):
+            raise next_response
+        return next_response
 
 
 def make_agent(responses, **settings):
@@ -89,3 +94,13 @@ def test_stops_at_max_turns():
     result = agent.ask("loop forever")
     assert result.stop_reason == "max_turns"
     assert result.tool_calls == ["get_control"] * 3
+
+
+def test_failed_request_rolls_back_history():
+    agent, _ = make_agent([response("end_turn", text("ok")), RuntimeError("network down")])
+    agent.ask("first")
+
+    with pytest.raises(RuntimeError):
+        agent.ask("second")
+
+    assert [m["role"] for m in agent.messages] == ["user", "assistant"]
