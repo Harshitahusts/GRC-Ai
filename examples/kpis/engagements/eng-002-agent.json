@@ -1,0 +1,24 @@
+{
+  "id": "ENG-002",
+  "client": "Example EdTech Pvt Ltd (fictional)",
+  "mode": "agent",
+  "completed": true,
+  "consultant_hours": 5.5,
+  "register_size": 4,
+  "intake_completed_unaided": true,
+  "intake_submitted_at": "2026-10-19T10:00:00+05:30",
+  "draft_pack_ready_at": "2026-10-19T10:16:00+05:30",
+  "fell_back_to_manual": false,
+  "findings": [
+    {"id": "F-1", "obligation_id": "OBL-001", "status": "gap", "citations": ["Section 5(1)"], "verdict": "correct"},
+    {"id": "F-2", "obligation_id": "OBL-002", "status": "compliant", "citations": ["Section 6(1)"], "verdict": "correct"},
+    {"id": "F-3", "obligation_id": "OBL-003", "status": "gap", "citations": ["Sec. 8 (6)"], "verdict": "correct"},
+    {"id": "F-4", "obligation_id": "OBL-004", "status": "open_item", "citations": ["Section 9(1)"], "verdict": "incomplete"}
+  ],
+  "documents": [
+    {"type": "ropa", "outcome": "minor_edits", "reviewed_by": "Harshit", "reviewed_at": "2026-10-19T12:00:00+05:30"},
+    {"type": "privacy_notice", "outcome": "usable", "reviewed_by": "Harshit", "reviewed_at": "2026-10-19T12:10:00+05:30"},
+    {"type": "breach_playbook", "outcome": "material_edit", "reviewed_by": "Harshit", "reviewed_at": "2026-10-19T12:30:00+05:30"},
+    {"type": "dpa", "outcome": "minor_edits", "reviewed_by": "Harshit", "reviewed_at": "2026-10-19T12:45:00+05:30"}
+  ]
+}

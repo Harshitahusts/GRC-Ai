@@ -1,0 +1,19 @@
+{
+  "id": "ENG-003",
+  "client": "Example SaaS Pvt Ltd (fictional)",
+  "mode": "agent",
+  "completed": false,
+  "register_size": 4,
+  "intake_completed_unaided": false,
+  "intake_submitted_at": "2026-10-21T15:00:00+05:30",
+  "draft_pack_ready_at": "2026-10-21T15:24:00+05:30",
+  "findings": [
+    {"id": "F-1", "obligation_id": "OBL-001", "status": "gap", "citations": ["Section 5(1)"], "verdict": "correct"},
+    {"id": "F-2", "obligation_id": "OBL-002", "status": "gap", "citations": ["Section 16(3)"], "verdict": "wrong", "hallucination": true},
+    {"id": "F-3", "obligation_id": "OBL-003", "status": "gap", "citations": ["Section 8(7)"]}
+  ],
+  "documents": [
+    {"type": "ropa", "outcome": "usable", "reviewed_by": "Harshit", "reviewed_at": "2026-10-21T17:00:00+05:30"},
+    {"type": "privacy_notice"}
+  ]
+}

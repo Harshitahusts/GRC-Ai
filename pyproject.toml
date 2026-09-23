@@ -19,6 +19,7 @@ dev = ["pytest>=8", "ruff>=0.6"]
 
 [project.scripts]
 grc-agent = "grc_agent.cli:main"
+grc-kpis = "grc_agent.kpis.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/grc_agent"]

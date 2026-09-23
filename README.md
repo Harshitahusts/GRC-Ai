@@ -38,6 +38,19 @@ print(agent.ask("Score a risk with likelihood 4 and impact 3").text)
 print(agent.ask("What controls would reduce it?").text)  # same conversation
 ```
 
+## Pilot KPIs
+
+`grc-kpis` scores the DPDPA pilot against the build plan's KPIs: the North Star
+(**Verified Engagements Delivered**) and eight pilot thresholds, including zero
+fabricated citations. For each engagement that doesn't count yet, it lists what's blocking it.
+
+```bash
+grc-kpis examples/kpis/engagements --corpus-index examples/kpis/corpus_index.sample.txt
+```
+
+See [docs/kpis.md](docs/kpis.md) for each metric, the draft term dictionary, and the
+engagement record format.
+
 ## Project layout
 
 ```
@@ -47,8 +60,11 @@ src/grc_agent/
   prompts.py        system prompt
   config.py         settings from environment variables
   cli.py            `grc-agent` command
+  kpis/             citation verifier, engagement records, KPI scorecard, `grc-kpis`
   data/controls.json  sample control catalog
 tests/              unit tests (use a fake client; no API key needed)
+docs/kpis.md        KPI definitions and dictionary
+examples/kpis/      fictional engagement records and a sample corpus index
 ```
 
 ## Configuration
