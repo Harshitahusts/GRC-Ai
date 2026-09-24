@@ -4,53 +4,10 @@ import re
 import anthropic
 import pytest
 from docx import Document
-from fastapi.testclient import TestClient
+from helpers import ALL_YES, PASSWORD, create, login, post
 
 from grc_agent.web import cli as web_cli
-from grc_agent.web.app import create_app
 from grc_agent.web.security import hash_password, verify_password
-
-PASSWORD = "correct-horse-battery"
-
-
-@pytest.fixture
-def app(tmp_path, monkeypatch):
-    monkeypatch.delenv("GRC_SECRET_KEY", raising=False)
-    monkeypatch.delenv("GRC_CORPUS_INDEX", raising=False)
-    monkeypatch.setenv("GRC_CORPUS_DIR", str(tmp_path / "no-corpus"))
-    monkeypatch.setattr("sys.stdin", io.StringIO(PASSWORD + "\n"))
-    assert (
-        web_cli.main(["--data-dir", str(tmp_path), "adduser", "harshit", "--password-stdin"]) == 0
-    )
-    return create_app(tmp_path)
-
-
-@pytest.fixture
-def client(app):
-    return TestClient(app)
-
-
-def csrf(client, path="/login"):
-    return re.search(r'name="csrf" value="([^"]+)"', client.get(path).text).group(1)
-
-
-def login(client, password=PASSWORD):
-    return client.post(
-        "/login",
-        data={"username": "harshit", "password": password, "csrf": csrf(client)},
-        follow_redirects=False,
-    )
-
-
-@pytest.fixture
-def authed(client):
-    assert login(client).status_code == 303
-    return client
-
-
-def post(client, path, data=None, **kwargs):
-    return client.post(path, data={**(data or {}), "csrf": csrf(client, "/")}, **kwargs)
-
 
 # ---- auth
 
@@ -99,37 +56,6 @@ def test_adduser_rejects_duplicates_and_short_passwords(tmp_path, monkeypatch):
 
 
 # ---- workflow
-
-
-def create(client, mode="agent"):
-    response = post(
-        client, "/engagements", {"client": "Acme Pvt Ltd", "sector": "SaaS", "mode": mode}
-    )
-    return int(response.url.path.rsplit("/", 1)[1])
-
-
-ALL_YES = {
-    "q_INFO-DATA": "Names, emails",
-    "q_CTX-CHILDREN": "no",
-    "q_CTX-VENDORS": "yes",
-    "q_CTX-FOREIGN": "no",
-    **{
-        f"q_{q}": "yes"
-        for q in [
-            "Q-NOTICE",
-            "Q-CONSENT",
-            "Q-WITHDRAW",
-            "Q-SECURITY",
-            "Q-BREACH",
-            "Q-ERASURE",
-            "Q-CONTACT",
-            "Q-GRIEVANCE",
-            "Q-ACCESS",
-            "Q-CORRECTION",
-            "Q-VENDOR-CONTRACT",
-        ]
-    },
-}
 
 
 def document_ids(client, eid):

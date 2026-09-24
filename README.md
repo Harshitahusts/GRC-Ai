@@ -80,6 +80,23 @@ Put the DPDP Act and Rules PDFs from meity.gov.in in `corpus/`, list them in
   provision Claude wasn't shown, is flagged and blocks delivery. Needs `ANTHROPIC_API_KEY`
   in `.env`.
 
+### Docs and blog
+
+**Docs & blog** in the app is where you write and publish DPDPA guides and SEO articles in
+Markdown. The editor shows a live SEO checklist: title and description length, focus
+keyword placement, word count, subheadings, internal links, and links to unpublished pages.
+
+- It ships with 13 DPDPA docs and 2 blog posts, imported once as **drafts**. They were
+  written from general knowledge of the Act and Rules, so check every point and section
+  reference against the gazetted text before publishing.
+- Publishing needs a named reviewer.
+- Published items appear on public pages that need no login: `/docs`, `/blog`, and
+  `/sitemap.xml` and `/robots.txt` for search engines. Every page has its own title,
+  description, canonical link, Open Graph tags and article structured data.
+- Search engines can only find these pages once the site is hosted at a public address.
+  Set `GRC_PUBLIC_URL` (for example `https://www.example.in`) so canonical links and the
+  sitemap use it, and `GRC_SITE_NAME` for the site name.
+
 The app binds to this machine only (127.0.0.1) by default. It uses the **sample** register
 in `src/grc_agent/data/`. Point `GRC_REGISTER` and `GRC_CORPUS_INDEX` at the reviewed
 register and the real corpus index before any client use.

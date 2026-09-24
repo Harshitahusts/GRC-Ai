@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en-IN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ site_name }}{% endblock %}</title>
+  <meta name="description" content="{% block description %}{% endblock %}">
+  <link rel="canonical" href="{% block canonical %}{{ base }}{{ request.url.path }}{% endblock %}">
+  <meta property="og:site_name" content="{{ site_name }}">
+  <meta property="og:title" content="{{ self.title() }}">
+  <meta property="og:description" content="{{ self.description() }}">
+  <meta property="og:url" content="{{ self.canonical() }}">
+  <meta property="og:type" content="{% block og_type %}website{% endblock %}">
+  <meta name="twitter:card" content="summary">
+  <link rel="stylesheet" href="/static/style.css">
+  {% block structured_data %}{% endblock %}
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/docs">{{ site_name }}</a>
+  <nav>
+    {% set path = request.url.path %}
+    <a href="/docs" {% if path.startswith("/docs") %}aria-current="page"{% endif %}>Docs</a>
+    <a href="/blog" {% if path.startswith("/blog") %}aria-current="page"{% endif %}>Blog</a>
+  </nav>
+  <a href="{{ '/' if user else '/login' }}" class="small">{{ "Open the app" if user else "Log in" }}</a>
+</header>
+<main class="page">
+  {% block content %}{% endblock %}
+</main>
+<footer class="public-footer muted small">
+  <p>General information about India's Digital Personal Data Protection Act, 2023 and the DPDP Rules, 2025. Not legal advice.</p>
+</footer>
+</body>
+</html>

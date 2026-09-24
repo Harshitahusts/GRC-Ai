@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from helpers import ALL_YES, PASSWORD, create, login, post
 from test_ai_assessment import FakeClient, cite_first_provision, good
-from test_web import ALL_YES, PASSWORD, create, login, post
 
 from grc_agent.ai_assessment import AssessmentError, ClaudeAssessor
 from grc_agent.config import Settings

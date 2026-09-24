@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}{{ item.title or "New " ~ ("doc" if item.type == "docs" else "blog post") }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="crumb"><a href="/content">Docs &amp; blog</a></p>
+    <h1>{{ item.title or "New " ~ ("doc" if item.type == "docs" else "blog post") }}</h1>
+    {% if item.id %}
+    <p class="muted">{% if item.status == "published" %}<span class="badge badge-pass">Published</span> at <a href="/{{ item.type }}/{{ item.slug }}">/{{ item.type }}/{{ item.slug }}</a>{% else %}<span class="badge badge-none">Draft</span> Not visible to the public.{% endif %}</p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="grid-2 wide-left">
+  <form method="post" action="{{ '/content/%d'|format(item.id) if item.id else '/content' }}" class="card">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="type" value="{{ item.type }}">
+    <label>Title <input name="title" value="{{ item.title }}" required maxlength="200"></label>
+    <label>URL slug <span class="muted small">(/{{ item.type }}/…) lowercase letters, numbers, hyphens. Left blank, it's made from the title.</span>
+      <input name="slug" value="{{ item.slug }}" maxlength="80" pattern="[a-z0-9]+(-[a-z0-9]+)*"></label>
+    <label>Meta description <span class="muted small">(shown in Google results, 70-160 characters)</span>
+      <textarea name="description" rows="2" maxlength="300">{{ item.description }}</textarea></label>
+    <div class="grid-2">
+      <label>Focus keyword <input name="keyword" value="{{ item.keyword }}" maxlength="100" placeholder="e.g. dpdpa compliance checklist"></label>
+      {% if item.type == "docs" %}<label>Order in the docs menu <input name="position" type="number" value="{{ item.position }}"></label>{% endif %}
+    </div>
+    <label>Body <span class="muted small">(Markdown: ## for headings, - for lists, [text](/docs/slug) for links)</span>
+      <textarea name="body_md" rows="24" class="mono">{{ item.body_md }}</textarea></label>
+    <label>Reviewed by <span class="muted small">(required to publish: who checked every legal point and citation)</span>
+      <input name="reviewed_by" value="{{ item.reviewed_by or '' }}" maxlength="100"></label>
+    <div class="actions">
+      <button name="action" value="save">{{ "Save" if item.id else "Save draft" }}</button>
+      {% if item.id %}
+        {% if item.status == "published" %}
+        <button name="action" value="publish" class="primary">Save and keep published</button>
+        <button name="action" value="unpublish">Unpublish</button>
+        {% else %}
+        <button name="action" value="publish" class="primary">Publish</button>
+        {% endif %}
+      {% endif %}
+    </div>
+  </form>
+
+  <aside>
+    <section class="card">
+      <h2>SEO checklist</h2>
+      <p class="muted small">Advice, not rules. Updates when you save.</p>
+      <ul class="checks">
+        {% for c in checks %}
+        <li class="{{ 'ok' if c.ok else 'todo' }}"><span aria-hidden="true">{{ "✓" if c.ok else "○" }}</span> {{ c.label }}{% if c.detail %} <span class="muted small">({{ c.detail }})</span>{% endif %}</li>
+        {% endfor %}
+      </ul>
+    </section>
+  </aside>
+</div>
+
+{% if preview %}
+<section class="card prose">
+  <p class="muted small">Preview</p>
+  <h1>{{ item.title }}</h1>
+  {{ preview|safe }}
+</section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,47 @@
+{% extends "public_base.html" %}
+{% block title %}{{ item.title }} · {{ site_name }}{% endblock %}
+{% block description %}{{ item.description }}{% endblock %}
+{% block canonical %}{{ base }}/{{ item.type }}/{{ item.slug }}{% endblock %}
+{% block og_type %}article{% endblock %}
+{% block structured_data %}
+<script type="application/ld+json">{{ {
+  "@context": "https://schema.org",
+  "@type": "BlogPosting" if item.type == "blog" else "Article",
+  "headline": item.title,
+  "description": item.description,
+  "datePublished": item.published_at,
+  "dateModified": item.updated_at,
+  "mainEntityOfPage": base ~ "/" ~ item.type ~ "/" ~ item.slug,
+  "author": {"@type": "Organization", "name": site_name},
+  "publisher": {"@type": "Organization", "name": site_name},
+  "inLanguage": "en-IN"
+}|tojson }}</script>
+{% endblock %}
+{% block content %}
+<div class="public-layout">
+  <article class="card prose">
+    <p class="crumb"><a href="/{{ item.type }}">{{ "Docs" if item.type == "docs" else "Blog" }}</a></p>
+    <h1>{{ item.title }}</h1>
+    <p class="muted small">
+      {% if item.type == "blog" %}{{ item.published_at[:10] }} · {% endif %}{{ minutes }} min read
+      · Updated {{ item.updated_at[:10] }}
+    </p>
+    {{ html|safe }}
+    <p class="flash flash-info small">This is general information, not legal advice. Check the provision it cites before relying on it.</p>
+  </article>
+  <aside>
+    {% if docs %}
+    <nav class="card side-nav" aria-label="Docs">
+      <h2>Docs</h2>
+      <ul>{% for d in docs %}<li><a href="/docs/{{ d.slug }}" {% if item.type == "docs" and d.slug == item.slug %}aria-current="page"{% endif %}>{{ d.title }}</a></li>{% endfor %}</ul>
+    </nav>
+    {% endif %}
+    {% if recent %}
+    <nav class="card side-nav" aria-label="Recent posts">
+      <h2>From the blog</h2>
+      <ul>{% for b in recent %}<li><a href="/blog/{{ b.slug }}">{{ b.title }}</a></li>{% endfor %}</ul>
+    </nav>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}
