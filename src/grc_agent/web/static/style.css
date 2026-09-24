@@ -156,3 +156,9 @@ details summary { cursor: pointer; color: var(--muted); }
 .connector p { margin: .25rem 0; }
 .connector.planned { opacity: .7; }
 .connector-name { display: flex; justify-content: space-between; gap: .5rem; align-items: center; }
+a.connector { display: block; color: inherit; text-decoration: none; transition: border-color .15s, box-shadow .15s; }
+a.connector:hover, a.connector:focus-visible { border-color: var(--accent); box-shadow: 0 1px 6px rgba(0,0,0,.08); }
+.connector-cta { color: var(--accent); font-weight: 600; margin-top: .5rem !important; }
+ul.plain { list-style: none; padding: 0; margin: 0; }
+ul.plain li { padding: .35rem 0; border-bottom: 1px solid var(--border); }
+ul.plain li:last-child { border-bottom: 0; }
