@@ -1,0 +1,19 @@
+THE GAZETTE OF INDIA : EXTRAORDINARY
+MINISTRY OF SAMPLE AFFAIRS
+NOTIFICATION
+In exercise of the powers conferred by the Act, the Government hereby makes the following rules, namely:—
+1. Short title and commencement.—(1) These rules may be called the Sample Data Protection Rules, 2099.
+(2) They shall come into force on publication.
+2. Definitions.—In these rules, unless the context otherwise requires, "Act" means the Sample Data Protection Act, 2099.
+3. Notice given by Data Fiduciary.—The notice shall—
+(a) be presented in clear and plain language;
+(b) give an itemised description of the personal data; and
+(c) give a link to withdraw consent.
+4. Intimation of personal data breach.—(1) On becoming aware of a breach, the Data Fiduciary shall without delay inform each affected person of the nature of the breach and the measures taken.
+(2) Within seventy-two hours of becoming aware of the breach, the Data Fiduciary shall intimate the Board with details of the breach.
+FIRST SCHEDULE
+[See rule 3]
+Standards for a Consent Manager: be a company incorporated in India with a net worth of at least two crore rupees.
+SECOND SCHEDULE
+[See rule 4]
+Particulars of a breach report: nature, extent, timing and likely impact.

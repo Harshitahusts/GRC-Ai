@@ -1,0 +1,12 @@
+[
+  {"question": "What must a notice tell people when asking for consent?", "expected": ["Section 3"]},
+  {"question": "Can a person withdraw consent?", "expected": ["Section 4(2)"]},
+  {"question": "What security safeguards must be taken to prevent a breach?", "expected": ["Section 5(1)"]},
+  {"question": "Who must be told about a personal data breach?", "expected": ["Section 5(2)", "Rule 4"]},
+  {"question": "When must personal data be erased?", "expected": ["Section 5(3)"]},
+  {"question": "Parent consent for processing a child's data", "expected": ["Section 6(1)"]},
+  {"question": "Is targeted advertising to children allowed?", "expected": ["Section 6(2)"]},
+  {"question": "How quickly must the Board be told about a breach?", "expected": ["Rule 4(2)"]},
+  {"question": "Transferring personal data to another country", "expected": ["Section 9"]},
+  {"question": "Complaints and grievance redressal", "expected": ["Section 8"]}
+]

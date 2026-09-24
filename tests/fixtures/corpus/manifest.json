@@ -1,0 +1,8 @@
+{
+  "sources": [
+    {"file": "sample_act.txt", "kind": "act", "title": "Sample Data Protection Act, 2099 (fictional test fixture)",
+     "source_url": "https://example.invalid/sample-act", "downloaded": "2026-09-24"},
+    {"file": "sample_rules.txt", "kind": "rules", "title": "Sample Data Protection Rules, 2099 (fictional test fixture)",
+     "source_url": "https://example.invalid/sample-rules", "downloaded": "2026-09-24"}
+  ]
+}
