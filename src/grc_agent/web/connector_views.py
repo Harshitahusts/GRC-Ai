@@ -24,6 +24,8 @@ from grc_agent.web import db
 
 log = logging.getLogger(__name__)
 
+PROJECT_URL = "https://github.com/Harshitahusts/GRC-Ai"
+
 
 # ---- evidence helpers (used by other pages too)
 
@@ -459,7 +461,11 @@ def register(app: FastAPI) -> None:
     @app.get("/settings/github-app")
     def github_app_settings(request: Request, user: User):
         base = str(request.base_url).rstrip("/")
-        homepage = (os.getenv("GRC_PUBLIC_URL") or base).rstrip("/")
+        # GitHub needs a public homepage and webhook address, even though webhooks are off.
+        # A local app (http://localhost) uses the project's page instead.
+        homepage = (os.getenv("GRC_PUBLIC_URL") or "").rstrip("/")
+        if not homepage:
+            homepage = base if base.startswith("https://") else PROJECT_URL
         manifest = github_app.manifest("", base, homepage)
         state = _signer(request.app, "github-manifest").dumps({"user": user})
         return render(
