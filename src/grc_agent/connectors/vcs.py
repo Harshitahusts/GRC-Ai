@@ -106,9 +106,12 @@ def github_test(config: dict, secrets: dict) -> str:
 
 def github_collect(config: dict, secrets: dict) -> list[Check]:
     token = secrets["token"]
-    repos_raw = expect_ok(
-        _gh("/user/repos?per_page=100&sort=updated", token), "Listing repositories"
-    )
+    repos = expect_ok(_gh("/user/repos?per_page=100&sort=updated", token), "Listing repositories")
+    return github_repo_checks(repos, token)
+
+
+def github_repo_checks(repos_raw: list[dict], token: str) -> list[Check]:
+    """Checks on GitHub repositories, given their API objects and a token that can read them."""
     repos = []
     for r in repos_raw[:MAX_REPOS]:
         branch = _gh(

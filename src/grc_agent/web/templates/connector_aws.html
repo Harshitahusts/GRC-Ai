@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% from "_macros.html" import engagement_header %}
+{% block title %}Connect AWS · {{ eng.client }}{% endblock %}
+{% block content %}
+{{ engagement_header(eng, s, tab) }}
+{% if firm_error %}
+<section class="card">
+  <h2>One-time setup first</h2>
+  <p class="flash flash-error">{{ firm_error }}</p>
+  <p>The client gives read-only access to <strong>your firm's AWS account</strong>, so this computer needs that account's credentials:</p>
+  <ol>
+    <li>In your firm's AWS account, create an IAM user for this app with only the permission <code>sts:AssumeRole</code>.</li>
+    <li>Create an access key for it and run <code>aws configure</code> on this computer (or set <code>AWS_ACCESS_KEY_ID</code> and <code>AWS_SECRET_ACCESS_KEY</code> in <code>.env</code>). To use a named profile, set <code>GRC_AWS_PROFILE</code>.</li>
+    <li>Restart the app and reload this page.</li>
+  </ol>
+</section>
+{% else %}
+<div class="grid-2 wide-left">
+  <section class="card">
+    <h2>Authorise read-only access</h2>
+    <p>The client creates a <strong>read-only role</strong> in their AWS account that only your firm's account can use, locked to this engagement. No keys are shared, and they can remove it at any time.</p>
+    <ol>
+      <li><a class="button" href="/engagements/{{ eng.id }}/connectors/aws/template.yaml">Download the CloudFormation template</a> and send it to the client.</li>
+      <li>The client opens <strong>CloudFormation → Create stack → With new resources → Upload a template file</strong>, chooses the file, and creates the stack.</li>
+      <li>When it finishes, they copy <strong>RoleArn</strong> from the stack's <strong>Outputs</strong> tab and send it to you.</li>
+      <li>Paste it below.</li>
+    </ol>
+    <form method="post" action="/engagements/{{ eng.id }}/connectors" autocomplete="off">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="hidden" name="connector" value="aws">
+      {% for f in c.fields %}
+      <label>{{ f.label }}{% if not f.required %} <span class="muted small">(optional)</span>{% endif %}
+        <input name="{{ f.name }}" placeholder="{{ f.placeholder }}" {% if f.required %}required{% endif %} spellcheck="false"></label>
+      {% endfor %}
+      <button class="primary">Connect and run checks</button>
+    </form>
+  </section>
+  <aside class="card">
+    <h2>Details for the client</h2>
+    <p class="small"><strong>Trusted AWS account:</strong> <code>{{ firm_account }}</code></p>
+    <p class="small"><strong>External ID:</strong> <code>{{ external_id }}</code></p>
+    <p class="small"><strong>Permission:</strong> AWS managed policy <code>SecurityAudit</code> (read-only)</p>
+    <details class="small"><summary>Creating the role by hand instead</summary>
+      <ol>
+        <li>IAM → Roles → Create role → <strong>AWS account</strong> → <strong>Another AWS account</strong>, account ID <code>{{ firm_account }}</code>.</li>
+        <li>Tick <strong>Require external ID</strong> and enter <code>{{ external_id }}</code>.</li>
+        <li>Attach the policy <strong>SecurityAudit</strong>, name the role, create it, and send its ARN.</li>
+      </ol>
+    </details>
+    <p class="small muted">To remove access, the client deletes the stack (or the role).</p>
+  </aside>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}GitHub App{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="crumb"><a href="/connectors/github">GitHub connector</a></p>
+    <h1>The firm's GitHub App</h1>
+    <p class="muted">Clients authorise read-only access by installing this app on their GitHub organisation. You set it up once.</p>
+  </div>
+</div>
+
+{% if app_config %}
+<section class="card">
+  <h2><span class="badge badge-pass">Set up</span> {{ app_config.slug }}</h2>
+  <p>App ID {{ app_config.app_id }}{% if app_config.owner %} · owned by {{ app_config.owner }}{% endif %}.</p>
+  <p>Permissions: Metadata (read) and Administration (read). No write access, no webhooks.</p>
+  {% if app_config.html_url %}<p><a href="{{ app_config.html_url }}" rel="noopener noreferrer" target="_blank">Open the app's settings on GitHub</a></p>{% endif %}
+  <p class="small muted">Its private key is stored encrypted in this computer's data folder. Back up the <code>var</code> folder: without it, clients' installations can't be read.</p>
+</section>
+{% else %}
+<form method="post" action="https://github.com/settings/apps/new?state={{ state }}" class="card" id="manifest-form">
+  <h2>Create it in one click</h2>
+  <ol>
+    <li>Choose a name (it must be unique on GitHub) and, optionally, the GitHub organisation that should own it.</li>
+    <li>Click <strong>Create on GitHub</strong>. GitHub shows the app with read-only permissions; click <strong>Create GitHub App</strong>.</li>
+    <li>GitHub sends you back here and the app is saved.</li>
+  </ol>
+  <label>App name <input id="app-name" value="{{ default_name }}" maxlength="34" required></label>
+  <label>Owner organisation <span class="muted small">(optional; leave blank to own it with your personal account)</span>
+    <input id="app-org" placeholder="your-firm-org" pattern="[A-Za-z0-9-]*"></label>
+  <input type="hidden" name="manifest" id="manifest">
+  <button class="primary">Create on GitHub</button>
+  <p class="small muted">The app asks only for Metadata (read) and Administration (read). It has no webhooks and can't change anything.</p>
+</form>
+<script>
+const manifest = {{ manifest|tojson }};
+const form = document.getElementById("manifest-form");
+form.addEventListener("submit", () => {
+  manifest.name = document.getElementById("app-name").value.trim();
+  document.getElementById("manifest").value = JSON.stringify(manifest);
+  const org = document.getElementById("app-org").value.trim();
+  const state = new URL(form.action).searchParams.get("state");
+  form.action = (org ? `https://github.com/organizations/${encodeURIComponent(org)}/settings/apps/new`
+                     : "https://github.com/settings/apps/new") + "?state=" + encodeURIComponent(state);
+});
+</script>
+{% endif %}
+{% endblock %}

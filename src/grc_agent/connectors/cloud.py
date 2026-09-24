@@ -10,8 +10,8 @@ Read-only checks with two purposes:
 
 from __future__ import annotations
 
-import base64
 import json
+import os
 import re
 import time
 from typing import Any
@@ -23,6 +23,7 @@ from grc_agent.connectors.base import (
     expect_ok,
     location_check,
     request,
+    sign_rs256_jwt,
 )
 
 AWS_INDIA = {"ap-south-1", "ap-south-2"}
@@ -32,15 +33,88 @@ AZURE_INDIA = {"centralindia", "southindia", "westindia", "jioindiawest", "jioin
 # ---- AWS
 
 
-def _aws_session(config: dict, secrets: dict) -> Any:
+ROLE_ARN = re.compile(r"arn:aws:iam::\d{12}:role/[\w+=,.@/-]{1,512}")
+
+
+def firm_session() -> Any:
+    """The firm's own AWS credentials, from the standard AWS lookup on this machine
+    (environment variables, ~/.aws, or GRC_AWS_PROFILE). They're only used to assume
+    clients' read-only roles."""
+    import boto3
+
+    return boto3.session.Session(profile_name=os.getenv("GRC_AWS_PROFILE") or None)
+
+
+def firm_account_id() -> str:
+    ident, err = _aws_call(firm_session().client("sts").get_caller_identity)
+    if err:
+        raise ConnectorError(f"The firm's AWS credentials don't work ({err}).")
+    return ident["Account"]
+
+
+def _session_from(credentials: dict, region: str) -> Any:
     import boto3
 
     return boto3.session.Session(
-        aws_access_key_id=secrets["access_key_id"],
-        aws_secret_access_key=secrets["secret_access_key"],
-        aws_session_token=secrets.get("session_token") or None,
-        region_name=config.get("region") or "ap-south-1",
+        aws_access_key_id=credentials["AccessKeyId"],
+        aws_secret_access_key=credentials["SecretAccessKey"],
+        aws_session_token=credentials["SessionToken"],
+        region_name=region,
     )
+
+
+def _aws_session(config: dict, secrets: dict) -> Any:
+    """Temporary credentials (15 minutes) for the client's read-only role."""
+    role_arn = (config.get("role_arn") or "").strip()
+    if not ROLE_ARN.fullmatch(role_arn):
+        raise ConnectorError(
+            "Enter the role ARN from the client, like arn:aws:iam::123456789012:role/…"
+        )
+    result, err = _aws_call(
+        firm_session().client("sts").assume_role,
+        RoleArn=role_arn,
+        RoleSessionName="grc-agent",
+        ExternalId=config["external_id"],
+        DurationSeconds=900,
+    )
+    if err:
+        hint = {
+            "AccessDenied": "Check the role trusts this firm's AWS account with this external ID.",
+        }.get(err, "")
+        raise ConnectorError(f"Couldn't assume the client's role ({err}). {hint}".strip())
+    return _session_from(result["Credentials"], config.get("region") or "ap-south-1")
+
+
+def cloudformation_template(firm_account: str, external_id: str) -> str:
+    """What the client runs in CloudFormation: a read-only role only this firm can use."""
+    return f"""AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Read-only access for the GRC agent (AWS managed policy SecurityAudit).
+  Only AWS account {firm_account} can use it, and only with the external ID below.
+  Delete this stack to remove the access.
+Resources:
+  GrcAgentReadOnlyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Read-only access for the GRC agent's DPDPA assessment
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: arn:aws:iam::{firm_account}:root
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                sts:ExternalId: "{external_id}"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/SecurityAudit
+Outputs:
+  RoleArn:
+    Description: Send this to your consultant
+    Value: !GetAtt GrcAgentReadOnlyRole.Arn
+"""
 
 
 def _aws_call(fn, *args, **kwargs) -> tuple[Any, str | None]:
@@ -186,10 +260,6 @@ GCP_TOKEN_URI = "https://oauth2.googleapis.com/token"
 GCP_SCOPE = "https://www.googleapis.com/auth/devstorage.read_only"
 
 
-def _b64url(data: bytes) -> str:
-    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
-
-
 def _gcp_key(secrets: dict) -> dict:
     try:
         key = json.loads(secrets["service_account_json"])
@@ -200,11 +270,7 @@ def _gcp_key(secrets: dict) -> dict:
 
 
 def gcp_jwt(key: dict, now: int | None = None) -> str:
-    from cryptography.hazmat.primitives import hashes, serialization
-    from cryptography.hazmat.primitives.asymmetric import padding
-
     now = now or int(time.time())
-    header = {"alg": "RS256", "typ": "JWT"}
     claims = {
         "iss": key["client_email"],
         "scope": GCP_SCOPE,
@@ -212,13 +278,7 @@ def gcp_jwt(key: dict, now: int | None = None) -> str:
         "iat": now,
         "exp": now + 3600,
     }
-    signing_input = f"{_b64url(json.dumps(header).encode())}.{_b64url(json.dumps(claims).encode())}"
-    try:
-        private_key = serialization.load_pem_private_key(key["private_key"].encode(), password=None)
-    except ValueError:
-        raise ConnectorError("The service account key's private_key isn't valid.") from None
-    signature = private_key.sign(signing_input.encode(), padding.PKCS1v15(), hashes.SHA256())
-    return f"{signing_input}.{_b64url(signature)}"
+    return sign_rs256_jwt(claims, key["private_key"])
 
 
 def _gcp_token(key: dict) -> str:

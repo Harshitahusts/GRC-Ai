@@ -9,8 +9,8 @@ from grc_agent.connectors import BY_ID, Check, ConnectorError
 
 def fake_evidence_connector(outside=("us-east-1",), fail=False):
     def test(config, secrets):
-        if secrets.get("access_key_id") == "bad":
-            raise ConnectorError("AWS rejected the credentials (InvalidClientTokenId).")
+        if "bad" in config["role_arn"]:
+            raise ConnectorError("Couldn't assume the client's role (AccessDenied).")
         return "Connected to AWS account 123"
 
     def collect(config, secrets):
@@ -40,21 +40,20 @@ class Outbox:
 
 
 @pytest.fixture
-def app_with_fakes(authed):
+def app_with_fakes(authed, monkeypatch):
     outbox = Outbox()
     authed.app.state.connectors = {
         **authed.app.state.connectors,
         "aws": fake_evidence_connector(),
-        "slack": replace(BY_ID["slack"], send=outbox.send),
+        # Slack is "Coming soon"; switched on here to test notifications.
+        "slack": replace(BY_ID["slack"], status="available", send=outbox.send),
     }
+    monkeypatch.setattr("grc_agent.connectors.cloud.firm_account_id", lambda: "999999999999")
     return authed, outbox
 
 
-AWS = {
-    "connector": "aws",
-    "access_key_id": "AKIAEXAMPLE1234",
-    "secret_access_key": "s3cr3t-value-9876",
-}
+AWS = {"connector": "aws", "role_arn": "arn:aws:iam::123456789012:role/grc-read-only"}
+BAD_ROLE = {**AWS, "role_arn": "arn:aws:iam::123456789012:role/bad"}
 
 
 def test_pages_require_login(client):
@@ -78,28 +77,24 @@ def test_catalog_page(authed):
         "Keka",
     ]:
         assert name in page
-    assert page.count("Planned") >= 10
+    assert page.count("Coming soon") >= 20
 
 
-def test_add_evidence_connector_stores_encrypted_and_collects(app_with_fakes):
+def test_aws_role_connection_collects_evidence(app_with_fakes):
     client, _ = app_with_fakes
     eid = create(client)
+    page = client.get(f"/engagements/{eid}/connectors/new?type=aws").text
+    assert "999999999999" in page and "grc-" in page  # firm account and external ID
     page = post(client, f"/engagements/{eid}/connectors", AWS).text
     assert "Connected to AWS account 123" in page
     assert "MFA on the root account" in page and "Where data is stored" in page
-    assert "••••9876" in page and "s3cr3t-value-9876" not in page
-
-    import sqlite3
-
-    db = sqlite3.connect(client.app.state.db_path)
-    stored = db.execute("SELECT secrets_enc FROM connections").fetchone()[0]
-    assert "s3cr3t" not in stored and "AKIA" not in stored
+    assert "arn:aws:iam::123456789012:role/grc-read-only" in page
 
 
-def test_bad_credentials_are_not_saved(app_with_fakes):
+def test_failed_role_is_not_saved(app_with_fakes):
     client, _ = app_with_fakes
     eid = create(client)
-    page = post(client, f"/engagements/{eid}/connectors", {**AWS, "access_key_id": "bad"}).text
+    page = post(client, f"/engagements/{eid}/connectors", BAD_ROLE).text
     assert "Couldn&#39;t connect to Amazon Web Services" in page
     assert "Run checks again" not in client.get(f"/engagements/{eid}/connectors").text
 
@@ -108,7 +103,7 @@ def test_missing_fields(app_with_fakes):
     client, _ = app_with_fakes
     eid = create(client)
     page = post(client, f"/engagements/{eid}/connectors", {"connector": "aws"}).text
-    assert "Fill in: Access key ID, Secret access key" in page
+    assert "Fill in: Role ARN from the client" in page
 
 
 def test_planned_connectors_cannot_be_added(app_with_fakes):
@@ -173,14 +168,10 @@ def test_sync_error_is_recorded_and_remove_deletes(app_with_fakes):
     assert "stored credentials deleted" in page and "Run checks again" not in page
 
 
-def test_real_slack_connector_rejects_non_slack_url(authed):
+def test_coming_soon_connectors_cannot_be_added(authed):
     eid = create(authed)
-    page = post(
-        authed,
-        f"/engagements/{eid}/connectors",
-        {"connector": "slack", "webhook_url": "https://evil.example/hook"},
-    ).text
-    assert "doesn&#39;t look like a Slack incoming webhook URL" in page
+    for cid in ("slack", "gitlab", "gcp"):
+        assert authed.get(f"/engagements/{eid}/connectors/new?type={cid}").status_code == 404
 
 
 def test_catalog_cards_link_to_detail_pages(authed):
@@ -198,13 +189,13 @@ def test_detail_page_and_connect_flow(authed):
     response = authed.get(f"/connectors/aws/connect?engagement={eid}", follow_redirects=False)
     assert response.status_code == 303
     assert response.headers["location"] == f"/engagements/{eid}/connectors/new?type=aws"
-    assert "Connect Amazon Web Services" in authed.get(response.headers["location"]).text
+    assert "One-time setup first" in authed.get(response.headers["location"]).text
 
 
 def test_detail_page_without_engagements_and_for_planned(authed):
     assert "Create an engagement" in authed.get("/connectors/github").text
     page = authed.get("/connectors/okta").text
-    assert "planned but not built yet" in page and "For which engagement?" not in page
+    assert "coming soon" in page and "For which engagement?" not in page
     assert authed.get("/connectors/okta/connect?engagement=1").status_code == 404
     assert authed.get("/connectors/nope").status_code == 404
 
