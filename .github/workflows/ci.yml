@@ -40,3 +40,12 @@ jobs:
         ruff format --check .
     - name: Tests
       run: pytest -q
+    # Run start.bat itself on Windows, as a user would: it creates its own .venv,
+    # installs, checks for a running copy and an account, then serve --help exits.
+    - name: start.bat works
+      if: runner.os == 'Windows'
+      timeout-minutes: 10
+      shell: cmd
+      run: |
+        echo ci-test-password| grc-web --data-dir var adduser ci --password-stdin
+        call start.bat --help

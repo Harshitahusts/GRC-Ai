@@ -30,5 +30,5 @@ fi
 
 [ -f .env ] || cp .env.example .env
 
-.venv/bin/grc-web init
-exec .venv/bin/grc-web serve --open "$@"
+.venv/bin/python -m grc_agent.web.cli init
+exec .venv/bin/python -m grc_agent.web.cli serve --open "$@"
