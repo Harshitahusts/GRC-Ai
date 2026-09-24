@@ -150,3 +150,4 @@ details summary { cursor: pointer; color: var(--muted); }
 .post-list .card p { margin: .2rem 0; }
 .public-footer { max-width: 1200px; margin: 0 auto; padding: 0 1rem 2rem; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .9rem; }
+.demo-banner { background: var(--warn-bg); color: var(--warn); padding: .5rem 1.5rem; font-size: .9rem; border-bottom: 1px solid var(--border); }

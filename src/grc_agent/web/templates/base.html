@@ -26,6 +26,9 @@
   </form>
 </header>
 {% endif %}
+{% if demo_mode and user %}
+<div class="demo-banner" role="status">Demo mode: AI answers and drafted findings are simulated placeholders, not real AI. Don't use them with clients. Set <code>ANTHROPIC_API_KEY</code> and remove <code>GRC_AI_MODE=demo</code> from <code>.env</code> to use Claude.</div>
+{% endif %}
 <main class="{% block main_class %}page{% endblock %}">
   {% for kind, message in flashes %}
   <div class="flash flash-{{ kind }}" role="status">{{ message }}</div>

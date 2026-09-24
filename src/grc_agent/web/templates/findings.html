@@ -19,7 +19,7 @@
       {{ "Re-run" if eng.assessed_at else "Run" }} rule-based assessment</button>
     <button name="mode" value="claude" class="primary" {% if disabled or not corpus_ready %}disabled{% endif %}
       title="{{ 'Build the corpus first: grc-corpus ingest' if not corpus_ready else 'Rules decide status; Claude drafts each finding from the retrieved provisions' }}">
-      {{ "Re-run" if eng.assessed_at else "Run" }} with Claude drafting</button>
+      {{ "Re-run" if eng.assessed_at else "Run" }} with {{ "demo" if demo_mode else "Claude" }} drafting</button>
     <span class="muted small">{% if corpus_ready %}Claude drafting takes a minute or two.{% else %}Claude drafting needs the corpus: <a href="/corpus">set it up</a>.{% endif %}</span>
   </form>
   {% endif %}
@@ -46,6 +46,9 @@
           {% else %}<span class="badge badge-fail" title="Doesn't resolve, or wasn't among the provisions Claude was shown. Blocks delivery.">✗ unresolved</span>{% endif %}
         </div>
         {% endfor %}
+        {% if f.drafted_by == "demo" %}
+        <p class="small"><span class="badge badge-fail">Demo placeholder</span></p>
+        {% endif %}
         {% if f.drafted_by == "claude" %}
         <p class="small muted">Drafted by Claude · {{ f.confidence }} confidence</p>
         {% if f.needs_legal_review %}<span class="badge badge-fail">Legal review</span>{% endif %}

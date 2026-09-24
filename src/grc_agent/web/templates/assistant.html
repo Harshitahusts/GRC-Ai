@@ -14,7 +14,7 @@
 
 <section class="card chat">
   {% for role, text in history %}
-  <div class="msg msg-{{ role }}"><small>{{ "You" if role == "user" else "Claude" }}</small><div>{{ text }}</div></div>
+  <div class="msg msg-{{ role }}"><small>{{ "You" if role == "user" else ("Demo (not AI)" if demo_mode else "Claude") }}</small><div>{{ text }}</div></div>
   {% else %}
   <p class="muted">No messages yet. Try "Score a risk with likelihood 4 and impact 3" or "Which controls cover MFA?".</p>
   {% endfor %}
