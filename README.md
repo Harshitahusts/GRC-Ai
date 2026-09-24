@@ -51,8 +51,14 @@ The first run sets up a `.venv`, installs the app, creates a `.env` from `.env.e
 asks you to create your login, then opens http://127.0.0.1:8000 in your browser. Later
 runs start in a few seconds. Press Ctrl+C to stop it. Add `--port 9000` to use another port.
 
-Put your `ANTHROPIC_API_KEY` in `.env` to enable the assistant page. Everything else works
-without it. Add more accounts with `.venv/bin/grc-web adduser NAME` (Windows PowerShell:
+Put your `ANTHROPIC_API_KEY` in `.env` to enable the assistant page and Claude drafting.
+Everything else works without it.
+
+**No API key yet?** Add `GRC_AI_MODE=demo` to `.env` and restart. A built-in stand-in for
+Claude then answers in the same format as the real API: the assistant calls the real tools,
+and drafted findings go through the same citation checks. Its text is a placeholder, not AI.
+A banner shows on every page, and an engagement with demo findings can't be delivered.
+Remove the line once you have a key. Add more accounts with `.venv/bin/grc-web adduser NAME` (Windows PowerShell:
 `.\.venv\Scripts\grc-web adduser NAME`), and change a password with `grc-web passwd NAME`.
 
 Data (SQLite database and session secret) lives in `./var/`. It's git-ignored, so back up
@@ -164,6 +170,7 @@ Set in `.env` or the environment:
 | `GRC_AGENT_EFFORT` | `high` | `low` / `medium` / `high` / `xhigh` / `max` |
 | `GRC_AGENT_MAX_TOKENS` | `16000` | Max output tokens per response |
 | `GRC_AGENT_MAX_TURNS` | `20` | Max model calls per question |
+| `GRC_AI_MODE` | `api` | `demo` runs the offline stand-in for Claude, for testing without a key |
 
 The agent uses adaptive thinking, prompt caching, and server-side refusal fallbacks
 (`fallbacks: "default"`).

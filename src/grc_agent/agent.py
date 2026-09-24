@@ -7,7 +7,7 @@ from typing import Any
 
 import anthropic
 
-from grc_agent.config import Settings
+from grc_agent.config import Settings, make_client
 from grc_agent.prompts import SYSTEM_PROMPT
 from grc_agent.tools import TOOLS, Tool, run_tool
 
@@ -36,7 +36,7 @@ class Agent:
     ) -> None:
         # Settings first: loading them reads .env, which may hold ANTHROPIC_API_KEY.
         self.settings = settings or Settings.from_env()
-        self.client = client or anthropic.Anthropic()
+        self.client = client or make_client(self.settings)
         self.tools = {tool.name: tool for tool in (TOOLS if tools is None else tools)}
         self.system_prompt = system_prompt
         # Append-only history. Assistant turns keep their full content blocks

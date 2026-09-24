@@ -21,7 +21,7 @@ from typing import Any
 import anthropic
 
 from grc_agent.assessment import AssessedFinding, assess
-from grc_agent.config import Settings
+from grc_agent.config import Settings, make_client
 from grc_agent.corpus.ingest import Chunk
 from grc_agent.corpus.store import Corpus
 from grc_agent.kpis.citations import normalize_citation
@@ -155,7 +155,7 @@ class ClaudeAssessor:
         workers: int = 4,
     ) -> None:
         self.settings = settings or Settings.from_env()
-        self.client = client or anthropic.Anthropic()
+        self.client = client or make_client(self.settings)
         self.corpus = corpus
         self.workers = workers
 
@@ -209,7 +209,7 @@ class ClaudeAssessor:
             unresolved=unresolved,
             summary=data["finding"].strip(),
             remediation=data["remediation"].strip() if finding.status != "compliant" else "",
-            drafted_by="claude",
+            drafted_by="demo" if self.settings.demo else "claude",
             confidence=data["confidence"],
             needs_legal_review=bool(data["needs_legal_review"]),
             provisions=tuple(c.ref for c in provisions),

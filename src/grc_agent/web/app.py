@@ -28,6 +28,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from grc_agent.agent import Agent
 from grc_agent.ai_assessment import AssessmentError, ClaudeAssessor
 from grc_agent.assessment import assess, readiness_score
+from grc_agent.config import Settings
 from grc_agent.content import (
     TYPES as CONTENT_TYPES,
 )
@@ -87,6 +88,7 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
     app.state.db_path = db_path
     app.state.login_failures = {}
     app.state.agents = {}
+    app.state.demo = Settings.from_env().demo  # also loads .env
     app.state.register = load_register()
     app.state.corpus = load_corpus()
     if os.getenv("GRC_CORPUS_INDEX"):
@@ -158,6 +160,7 @@ def render(request: Request, name: str, status_code: int = 200, **context: Any) 
         csrf=request.session["csrf"],
         flashes=request.session.pop("flash", []),
         register=request.app.state.register,
+        demo_mode=request.app.state.demo,
         document_types=DOCUMENT_TYPES,
         choices=CHOICES,
         outcome_labels=OUTCOME_LABELS,
@@ -216,6 +219,11 @@ def delivery_checks(conn: sqlite3.Connection, eng: sqlite3.Row) -> list[tuple[st
         ),
         ("All documents generated", {d["type"] for d in docs} == set(DOCUMENT_TYPES)),
         ("Every document reviewed by a person", bool(docs) and all(d["reviewed_at"] for d in docs)),
+        # Demo-mode text is a placeholder, never AI output, so it can't go to a client.
+        (
+            "No demo-mode (placeholder) findings",
+            not any(f["drafted_by"] == "demo" for f in findings),
+        ),
     ]
 
 
@@ -1177,7 +1185,12 @@ def _routes(app: FastAPI) -> None:
         except (TypeError, anthropic.CredentialsError) as exc:
             if isinstance(exc, TypeError) and "authentication method" not in str(exc):
                 raise
-            flash(request, "No Claude API credentials. Set ANTHROPIC_API_KEY and restart.", "error")
+            flash(
+                request,
+                "No Claude API credentials. Put ANTHROPIC_API_KEY in .env and restart, "
+                "or set GRC_AI_MODE=demo to test without a key.",
+                "error",
+            )
         except anthropic.AuthenticationError:
             flash(request, "The Claude API rejected the API key.", "error")
         except anthropic.APIError as exc:

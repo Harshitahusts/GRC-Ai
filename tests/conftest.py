@@ -10,6 +10,12 @@ from grc_agent.web import cli as web_cli
 from grc_agent.web.app import create_app
 
 
+@pytest.fixture(autouse=True)
+def _api_mode(monkeypatch):
+    """Tests control the AI mode themselves; a developer's .env must not switch it."""
+    monkeypatch.setenv("GRC_AI_MODE", "api")
+
+
 @pytest.fixture
 def app(tmp_path, monkeypatch):
     monkeypatch.delenv("GRC_SECRET_KEY", raising=False)
