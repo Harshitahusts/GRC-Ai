@@ -228,3 +228,24 @@ def test_dashboard_pipeline_and_attention(authed):
     assert 'data-tip="Intake submitted: 1 engagement"' in page
     assert "harshit</strong> intake submitted" in page
     assert "</strong> login" not in page  # logins don't crowd the activity list
+
+
+def test_serve_refuses_a_port_another_copy_is_using(tmp_path, monkeypatch, capsys):
+    """An old copy still running would otherwise answer the browser with old code."""
+    import socket
+
+    started = []
+    monkeypatch.setattr("uvicorn.run", lambda *a, **k: started.append(k))
+    opened = []
+    monkeypatch.setattr("webbrowser.open", opened.append)
+    with socket.socket() as busy:
+        busy.bind(("127.0.0.1", 0))
+        busy.listen()
+        port = busy.getsockname()[1]
+        code = web_cli.main(["--data-dir", str(tmp_path), "serve", "--port", str(port), "--open"])
+    assert code == 1 and not started and not opened
+    err = capsys.readouterr().err
+    assert f"Port {port} is already in use" in err and "Ctrl+C" in err
+
+    code = web_cli.main(["--data-dir", str(tmp_path), "serve", "--port", str(port)])
+    assert code == 0 and started  # free again: starts normally

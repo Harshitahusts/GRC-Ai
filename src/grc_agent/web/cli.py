@@ -61,7 +61,21 @@ def _serve(data_dir: Path, host: str, port: int, reload: bool, open_browser: boo
     import uvicorn
 
     os.environ["GRC_DATA_DIR"] = str(data_dir)
-    url = f"http://{'127.0.0.1' if host in ('0.0.0.0', '::') else host}:{port}"
+    local = "127.0.0.1" if host in ("0.0.0.0", "::") else host
+    url = f"http://{local}:{port}"
+    if _port_in_use(local, port):
+        # Usually an older copy of the app. Opening the browser would show that copy,
+        # running old code, so stop here instead.
+        print(
+            f"Port {port} is already in use, probably by another copy of the app.", file=sys.stderr
+        )
+        print(
+            "Close that window (or press Ctrl+C in it), then start the app again.\n"
+            "Can't find it? Task Manager > Details: end python.exe and grc-web.exe.\n"
+            f"Or use another port: --port {port + 1}",
+            file=sys.stderr,
+        )
+        return 1
     print(f"GRC agent running at {url}  (data: {data_dir.resolve()})")
     print("Press Ctrl+C to stop.")
     if open_browser:
@@ -78,6 +92,14 @@ def _serve(data_dir: Path, host: str, port: int, reload: bool, open_browser: boo
         log_level="info",
     )
     return 0
+
+
+def _port_in_use(host: str, port: int) -> bool:
+    import socket
+
+    with socket.socket(socket.AF_INET6 if ":" in host else socket.AF_INET) as s:
+        s.settimeout(0.5)
+        return s.connect_ex((host, port)) == 0
 
 
 def _init(data_dir: Path) -> int:

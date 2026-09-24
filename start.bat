@@ -44,6 +44,7 @@ rem Run through python.exe, not grc-web.exe: the installer never replaces python
 rem so a running app can't block the next update.
 .venv\Scripts\python.exe -m grc_agent.web.cli init || goto :error
 .venv\Scripts\python.exe -m grc_agent.web.cli serve --open %*
+if errorlevel 1 pause
 exit /b %errorlevel%
 
 :error
