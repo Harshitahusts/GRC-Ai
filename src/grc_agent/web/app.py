@@ -105,9 +105,11 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
     app.state.make_assessor = lambda corpus: ClaudeAssessor(corpus)
     app.state.connectors = dict(CONNECTORS)
     app.state.secret_box = SecretBox.for_data_dir(data_dir)
+    app.state.data_dir = data_dir
+    app.state.secret_key = _secret_key(data_dir)
     app.add_middleware(
         SessionMiddleware,
-        secret_key=_secret_key(data_dir),
+        secret_key=app.state.secret_key,
         session_cookie="grc_session",
         max_age=SESSION_SECONDS,
         same_site="strict",

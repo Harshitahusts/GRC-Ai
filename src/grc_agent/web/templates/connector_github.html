@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% from "_macros.html" import engagement_header %}
+{% block title %}Connect GitHub · {{ eng.client }}{% endblock %}
+{% block content %}
+{{ engagement_header(eng, s, tab) }}
+{% if not app_config %}
+<section class="card">
+  <h2>One-time setup first</h2>
+  <p>Clients authorise access by installing the firm's GitHub App. It isn't set up on this computer yet.</p>
+  <p><a class="button primary" href="/settings/github-app">Set up the GitHub App</a></p>
+</section>
+{% else %}
+<div class="grid-2 wide-left">
+  <section class="card">
+    <h2>Authorise read-only access</h2>
+    <p>The client installs the app on their GitHub organisation, chooses which repositories to share, and approves <strong>read-only</strong> access on GitHub's screen. No password or token is ever shared.</p>
+    <p><a class="button primary" href="{{ install_url }}">Authorize on GitHub</a></p>
+    <p class="small muted">Use this if you're signed in to the client's GitHub, for example together in a meeting. GitHub brings you back here and the checks run straight away.</p>
+    <h3>Or send the client this link</h3>
+    <input class="mono" readonly value="https://github.com/apps/{{ app_config.slug }}/installations/new" onclick="this.select()" aria-label="Install link">
+    <p class="small muted">When they've installed it, enter their GitHub organisation name below.</p>
+    <form method="post" action="/engagements/{{ eng.id }}/connectors/github/find" class="ask">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input name="account" placeholder="client-org-name" required aria-label="Client's GitHub organisation">
+      <button>Find their installation</button>
+    </form>
+  </section>
+  <aside class="card">
+    <h2>What the client grants</h2>
+    <p class="small">{{ c.permissions }}</p>
+    <h2>What we check</h2>
+    <p class="small">{{ c.summary }}</p>
+    <p class="small muted">The client can remove access at any time: GitHub → Settings → Applications → Installed GitHub Apps → Configure → Uninstall.</p>
+  </aside>
+</div>
+{% endif %}
+{% endblock %}

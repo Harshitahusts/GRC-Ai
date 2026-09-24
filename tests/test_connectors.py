@@ -52,22 +52,13 @@ def by_key(checks):
 def test_catalog_is_consistent():
     ids = [c.id for c in CONNECTORS]
     assert len(ids) == len(set(ids))
-    for c in CONNECTORS:
-        if c.status == "available":
-            assert c.fields and c.setup and c.permissions, c.id
-            assert c.send if c.kind == "notify" else c.test and c.collect, c.id
-    available = {c.id for c in CONNECTORS if c.status == "available"}
-    assert available == {
-        "github",
-        "gitlab",
-        "bitbucket",
-        "aws",
-        "gcp",
-        "azure",
-        "slack",
-        "teams",
-        "google_chat",
-    }
+    available = {c.id: c for c in CONNECTORS if c.status == "available"}
+    assert set(available) == {"github", "aws"}  # the rest are "Coming soon" for now
+    assert available["github"].flow == "github_app"
+    aws = available["aws"]
+    assert aws.flow == "aws_role" and aws.test and aws.collect
+    for c in available.values():
+        assert c.setup and c.permissions
     assert all(items for _, items in by_category())
 
 
@@ -468,6 +459,6 @@ def test_all_storage_in_india_passes():
     assert check.status == "pass"
 
 
-def test_registry_points_at_the_implementations():
-    assert BY_ID["github"].collect is vcs.github_collect
-    assert BY_ID["teams"].send is chat.teams_send
+def test_coming_soon_connectors_keep_their_code():
+    assert BY_ID["gitlab"].status == "planned" and BY_ID["gitlab"].collect is vcs.gitlab_collect
+    assert BY_ID["teams"].status == "planned" and BY_ID["teams"].send is chat.teams_send

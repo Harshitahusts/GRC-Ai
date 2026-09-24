@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}GitHub access{% endblock %}
+{% block main_class %}login{% endblock %}
+{% block content %}
+<div class="card login-card">
+  {% if setup_action == "request" %}
+  <h1>Request sent</h1>
+  <p>GitHub has asked your organisation's owners to approve the app. Once they approve it, let your consultant know.</p>
+  {% else %}
+  <h1>Thank you</h1>
+  <p>Read-only access is set up. Let your consultant know, and you can close this page.</p>
+  {% endif %}
+  <p class="small muted">You can remove the app at any time: GitHub → Settings → Applications → Installed GitHub Apps.</p>
+</div>
+{% endblock %}

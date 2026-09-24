@@ -88,26 +88,34 @@ Put the DPDP Act and Rules PDFs from meity.gov.in in `corpus/`, list them in
 
 ### Connectors
 
-Each engagement has a **Connectors** tab for linking the client's systems with read-only
-access. The **Connectors** page lists every connector with its setup steps.
+Each engagement has a **Connectors** tab for linking the client's systems. The client
+**authorises read-only access** on their side; nobody pastes passwords or long-lived keys.
 
-| Kind | Connectors | What it does |
+| Connector | How the client authorises | What it checks |
 |---|---|---|
-| Version control | GitHub, GitLab, Bitbucket | Public repositories, default branch protection, secret scanning |
-| Cloud | AWS, Google Cloud, Azure | **Where data is stored (India or not)**, public access, root MFA, audit logging, TLS |
-| Communication | Slack, Microsoft Teams, Google Chat | Posts engagement updates to a channel (status only, never client data) |
+| GitHub | Installs the firm's GitHub App, picks which repositories to share, approves read-only access on GitHub | Public repositories, default branch protection, secret scanning |
+| AWS | Runs a CloudFormation template that creates a read-only role (AWS `SecurityAudit`) only the firm can use, then sends back the role ARN | **Where data is stored (India or not)**, S3 public access, root MFA, password policy, CloudTrail |
 
-Identity (Google Workspace, Entra ID, Okta), HR (Keka, Darwinbox, Zoho People), ticketing,
-device and data-store connectors are listed as planned.
+Everything else (GitLab, Bitbucket, Google Cloud, Azure, Slack, Teams, Google Chat, and the
+identity, HR, ticketing, device and data-store connectors) shows as **Coming soon**.
+
+One-time setup for the firm:
+
+- **GitHub:** Connectors → GitHub → Connect → **Set up the GitHub App**. One click creates
+  the app on GitHub; its private key is saved encrypted in `var/`. Back up `var/`. The app
+  can also be supplied with `GRC_GITHUB_APP_ID`, `GRC_GITHUB_APP_SLUG` and
+  `GRC_GITHUB_APP_PRIVATE_KEY` (the PEM, or a path to it).
+- **AWS:** the firm's own AWS credentials must be on this computer (`aws configure`, the
+  `AWS_*` variables, or a profile named in `GRC_AWS_PROFILE`). They need only
+  `sts:AssumeRole`. Each engagement gets its own external ID, so a client's role works only
+  for that engagement; access lasts 15 minutes per check run.
 
 - Evidence is linked to provisions (Section 8(5) safeguards, Section 16(1) transfers) and
   shows under the matching findings.
-- If a cloud connector finds data outside India but the client answered "No" to using
-  services outside India, the app flags the contradiction and blocks delivery until the
-  answer is corrected.
-- Credentials are checked before they're saved, stored encrypted with a key in the data
-  folder (`var/connector_key`, or `GRC_CONNECTOR_KEY`), and never shown again. Webhook URLs
-  must be on the real Slack, Teams or Google Chat hosts.
+- If AWS finds data outside India but the client answered "No" to using services outside
+  India, the app flags the contradiction and blocks delivery until the answer is corrected.
+- Clients remove access at any time: uninstall the GitHub App, or delete the CloudFormation
+  stack.
 
 ### Docs and blog
 
@@ -194,6 +202,8 @@ Set in `.env` or the environment:
 | `GRC_AGENT_MAX_TOKENS` | `16000` | Max output tokens per response |
 | `GRC_AGENT_MAX_TURNS` | `20` | Max model calls per question |
 | `GRC_AI_MODE` | `api` | `demo` runs the offline stand-in for Claude, for testing without a key |
+| `GRC_AWS_PROFILE` | none | AWS profile with the firm's credentials (for assuming clients' roles) |
+| `GRC_PUBLIC_URL` | this server | Homepage shown on the GitHub App |
 
 The agent uses adaptive thinking, prompt caching, and server-side refusal fallbacks
 (`fallbacks: "default"`).

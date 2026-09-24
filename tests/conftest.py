@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 from helpers import PASSWORD, login
 
+from grc_agent.connectors import ConnectorError
 from grc_agent.web import cli as web_cli
 from grc_agent.web.app import create_app
 
@@ -14,6 +15,16 @@ from grc_agent.web.app import create_app
 def _api_mode(monkeypatch):
     """Tests control the AI mode themselves; a developer's .env must not switch it."""
     monkeypatch.setenv("GRC_AI_MODE", "api")
+
+
+@pytest.fixture(autouse=True)
+def _no_firm_aws(monkeypatch):
+    """Tests never call real AWS: by default this machine has no firm credentials."""
+
+    def missing():
+        raise ConnectorError("The firm's AWS credentials don't work (NoCredentials).")
+
+    monkeypatch.setattr("grc_agent.connectors.cloud.firm_account_id", missing)
 
 
 @pytest.fixture

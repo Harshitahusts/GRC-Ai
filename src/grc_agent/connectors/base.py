@@ -46,6 +46,25 @@ class Response:
         return 200 <= self.status < 300
 
 
+def _b64url(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+
+def sign_rs256_jwt(claims: dict[str, Any], private_key_pem: str) -> str:
+    """A JSON Web Token signed with an RSA private key (used by GitHub Apps and GCP)."""
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import padding
+
+    header = _b64url(json.dumps({"alg": "RS256", "typ": "JWT"}).encode())
+    body = _b64url(json.dumps(claims).encode())
+    try:
+        key = serialization.load_pem_private_key(private_key_pem.encode(), password=None)
+    except (ValueError, TypeError):
+        raise ConnectorError("The private key isn't a valid PEM key.") from None
+    signature = key.sign(f"{header}.{body}".encode(), padding.PKCS1v15(), hashes.SHA256())
+    return f"{header}.{body}.{_b64url(signature)}"
+
+
 def basic_auth(user: str, password: str) -> str:
     return "Basic " + base64.b64encode(f"{user}:{password}".encode()).decode()
 

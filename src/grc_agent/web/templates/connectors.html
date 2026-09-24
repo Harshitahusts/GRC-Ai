@@ -34,7 +34,7 @@
     {% for c in items %}
     <a class="connector {{ 'planned' if c.status == 'planned' }}" href="/connectors/{{ c.id }}">
       <p class="connector-name"><strong>{{ c.name }}</strong>
-        {% if c.status == "planned" %}<span class="badge badge-none">Planned</span>
+        {% if c.status == "planned" %}<span class="badge badge-none">Coming soon</span>
         {% elif c.kind == "notify" %}<span class="badge sev-medium">Notifications</span>
         {% else %}<span class="badge badge-pass">Evidence</span>{% endif %}</p>
       <p class="small">{{ c.summary }}</p>

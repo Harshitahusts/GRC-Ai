@@ -1,7 +1,7 @@
 """Every connector the app knows about: what it needs, what it checks, and why.
 
-"available" connectors work now. "planned" ones are listed so the roadmap is
-visible in the app; they follow the categories GRC and DPDPA platforms connect
+"available" connectors work now. "planned" ones show as "Coming soon", so the
+roadmap is visible in the app; they follow the categories GRC and DPDPA platforms connect
 to (cloud, identity, HR, code, ticketing, devices, and data stores for
 personal-data discovery).
 """
@@ -9,7 +9,7 @@ personal-data discovery).
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from grc_agent.connectors import chat, cloud, vcs
 
@@ -32,8 +32,9 @@ class Connector:
     category: str
     summary: str
     why: str  # why it matters for DPDPA work
-    status: str = "available"  # available | planned
+    status: str = "available"  # available | planned (shown as "Coming soon")
     kind: str = "evidence"  # evidence (collects checks) | notify (posts messages)
+    flow: str = "form"  # form (paste credentials) | github_app | aws_role (client authorises)
     fields: tuple[Field, ...] = ()
     setup: tuple[str, ...] = ()
     permissions: str = ""
@@ -64,16 +65,14 @@ CONNECTORS: tuple[Connector, ...] = (
         "Version control",
         "Repository visibility, default branch protection and secret scanning.",
         "Public repositories and leaked secrets are a common route to personal data breaches.",
-        fields=(TOKEN,),
+        flow="github_app",
         setup=(
-            "In GitHub go to Settings → Developer settings → Personal access tokens → Fine-grained tokens.",
-            "Choose the organisation or account, and 'All repositories' (or the ones to check).",
-            "Repository permissions: Metadata (read) and Administration (read). Nothing else.",
-            "Generate the token and paste it here.",
+            "Click Authorize on GitHub, or send the client the install link.",
+            "The client picks their organisation and which repositories to share.",
+            "They approve read-only access on GitHub's own screen. No token is copied anywhere.",
+            "They can remove the app at any time in their GitHub settings under Applications.",
         ),
-        permissions="Read-only: Metadata and Administration (read).",
-        test=vcs.github_test,
-        collect=vcs.github_collect,
+        permissions="Read-only: Metadata and Administration (read), on the repositories the client chooses.",
     ),
     Connector(
         "gitlab",
@@ -126,24 +125,23 @@ CONNECTORS: tuple[Connector, ...] = (
         "Cloud",
         "Where S3 data is stored, S3 public access, root MFA, password policy and CloudTrail.",
         "Shows whether personal data sits outside India (Section 16) and checks basic safeguards.",
+        flow="aws_role",
         fields=(
-            Field("access_key_id", "Access key ID", secret=True),
-            Field("secret_access_key", "Secret access key", secret=True),
             Field(
-                "session_token",
-                "Session token",
-                secret=True,
-                required=False,
-                help="Only for temporary credentials.",
+                "role_arn",
+                "Role ARN from the client",
+                placeholder="arn:aws:iam::123456789012:role/…",
             ),
             Field("region", "Home region", required=False, placeholder="ap-south-1"),
         ),
         setup=(
-            "In IAM create a user (or role) for this app, with the AWS managed policy SecurityAudit.",
-            "Create an access key for it and paste both parts here.",
-            "Delete the key when the engagement ends.",
+            "Download the CloudFormation template below and send it to the client.",
+            "The client opens CloudFormation → Create stack → Upload a template file, and creates the stack.",
+            "It creates a read-only role (AWS SecurityAudit policy) that only this firm can use, locked to this engagement's external ID.",
+            "The client copies RoleArn from the stack's Outputs tab and sends it back. Paste it here.",
+            "To remove access, the client deletes the stack.",
         ),
-        permissions="Read-only: the SecurityAudit managed policy.",
+        permissions="Read-only: the AWS managed policy SecurityAudit, through a role the client controls.",
         test=cloud.aws_test,
         collect=cloud.aws_collect,
     ),
@@ -355,6 +353,11 @@ CONNECTORS: tuple[Connector, ...] = (
         )
     ),
 )
+
+# Built and tested, but switched off for now: GitHub and AWS use authorised
+# read-only access first; these follow once they have the same kind of flow.
+COMING_SOON = {"gitlab", "bitbucket", "gcp", "azure", "slack", "teams", "google_chat"}
+CONNECTORS = tuple(replace(c, status="planned") if c.id in COMING_SOON else c for c in CONNECTORS)
 
 BY_ID = {c.id: c for c in CONNECTORS}
 
