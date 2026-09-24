@@ -23,16 +23,28 @@
       <h2>How to set it up</h2>
       <ol>{% for step in c.setup %}<li>{{ step }}</li>{% endfor %}</ol>
       <p><strong>Access needed:</strong> {{ c.permissions }}</p>
-      <p class="small muted">Credentials are checked before they're saved, stored encrypted, and never shown again.</p>
+      {% if c.flow == "form" %}<p class="small muted">Credentials are checked before they're saved, stored encrypted, and never shown again.</p>{% endif %}
     {% else %}
       <p class="flash flash-info">This connector is coming soon. Until then, collect this evidence from the client by hand, such as exports or screenshots.</p>
     {% endif %}
   </section>
 
   <aside>
+    {% if c.flow == "github_app" and c.status == "available" %}
+    <section class="card">
+      <h2>Step 1: the firm's GitHub App</h2>
+      {% if github_app_config %}
+      <p><span class="badge badge-pass">Set up</span> {{ github_app_config.slug }}</p>
+      <p class="small"><a href="/settings/github-app">View the app</a></p>
+      {% else %}
+      <p>Clients authorise access by installing your firm's GitHub App. Create it once, in one click.</p>
+      <p><a class="button primary" href="/settings/github-app">Set up the GitHub App</a></p>
+      {% endif %}
+    </section>
+    {% endif %}
     {% if c.status == "available" %}
     <form method="get" action="/connectors/{{ c.id }}/connect" class="card">
-      <h2>Connect {{ c.name }}</h2>
+      <h2>{% if c.flow == "github_app" %}Step 2: connect a client{% else %}Connect {{ c.name }}{% endif %}</h2>
       {% if engagements %}
       <label>For which engagement?
         <select name="engagement" required>
@@ -41,7 +53,7 @@
       </label>
       <button class="primary">Continue</button>
       {% else %}
-      <p class="muted">Connectors belong to a client engagement. <a href="/engagements#new">Create an engagement</a> first.</p>
+      <p class="muted">Connectors belong to an <strong>Agent-assisted</strong> client engagement. <a href="/engagements#new">Create one</a> (choose Agent-assisted) and come back here.</p>
       {% endif %}
     </form>
     {% endif %}

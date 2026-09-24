@@ -323,7 +323,12 @@ def register(app: FastAPI) -> None:
             (c.id,),
         ).fetchall()
         return render(
-            request, "connector_detail.html", c=c, engagements=engagements, connections=connections
+            request,
+            "connector_detail.html",
+            c=c,
+            engagements=engagements,
+            connections=connections,
+            github_app_config=github_config(request.app) if c.flow == "github_app" else None,
         )
 
     @app.get("/connectors/{connector_id}/connect")
