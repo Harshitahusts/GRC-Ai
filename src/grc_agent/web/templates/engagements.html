@@ -1,27 +1,33 @@
 {% extends "base.html" %}
-{% from "_macros.html" import stage_badge %}
+{% from "_macros.html" import stage_badge, meter, icon %}
 {% block title %}Engagements{% endblock %}
 {% block content %}
-<div class="page-head"><h1>Engagements</h1></div>
+<div class="page-head">
+  <div>
+    <h1>Engagements</h1>
+    <p class="muted">Every client assessment, from intake to delivery.</p>
+  </div>
+  <a class="button primary" href="#new">{{ icon("i-plus") }} New engagement</a>
+</div>
 
 <div class="grid-2 wide-left">
   <section class="card">
     {% if summaries %}
-    <table>
-      <thead><tr><th>ID</th><th>Client</th><th>Stage</th><th class="num">Readiness</th><th class="num">Docs reviewed</th></tr></thead>
+    <table class="table">
+      <thead><tr><th>ID</th><th>Client</th><th>Stage</th><th>Readiness</th><th class="num">Docs reviewed</th></tr></thead>
       <tbody>
       {% for s in summaries %}
       <tr>
         <td class="muted">ENG-{{ '%03d' % s.id }}</td>
-        <td><a href="/engagements/{{ s.id }}">{{ s.client }}</a><br><span class="muted small">{{ s.sector }} · {{ s.mode }}</span></td>
+        <td><a class="strong-link" href="/engagements/{{ s.id }}">{{ s.client }}</a><br><span class="muted small">{{ s.sector }} · {{ s.mode }}</span></td>
         <td>{{ stage_badge(s) }}</td>
-        <td class="num">{{ s.score if s.score is not none else "–" }}</td>
+        <td class="readiness">{% if s.score is not none %}<span class="readiness-cell"><span class="num-inline">{{ s.score }}</span>{{ meter(s.score, 100, "Readiness for " ~ s.client) }}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
         <td class="num">{{ "%d/%d"|format(s.reviewed, s.documents) if s.documents else "–" }}</td>
       </tr>
       {% endfor %}
       </tbody>
     </table>
-    {% else %}<p class="muted">No engagements yet.</p>{% endif %}
+    {% else %}<div class="empty">{{ icon("i-briefcase") }}<p><strong>No engagements yet.</strong> Use the form to create the first one.</p></div>{% endif %}
   </section>
 
   <form method="post" action="/engagements" class="card" id="new">

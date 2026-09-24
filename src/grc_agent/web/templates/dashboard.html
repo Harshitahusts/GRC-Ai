@@ -1,76 +1,156 @@
 {% extends "base.html" %}
-{% from "_macros.html" import kpi_badge, stage_badge %}
+{% from "_macros.html" import kpi_badge, stage_badge, meter, icon %}
 {% block title %}Dashboard{% endblock %}
 {% block content %}
 <div class="page-head">
-  <h1>Dashboard</h1>
-  <a class="button primary" href="/engagements#new">New engagement</a>
+  <div>
+    <h1>Dashboard</h1>
+    <p class="muted">Welcome back, {{ user }}. {{ total }} engagement{{ "" if total == 1 else "s" }} in the workspace.</p>
+  </div>
+  <div class="head-actions">
+    <a class="button" href="/assistant">{{ icon("i-spark") }} Ask the assistant</a>
+    <a class="button primary" href="/engagements#new">{{ icon("i-plus") }} New engagement</a>
+  </div>
 </div>
 
-<section class="stats">
-  <div class="card stat north-star">
-    <small>North Star · Verified Engagements Delivered</small>
-    <strong>{{ card.verified_engagements }}</strong>
-    <span class="muted">of {{ card.agent_engagements }} agent engagement(s)</span>
+<section class="tiles" aria-label="Headline numbers">
+  <div class="tile tile-hero">
+    <p class="tile-label">{{ icon("i-star") }} North Star · Verified engagements delivered</p>
+    <p class="hero-figure">{{ card.verified_engagements }}</p>
+    <p class="muted small">of {{ card.agent_engagements }} agent-assisted engagement{{ "" if card.agent_engagements == 1 else "s" }}</p>
+    {{ meter(card.verified_engagements, card.agent_engagements, "Verified engagements delivered") }}
   </div>
-  <div class="card stat"><small>In progress</small><strong>{{ in_progress }}</strong></div>
-  <div class="card stat"><small>Delivered</small><strong>{{ delivered }}</strong></div>
-  <div class="card stat">
-    <small>Pilot KPIs passing</small>
-    <strong>{{ card.kpis|selectattr("passed")|list|length }}/{{ card.kpis|length }}</strong>
-    <a href="/kpis" class="small">View scorecard</a>
+  <div class="tile">
+    <p class="tile-label">In progress</p>
+    <p class="tile-value">{{ in_progress }}</p>
+    <p class="muted small">agent-assisted, not yet delivered</p>
+  </div>
+  <div class="tile">
+    <p class="tile-label">Delivered</p>
+    <p class="tile-value">{{ delivered }}</p>
+    <p class="muted small">agent-assisted</p>
+  </div>
+  <div class="tile">
+    <p class="tile-label">Average readiness</p>
+    <p class="tile-value">{{ avg_readiness if avg_readiness is not none else "–" }}{% if avg_readiness is not none %}<small>/100</small>{% endif %}</p>
+    {% if avg_readiness is not none %}{{ meter(avg_readiness, 100, "Average readiness") }}{% else %}<p class="muted small">No assessments yet</p>{% endif %}
+  </div>
+  <div class="tile">
+    {% set passing = card.kpis|selectattr("passed")|list|length %}
+    <p class="tile-label">Pilot KPIs passing</p>
+    <p class="tile-value">{{ passing }}<small>/{{ card.kpis|length }}</small></p>
+    {{ meter(passing, card.kpis|length, "Pilot KPIs passing") }}
   </div>
 </section>
 
-<div class="grid-2">
+<div class="grid-2 wide-left">
   <section class="card">
-    <h2>Engagements</h2>
+    <div class="card-head">
+      <h2>Needs attention</h2>
+      {% if attention %}<span class="badge">{{ attention|length }}</span>{% endif %}
+    </div>
+    {% if attention %}
+    <ul class="attention">
+      {% for a in attention[:8] %}
+      <li class="level-{{ a.level }}">
+        <span class="status-icon" aria-hidden="true">{{ icon({"critical": "i-x", "serious": "i-alert", "warning": "i-clock", "good": "i-check"}[a.level]) }}</span>
+        <span class="attention-text"><strong>{{ a.client }}</strong><span>{{ a.text }}</span></span>
+        <span class="sr-only">{{ {"critical": "Critical", "serious": "Serious", "warning": "To do", "good": "Ready"}[a.level] }}</span>
+        <a class="button small" href="{{ a.href }}">Open</a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty">
+      {{ icon("i-check") }}
+      <p><strong>All clear.</strong> Nothing is waiting on you.</p>
+    </div>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>Pipeline</h2>
+      <span class="muted small">agent-assisted engagements by stage</span>
+    </div>
+    <table class="barchart">
+      <caption class="sr-only">Number of agent-assisted engagements at each stage</caption>
+      <thead class="sr-only"><tr><th>Stage</th><th>Engagements</th></tr></thead>
+      <tbody>
+      {% for p in pipeline %}
+      <tr>
+        <th scope="row">{{ p.stage }}</th>
+        <td>
+          <span class="bar-track">
+            {% if p.count %}<span class="bar" style="width: {{ p.pct }}%" tabindex="0" data-tip="{{ p.stage }}: {{ p.count }} engagement{{ '' if p.count == 1 else 's' }}"></span>{% endif %}
+          </span>
+          <span class="bar-value{% if not p.count %} muted{% endif %}">{{ p.count }}</span>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="small"><a href="/engagements">All engagements {{ icon("i-arrow") }}</a></p>
+  </section>
+</div>
+
+<div class="grid-2 wide-left">
+  <section class="card">
+    <div class="card-head">
+      <h2>Engagements</h2>
+      <a class="small" href="/engagements">View all {{ icon("i-arrow") }}</a>
+    </div>
     {% if summaries %}
-    <table>
-      <thead><tr><th>Client</th><th>Stage</th><th class="num">Readiness</th><th class="num">Gaps</th><th class="num">Open</th></tr></thead>
+    <table class="table">
+      <thead><tr><th>Client</th><th>Stage</th><th>Readiness</th><th class="num hide-sm">Gaps</th><th class="num hide-sm">Open</th></tr></thead>
       <tbody>
       {% for s in summaries %}
       <tr>
-        <td><a href="/engagements/{{ s.id }}">{{ s.client }}</a><br><span class="muted small">{{ s.sector }}</span></td>
+        <td><a class="strong-link" href="/engagements/{{ s.id }}">{{ s.client }}</a><br><span class="muted small">{{ s.sector }}</span></td>
         <td>{{ stage_badge(s) }}</td>
-        <td class="num">{{ s.score if s.score is not none else "–" }}</td>
-        <td class="num">{{ s.gaps if s.mode == "agent" else "–" }}</td>
-        <td class="num">{{ s.open_items if s.mode == "agent" else "–" }}</td>
+        <td class="readiness">{% if s.score is not none %}<span class="readiness-cell"><span class="num-inline">{{ s.score }}</span>{{ meter(s.score, 100, "Readiness for " ~ s.client) }}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+        <td class="num hide-sm">{{ s.gaps if s.mode == "agent" else "–" }}</td>
+        <td class="num hide-sm">{{ s.open_items if s.mode == "agent" else "–" }}</td>
       </tr>
       {% endfor %}
       </tbody>
     </table>
     {% else %}
-    <p class="muted">No engagements yet. <a href="/engagements#new">Create the first one</a>.</p>
+    <div class="empty">
+      {{ icon("i-briefcase") }}
+      <p><strong>No engagements yet.</strong> Create one to start an intake.</p>
+      <a class="button primary" href="/engagements#new">{{ icon("i-plus") }} New engagement</a>
+    </div>
     {% endif %}
   </section>
 
   <section class="card">
-    <h2>Pilot KPIs</h2>
+    <div class="card-head">
+      <h2>Pilot KPIs</h2>
+      <a class="small" href="/kpis">Scorecard {{ icon("i-arrow") }}</a>
+    </div>
     <ul class="kpi-list">
       {% for k in card.kpis %}
       <li>{{ kpi_badge(k.passed) }} <span>{{ k.name }}</span> <strong>{{ k.display }}</strong></li>
       {% endfor %}
     </ul>
     {% for w in card.warnings %}<p class="flash flash-warn small">{{ w }}</p>{% endfor %}
+    <p class="small muted">Connectors healthy: <strong>{{ connections_ok }}/{{ connections_total }}</strong> · <a href="/connectors">Connectors</a></p>
   </section>
 </div>
 
 <section class="card">
-  <h2>Recent activity</h2>
+  <div class="card-head"><h2>Recent activity</h2></div>
   {% if activity %}
-  <table>
-    <tbody>
+  <ol class="timeline">
     {% for a in activity %}
-    <tr>
-      <td class="muted small nowrap">{{ a.at[:16].replace("T", " ") }} UTC</td>
-      <td>{{ a.username }}</td>
-      <td>{{ a.action.replace("_", " ") }}</td>
-      <td>{% if a.engagement_id %}<a href="/engagements/{{ a.engagement_id }}">{{ a.client }}</a>{% endif %}</td>
-    </tr>
+    <li>
+      <span class="dot" aria-hidden="true"></span>
+      <span><strong>{{ a.username }}</strong> {{ a.action.replace("_", " ") }}{% if a.engagement_id %} · <a href="/engagements/{{ a.engagement_id }}">{{ a.client }}</a>{% endif %}</span>
+      <time class="muted small" datetime="{{ a.at }}">{{ a.at[:16].replace("T", " ") }} UTC</time>
+    </li>
     {% endfor %}
-    </tbody>
-  </table>
+  </ol>
   {% else %}<p class="muted">Nothing yet.</p>{% endif %}
 </section>
 {% endblock %}

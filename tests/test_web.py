@@ -214,3 +214,17 @@ def test_init_creates_first_account_only_once(tmp_path, monkeypatch, capsys):
     assert "Created user 'priya'" in capsys.readouterr().out
     assert web_cli.main(["--data-dir", str(tmp_path), "init"]) == 0
     assert "already exist" in capsys.readouterr().out
+
+
+def test_dashboard_pipeline_and_attention(authed):
+    from helpers import ALL_YES, create, post
+
+    page = authed.get("/").text
+    assert "All clear." in page and "No engagements yet." in page
+    eid = create(authed)
+    post(authed, f"/engagements/{eid}/intake", {**ALL_YES, "action": "submit"})
+    page = authed.get("/").text
+    assert "Intake is in. Run the assessment." in page
+    assert 'data-tip="Intake submitted: 1 engagement"' in page
+    assert "harshit</strong> intake submitted" in page
+    assert "</strong> login" not in page  # logins don't crowd the activity list
