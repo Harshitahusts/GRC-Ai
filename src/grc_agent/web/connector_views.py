@@ -218,6 +218,36 @@ def register(app: FastAPI) -> None:
         ).fetchall()
         return render(request, "connectors.html", categories=by_category(), connections=rows)
 
+    @app.get("/connectors/{connector_id}")
+    def connector_detail(connector_id: str, request: Request, user: User, conn: Conn):
+        c = request.app.state.connectors.get(connector_id)
+        if c is None:
+            raise HTTPException(status_code=404, detail="Unknown connector")
+        engagements = conn.execute(
+            "SELECT id, client, sector FROM engagements WHERE mode = 'agent' ORDER BY id DESC"
+        ).fetchall()
+        connections = conn.execute(
+            "SELECT c.*, e.client FROM connections c JOIN engagements e ON e.id = c.engagement_id "
+            "WHERE c.connector = ? ORDER BY c.id DESC",
+            (c.id,),
+        ).fetchall()
+        return render(
+            request, "connector_detail.html", c=c, engagements=engagements, connections=connections
+        )
+
+    @app.get("/connectors/{connector_id}/connect")
+    def connector_connect(
+        connector_id: str, request: Request, user: User, conn: Conn, engagement: int = 0
+    ):
+        """From the catalog: pick an engagement, then go to its setup form for this connector."""
+        c = _connector(request, connector_id)
+        eng = get_engagement(conn, engagement)
+        if eng["mode"] != "agent":
+            raise HTTPException(
+                status_code=400, detail="Connectors are for agent-assisted engagements."
+            )
+        return redirect(f"/engagements/{eng['id']}/connectors/new?type={c.id}")
+
     @app.get("/engagements/{eid}/connectors")
     def engagement_connectors(eid: int, request: Request, user: User, conn: Conn):
         from grc_agent.web.app import answers_of

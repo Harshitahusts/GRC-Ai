@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}{{ c.name }} connector{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="crumb"><a href="/connectors">Connectors</a> / {{ c.category }}</p>
+    <h1>{{ c.name }}</h1>
+    <p>
+      {% if c.status == "planned" %}<span class="badge badge-none">Planned</span>
+      {% elif c.kind == "notify" %}<span class="badge sev-medium">Notifications</span>
+      {% else %}<span class="badge badge-pass">Evidence</span>{% endif %}
+    </p>
+  </div>
+</div>
+
+<div class="grid-2 wide-left">
+  <section class="card">
+    <h2>What it does</h2>
+    <p>{{ c.summary }}</p>
+    <h2>Why it matters for DPDPA</h2>
+    <p>{{ c.why }}</p>
+    {% if c.status == "available" %}
+      <h2>How to set it up</h2>
+      <ol>{% for step in c.setup %}<li>{{ step }}</li>{% endfor %}</ol>
+      <p><strong>Access needed:</strong> {{ c.permissions }}</p>
+      <p class="small muted">Credentials are checked before they're saved, stored encrypted, and never shown again.</p>
+    {% else %}
+      <p class="flash flash-info">This connector is planned but not built yet. Until it is, collect this evidence from the client by hand, such as exports or screenshots.</p>
+    {% endif %}
+  </section>
+
+  <aside>
+    {% if c.status == "available" %}
+    <form method="get" action="/connectors/{{ c.id }}/connect" class="card">
+      <h2>Connect {{ c.name }}</h2>
+      {% if engagements %}
+      <label>For which engagement?
+        <select name="engagement" required>
+          {% for e in engagements %}<option value="{{ e.id }}">{{ e.client }} ({{ e.sector }})</option>{% endfor %}
+        </select>
+      </label>
+      <button class="primary">Continue</button>
+      {% else %}
+      <p class="muted">Connectors belong to a client engagement. <a href="/engagements#new">Create an engagement</a> first.</p>
+      {% endif %}
+    </form>
+    {% endif %}
+    {% if connections %}
+    <section class="card">
+      <h2>Connected</h2>
+      <ul class="plain">
+        {% for x in connections %}
+        <li><a href="/engagements/{{ x.engagement_id }}/connectors">{{ x.client }}</a>
+          {% if x.status == "ok" %}<span class="badge badge-pass">OK</span>{% else %}<span class="badge badge-fail">Error</span>{% endif %}</li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

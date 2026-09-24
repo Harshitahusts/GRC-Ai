@@ -181,3 +181,35 @@ def test_real_slack_connector_rejects_non_slack_url(authed):
         {"connector": "slack", "webhook_url": "https://evil.example/hook"},
     ).text
     assert "doesn&#39;t look like a Slack incoming webhook URL" in page
+
+
+def test_catalog_cards_link_to_detail_pages(authed):
+    page = authed.get("/connectors").text
+    assert 'href="/connectors/github"' in page and 'href="/connectors/okta"' in page
+    assert page.count('class="connector') >= 24
+
+
+def test_detail_page_and_connect_flow(authed):
+    eid = create(authed)
+    page = authed.get("/connectors/aws").text
+    assert "SecurityAudit" in page and "For which engagement?" in page
+    assert f'<option value="{eid}">Acme Pvt Ltd (SaaS)</option>' in page
+
+    response = authed.get(f"/connectors/aws/connect?engagement={eid}", follow_redirects=False)
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/engagements/{eid}/connectors/new?type=aws"
+    assert "Connect Amazon Web Services" in authed.get(response.headers["location"]).text
+
+
+def test_detail_page_without_engagements_and_for_planned(authed):
+    assert "Create an engagement" in authed.get("/connectors/github").text
+    page = authed.get("/connectors/okta").text
+    assert "planned but not built yet" in page and "For which engagement?" not in page
+    assert authed.get("/connectors/okta/connect?engagement=1").status_code == 404
+    assert authed.get("/connectors/nope").status_code == 404
+
+
+def test_connect_rejects_manual_and_missing_engagements(authed):
+    eid = create(authed, mode="manual")
+    assert authed.get(f"/connectors/aws/connect?engagement={eid}").status_code == 400
+    assert authed.get("/connectors/aws/connect?engagement=999").status_code == 404
