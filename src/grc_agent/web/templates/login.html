@@ -1,15 +1,33 @@
 {% extends "base.html" %}
+{% from "_macros.html" import icon %}
 {% block title %}Log in{% endblock %}
 {% block main_class %}login{% endblock %}
 {% block content %}
-<form method="post" action="/login" class="card login-card">
-  <h1>GRC agent</h1>
-  <p class="muted">DPDPA assessment prototype. Internal use only.</p>
-  {% if error %}<div class="flash flash-error" role="alert">{{ error }}</div>{% endif %}
-  <input type="hidden" name="csrf" value="{{ csrf }}">
-  <label>Username <input name="username" autocomplete="username" required autofocus></label>
-  <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
-  <button class="primary">Log in</button>
-  <p class="muted small">No account? Create one on the server with <code>grc-web adduser NAME</code>.</p>
-</form>
+<section class="login-aside">
+  <span class="brand">
+    <span class="brand-mark" aria-hidden="true">{{ icon("i-shield") }}</span>
+    <span class="brand-text">GRC agent<small>DPDPA</small></span>
+  </span>
+  <div>
+    <h2>DPDPA readiness assessments, drafted in hours, verified by you.</h2>
+    <ul>
+      <li>{{ icon("i-check") }} Guided client intake mapped to every obligation in the Act and Rules.</li>
+      <li>{{ icon("i-check") }} Findings with provision-level citations, checked before delivery.</li>
+      <li>{{ icon("i-check") }} Read-only evidence from the client's GitHub and AWS.</li>
+    </ul>
+  </div>
+  <p class="small" style="color:#8e9ab3;margin:0">Internal use only.</p>
+</section>
+<div class="login-main">
+  <form method="post" action="/login" class="card login-card">
+    <h1>Log in</h1>
+    <p class="muted">Welcome back. Sign in to your workspace.</p>
+    {% if error %}<div class="flash flash-error" role="alert">{{ error }}</div>{% endif %}
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Username <input name="username" autocomplete="username" required autofocus></label>
+    <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+    <button class="primary">Log in</button>
+    <p class="muted small" style="margin-top:1rem">No account? Create one on the server with <code>grc-web adduser NAME</code>.</p>
+  </form>
+</div>
 {% endblock %}

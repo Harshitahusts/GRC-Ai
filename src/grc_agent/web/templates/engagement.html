@@ -23,7 +23,7 @@
     </form>
     {% endif %}
     {% if eng.mode == "agent" %}
-    <p class="small"><a href="/engagements/{{ eng.id }}/export.json">Export KPI record (JSON)</a></p>
+    <p class="small" style="margin-top:.8rem"><a href="/engagements/{{ eng.id }}/export.json">Export KPI record (JSON)</a></p>
     {% endif %}
   </section>
 
@@ -50,11 +50,11 @@
 <section class="card">
   <h2>Activity</h2>
   {% if activity %}
-  <table><tbody>
+  <ol class="timeline">
     {% for a in activity %}
-    <tr><td class="muted small nowrap">{{ a.at[:16].replace("T", " ") }} UTC</td><td>{{ a.username }}</td><td>{{ a.action.replace("_", " ") }}</td></tr>
+    <li><span class="dot" aria-hidden="true"></span><span><strong>{{ a.username }}</strong> {{ a.action.replace("_", " ") }}</span><time class="muted small" datetime="{{ a.at }}">{{ a.at[:16].replace("T", " ") }} UTC</time></li>
     {% endfor %}
-  </tbody></table>
+  </ol>
   {% else %}<p class="muted">Nothing yet.</p>{% endif %}
 </section>
 {% endblock %}

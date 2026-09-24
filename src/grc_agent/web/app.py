@@ -364,18 +364,31 @@ def _routes(app: FastAPI) -> None:
         card = scorecard(request, conn)
         engagements = conn.execute("SELECT * FROM engagements ORDER BY id DESC").fetchall()
         summaries = [_summary(conn, e) for e in engagements]
+        agent = [s for s in summaries if s["mode"] == "agent"]
+        scores = [s["score"] for s in agent if s["score"] is not None]
         activity = conn.execute(
             "SELECT a.*, e.client FROM audit_log a LEFT JOIN engagements e "
-            "ON e.id = a.engagement_id ORDER BY a.id DESC LIMIT 12"
+            "ON e.id = a.engagement_id WHERE a.action NOT IN ('login', 'logout') "
+            "ORDER BY a.id DESC LIMIT 8"
+        ).fetchall()
+        connections = conn.execute(
+            "SELECT c.connector, c.status, c.message, c.engagement_id, e.client FROM connections c "
+            "JOIN engagements e ON e.id = c.engagement_id"
         ).fetchall()
         return render(
             request,
             "dashboard.html",
             card=card,
             summaries=summaries[:8],
+            total=len(summaries),
             activity=activity,
-            in_progress=sum(1 for s in summaries if s["mode"] == "agent" and not s["delivered"]),
-            delivered=sum(1 for s in summaries if s["mode"] == "agent" and s["delivered"]),
+            in_progress=sum(1 for s in agent if not s["delivered"]),
+            delivered=sum(1 for s in agent if s["delivered"]),
+            avg_readiness=round(sum(scores) / len(scores)) if scores else None,
+            pipeline=_pipeline(agent),
+            attention=_attention(agent, connections),
+            connections_ok=sum(1 for c in connections if c["status"] == "ok"),
+            connections_total=len(connections),
         )
 
     # ---- engagements
@@ -1283,6 +1296,88 @@ def _summary(conn: sqlite3.Connection, eng: sqlite3.Row) -> dict[str, Any]:
         "documents": len(docs),
         "reviewed": sum(1 for d in docs if d["reviewed_at"]),
     }
+
+
+STAGES = ("Intake", "Intake submitted", "Assessed", "In review", "Ready to deliver", "Delivered")
+
+
+def _pipeline(summaries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """How many agent engagements sit at each stage, in workflow order."""
+    counts = {stage: 0 for stage in STAGES}
+    for s in summaries:
+        if s["stage"] in counts:
+            counts[s["stage"]] += 1
+    top = max(counts.values(), default=0) or 1
+    return [{"stage": k, "count": v, "pct": round(100 * v / top)} for k, v in counts.items()]
+
+
+def _attention(summaries: list[dict[str, Any]], connections: list) -> list[dict[str, Any]]:
+    """What needs someone's action next, most urgent first."""
+    items = []
+    for s in summaries:
+        if s["delivered"]:
+            continue
+        link = f"/engagements/{s['id']}"
+        if s["stale"]:
+            items.append(
+                {
+                    "level": "serious",
+                    "client": s["client"],
+                    "href": f"{link}/findings",
+                    "text": "Intake changed after the assessment. Re-run it.",
+                }
+            )
+        if s["unresolved"]:
+            items.append(
+                {
+                    "level": "critical",
+                    "client": s["client"],
+                    "href": f"{link}/findings",
+                    "text": f"{s['unresolved']} finding(s) cite a provision that doesn't resolve.",
+                }
+            )
+        if s["documents"] and s["reviewed"] < s["documents"]:
+            items.append(
+                {
+                    "level": "warning",
+                    "client": s["client"],
+                    "href": f"{link}/documents",
+                    "text": f"{s['documents'] - s['reviewed']} document(s) waiting for review.",
+                }
+            )
+        if s["stage"] == "Ready to deliver":
+            items.append(
+                {
+                    "level": "good",
+                    "client": s["client"],
+                    "href": link,
+                    "text": "Everything reviewed. Ready to deliver.",
+                }
+            )
+        if s["stage"] == "Intake submitted":
+            items.append(
+                {
+                    "level": "warning",
+                    "client": s["client"],
+                    "href": f"{link}/findings",
+                    "text": "Intake is in. Run the assessment.",
+                }
+            )
+    for c in connections:
+        if c["status"] == "error":
+            name = (
+                CONNECTORS[c["connector"]].name if c["connector"] in CONNECTORS else c["connector"]
+            )
+            items.append(
+                {
+                    "level": "serious",
+                    "client": c["client"],
+                    "href": f"/engagements/{c['engagement_id']}/connectors",
+                    "text": f"{name} connector failed: {c['message'] or 'check it'}",
+                }
+            )
+    order = {"critical": 0, "serious": 1, "warning": 2, "good": 3}
+    return sorted(items, key=lambda i: order[i["level"]])
 
 
 def _chat_history(agent: Agent | None) -> list[tuple[str, str]]:

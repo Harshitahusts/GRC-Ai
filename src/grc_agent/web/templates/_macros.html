@@ -17,7 +17,7 @@
     <p class="muted">{{ eng.sector }} · {{ "Agent-assisted" if eng.mode == "agent" else "Manual (baseline)" }} · {{ stage_badge(s) }}</p>
   </div>
   {% if s.score is not none %}
-  <div class="score"><span>{{ s.score }}</span><small>readiness</small></div>
+  <div class="score"><span>{{ s.score }}</span><small>readiness</small>{{ meter(s.score, 100, "Readiness") }}</div>
   {% endif %}
 </div>
 {% if eng.mode == "agent" %}
@@ -32,4 +32,13 @@
 {% if s.stale %}
 <div class="flash flash-warn">Intake answers changed after the assessment. Re-run the assessment on the Findings tab before delivery.</div>
 {% endif %}
+{%- endmacro %}
+
+{% macro icon(name) -%}
+<svg class="icon" aria-hidden="true"><use href="#{{ name }}"/></svg>
+{%- endmacro %}
+
+{% macro meter(value, total, label) -%}
+{% set pct = (100 * value / total)|round|int if total else 0 %}
+<span class="meter" role="meter" aria-label="{{ label }}" aria-valuemin="0" aria-valuemax="{{ total }}" aria-valuenow="{{ value }}"><span style="width: {{ pct }}%"></span></span>
 {%- endmacro %}
