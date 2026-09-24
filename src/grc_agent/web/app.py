@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Annotated, Any
 
 import anthropic
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -29,6 +29,8 @@ from grc_agent.agent import Agent
 from grc_agent.ai_assessment import AssessmentError, ClaudeAssessor
 from grc_agent.assessment import assess, readiness_score
 from grc_agent.config import Settings
+from grc_agent.connectors import BY_ID as CONNECTORS
+from grc_agent.connectors.secrets import SecretBox
 from grc_agent.content import (
     TYPES as CONTENT_TYPES,
 )
@@ -45,7 +47,7 @@ from grc_agent.documents import DOCUMENT_TYPES, Block, EngagementFacts, build_do
 from grc_agent.kpis import CorpusIndex, build_scorecard
 from grc_agent.kpis.models import DOCUMENT_OUTCOMES, VERDICTS, parse_engagement
 from grc_agent.register import CHOICES, corpus_index_path, load_register
-from grc_agent.web import db
+from grc_agent.web import connector_views, db
 from grc_agent.web.security import (
     DUMMY_HASH,
     csrf_matches,
@@ -101,6 +103,8 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
         app.state.index = CorpusIndex.from_file(corpus_index_path())
         app.state.index_source = "sample index"
     app.state.make_assessor = lambda corpus: ClaudeAssessor(corpus)
+    app.state.connectors = dict(CONNECTORS)
+    app.state.secret_box = SecretBox.for_data_dir(data_dir)
     app.add_middleware(
         SessionMiddleware,
         secret_key=_secret_key(data_dir),
@@ -111,6 +115,7 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
     )
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
     _routes(app)
+    connector_views.register(app)
     return app
 
 
@@ -219,6 +224,10 @@ def delivery_checks(conn: sqlite3.Connection, eng: sqlite3.Row) -> list[tuple[st
         ),
         ("All documents generated", {d["type"] for d in docs} == set(DOCUMENT_TYPES)),
         ("Every document reviewed by a person", bool(docs) and all(d["reviewed_at"] for d in docs)),
+        (
+            "Intake answers match connector evidence",
+            not connector_views.conflicts(conn, eng["id"], answers_of(conn, eng["id"]), {}),
+        ),
         # Demo-mode text is a placeholder, never AI output, so it can't go to a client.
         (
             "No demo-mode (placeholder) findings",
@@ -423,6 +432,9 @@ def _routes(app: FastAPI) -> None:
             s=_summary(conn, eng),
             checks=checks,
             can_deliver=all(ok for _, ok in checks),
+            conflicts=connector_views.conflicts(
+                conn, eid, answers_of(conn, eid), request.app.state.connectors
+            ),
             activity=activity,
             tab="overview",
         )
@@ -466,6 +478,7 @@ def _routes(app: FastAPI) -> None:
         eid: int,
         request: Request,
         user: User,
+        background: BackgroundTasks,
         conn: Conn,
     ):
         await form_with_csrf(request)
@@ -478,6 +491,9 @@ def _routes(app: FastAPI) -> None:
             return redirect(f"/engagements/{eid}")
         conn.execute("UPDATE engagements SET delivered_at = ? WHERE id = ?", (db.now(), eid))
         db.audit(conn, user, "delivered", eid)
+        connector_views.queue_notification(
+            request, background, conn, eid, f"{eng['client']}: engagement delivered by {user}."
+        )
         flash(request, "Engagement marked as delivered.")
         return redirect(f"/engagements/{eid}")
 
@@ -519,6 +535,7 @@ def _routes(app: FastAPI) -> None:
         eid: int,
         request: Request,
         user: User,
+        background: BackgroundTasks,
         conn: Conn,
     ):
         form = await form_with_csrf(request)
@@ -547,13 +564,18 @@ def _routes(app: FastAPI) -> None:
                 request, "Answers changed after the assessment. Re-run it before delivery.", "warn"
             )
         submit = form.get("action") == "submit"
-        if submit and not eng["intake_submitted_at"]:
+        first_submit = submit and not eng["intake_submitted_at"]
+        if first_submit:
             conn.execute(
                 "UPDATE engagements SET intake_submitted_at = ? WHERE id = ?", (db.now(), eid)
             )
         db.audit(
             conn, user, "intake_submitted" if submit else "intake_saved", eid, {"changed": changed}
         )
+        if first_submit:
+            connector_views.queue_notification(
+                request, background, conn, eid, f"{eng['client']}: intake submitted."
+            )
         flash(request, "Intake submitted." if submit else "Intake saved.")
         return redirect(f"/engagements/{eid}/intake")
 
@@ -564,6 +586,7 @@ def _routes(app: FastAPI) -> None:
         eid: int,
         request: Request,
         user: User,
+        background: BackgroundTasks,
         conn: Conn,
     ):
         form = await form_with_csrf(request)
@@ -642,6 +665,14 @@ def _routes(app: FastAPI) -> None:
             eid,
             {"findings": len(results), "unresolved": unresolved, "documents_cleared": removed},
         )
+        connector_views.queue_notification(
+            request,
+            background,
+            conn,
+            eid,
+            f"{eng['client']}: assessment run by {user}, {len(results)} findings"
+            + (f", {unresolved} unresolved citation(s)." if unresolved else "."),
+        )
         if removed:
             flash(
                 request,
@@ -663,14 +694,21 @@ def _routes(app: FastAPI) -> None:
     ):
         eng = get_engagement(conn, eid)
         obligations = {o.id: o for o in request.app.state.register.obligations}
+        evidence = connector_views.evidence_rows(conn, eid)
         rows = []
         for f in findings_of(conn, eid):
             unresolved = set(db.finding_unresolved(f))
+            o = obligations.get(f["obligation_id"])
+            linked = connector_views.evidence_for_provision(evidence, o.source) if o else []
             rows.append(
                 {
                     **dict(f),
                     "cites": [(c, c not in unresolved) for c in db.finding_citations(f)],
                     "provisions": json.loads(f["provisions_json"] or "[]"),
+                    "evidence": {
+                        st: sum(e["status"] == st for e in linked)
+                        for st in ("pass", "fail", "warn")
+                    },
                 }
             )
         return render(
@@ -679,6 +717,9 @@ def _routes(app: FastAPI) -> None:
             eng=eng,
             s=_summary(conn, eng),
             findings=rows,
+            conflicts=connector_views.conflicts(
+                conn, eid, answers_of(conn, eid), request.app.state.connectors
+            ),
             corpus_ready=request.app.state.corpus is not None,
             index_source=request.app.state.index_source,
             obligations=obligations,
@@ -729,6 +770,7 @@ def _routes(app: FastAPI) -> None:
         eid: int,
         request: Request,
         user: User,
+        background: BackgroundTasks,
         conn: Conn,
     ):
         await form_with_csrf(request)
@@ -757,6 +799,9 @@ def _routes(app: FastAPI) -> None:
                 "UPDATE engagements SET draft_pack_ready_at = ? WHERE id = ?", (generated, eid)
             )
         db.audit(conn, user, "documents_generated", eid, {"count": len(DOCUMENT_TYPES)})
+        connector_views.queue_notification(
+            request, background, conn, eid, f"{eng['client']}: draft pack ready for review."
+        )
         flash(request, "Draft pack generated. Every document now needs a review.")
         return redirect(f"/engagements/{eid}/documents")
 

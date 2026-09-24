@@ -86,6 +86,29 @@ Put the DPDP Act and Rules PDFs from meity.gov.in in `corpus/`, list them in
   provision Claude wasn't shown, is flagged and blocks delivery. Needs `ANTHROPIC_API_KEY`
   in `.env`.
 
+### Connectors
+
+Each engagement has a **Connectors** tab for linking the client's systems with read-only
+access. The **Connectors** page lists every connector with its setup steps.
+
+| Kind | Connectors | What it does |
+|---|---|---|
+| Version control | GitHub, GitLab, Bitbucket | Public repositories, default branch protection, secret scanning |
+| Cloud | AWS, Google Cloud, Azure | **Where data is stored (India or not)**, public access, root MFA, audit logging, TLS |
+| Communication | Slack, Microsoft Teams, Google Chat | Posts engagement updates to a channel (status only, never client data) |
+
+Identity (Google Workspace, Entra ID, Okta), HR (Keka, Darwinbox, Zoho People), ticketing,
+device and data-store connectors are listed as planned.
+
+- Evidence is linked to provisions (Section 8(5) safeguards, Section 16(1) transfers) and
+  shows under the matching findings.
+- If a cloud connector finds data outside India but the client answered "No" to using
+  services outside India, the app flags the contradiction and blocks delivery until the
+  answer is corrected.
+- Credentials are checked before they're saved, stored encrypted with a key in the data
+  folder (`var/connector_key`, or `GRC_CONNECTOR_KEY`), and never shown again. Webhook URLs
+  must be on the real Slack, Teams or Google Chat hosts.
+
 ### Docs and blog
 
 **Docs & blog** in the app is where you write and publish DPDPA guides and SEO articles in

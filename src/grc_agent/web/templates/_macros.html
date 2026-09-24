@@ -26,6 +26,7 @@
   <a href="/engagements/{{ eng.id }}/intake" {% if tab == "intake" %}aria-current="page"{% endif %}>1. Intake</a>
   <a href="/engagements/{{ eng.id }}/findings" {% if tab == "findings" %}aria-current="page"{% endif %}>2. Findings{% if s.unresolved %} <span class="badge badge-fail">{{ s.unresolved }}</span>{% endif %}</a>
   <a href="/engagements/{{ eng.id }}/documents" {% if tab == "documents" %}aria-current="page"{% endif %}>3. Documents &amp; review{% if s.documents %} <span class="muted">{{ s.reviewed }}/{{ s.documents }}</span>{% endif %}</a>
+  <a href="/engagements/{{ eng.id }}/connectors" {% if tab == "connectors" %}aria-current="page"{% endif %}>Connectors</a>
 </nav>
 {% endif %}
 {% if s.stale %}

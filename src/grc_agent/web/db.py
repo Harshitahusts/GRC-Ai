@@ -83,6 +83,31 @@ CREATE TABLE IF NOT EXISTS content_seeds (
     slug TEXT NOT NULL,
     PRIMARY KEY (type, slug)
 );
+CREATE TABLE IF NOT EXISTS connections (
+    id INTEGER PRIMARY KEY,
+    engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+    connector TEXT NOT NULL,
+    config_json TEXT NOT NULL DEFAULT '{}',   -- non-secret settings, shown in the app
+    secrets_enc TEXT NOT NULL,                -- credentials, encrypted (connectors/secrets.py)
+    secret_hints_json TEXT NOT NULL DEFAULT '{}',  -- masked, e.g. "••••abcd"
+    status TEXT NOT NULL DEFAULT 'ok' CHECK (status IN ('ok', 'error')),
+    message TEXT NOT NULL DEFAULT '',
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    last_synced_at TEXT
+);
+CREATE TABLE IF NOT EXISTS evidence (
+    id INTEGER PRIMARY KEY,
+    connection_id INTEGER NOT NULL REFERENCES connections(id),
+    engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+    check_key TEXT NOT NULL,
+    title TEXT NOT NULL,
+    status TEXT NOT NULL,
+    detail TEXT NOT NULL,
+    provisions_json TEXT NOT NULL DEFAULT '[]',
+    data_json TEXT NOT NULL DEFAULT '{}',
+    collected_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS audit_log (
     id INTEGER PRIMARY KEY,
     at TEXT NOT NULL,

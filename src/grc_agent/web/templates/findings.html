@@ -24,6 +24,7 @@
   </form>
   {% endif %}
   {% if register.notice %}<p class="flash flash-warn small">{{ register.notice }}</p>{% endif %}
+  {% for c in conflicts %}<p class="flash flash-error">{{ c }}</p>{% endfor %}
 
   {% if findings %}
   <table class="findings">
@@ -36,6 +37,13 @@
         <p class="muted small">{{ f.summary }}</p>
         {% if f.remediation %}<p class="small"><strong>Next step:</strong> {{ f.remediation }}</p>{% endif %}
         {% if o and f.status in ("gap", "open_item") %}<p class="small muted">Evidence to ask for: {{ o.evidence }}</p>{% endif %}
+        {% set ev = f.evidence %}
+        {% if ev.pass or ev.fail or ev.warn %}
+        <p class="small"><a href="/engagements/{{ eng.id }}/connectors">Connector evidence</a>:
+          {% if ev.pass %}<span class="badge badge-pass">{{ ev.pass }} pass</span>{% endif %}
+          {% if ev.warn %}<span class="badge status-badge-open_item">{{ ev.warn }} warning</span>{% endif %}
+          {% if ev.fail %}<span class="badge badge-fail">{{ ev.fail }} fail</span>{% endif %}</p>
+        {% endif %}
       </td>
       <td><span class="badge status-badge-{{ f.status }}">{{ f.status.replace("_", " ") }}</span></td>
       <td><span class="badge sev-{{ f.severity }}">{{ f.severity }}</span></td>

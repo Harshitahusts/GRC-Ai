@@ -3,6 +3,7 @@
 {% block title %}{{ eng.client }}{% endblock %}
 {% block content %}
 {{ engagement_header(eng, s, tab) }}
+{% for c in conflicts %}<div class="flash flash-error">{{ c }}</div>{% endfor %}
 
 <div class="grid-2">
   <section class="card">
