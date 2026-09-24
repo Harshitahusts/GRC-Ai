@@ -84,10 +84,42 @@ def connect(path: str | Path) -> sqlite3.Connection:
     return conn
 
 
+# Columns added after the first release. init_db adds any that are missing, so an
+# existing local database upgrades in place.
+MIGRATIONS = {
+    "findings": {
+        "citations_json": "TEXT",
+        "unresolved_json": "TEXT",
+        "drafted_by": "TEXT NOT NULL DEFAULT 'rules'",
+        "confidence": "TEXT",
+        "needs_legal_review": "INTEGER NOT NULL DEFAULT 0",
+        "provisions_json": "TEXT",
+    },
+}
+
+
 def init_db(path: str | Path) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     with connect(path) as conn:
         conn.executescript(SCHEMA)
+        for table, columns in MIGRATIONS.items():
+            existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+            for name, spec in columns.items():
+                if name not in existing:
+                    conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {spec}")
+
+
+def finding_citations(row) -> list[str]:
+    """A finding's citations; rows from before multi-citation support hold just one."""
+    if row["citations_json"]:
+        return json.loads(row["citations_json"])
+    return [row["citation"]]
+
+
+def finding_unresolved(row) -> list[str]:
+    if row["unresolved_json"] is not None:
+        return json.loads(row["unresolved_json"])
+    return [] if row["citation_resolves"] else [row["citation"]]
 
 
 def audit(

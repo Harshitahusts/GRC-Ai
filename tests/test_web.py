@@ -16,6 +16,8 @@ PASSWORD = "correct-horse-battery"
 @pytest.fixture
 def app(tmp_path, monkeypatch):
     monkeypatch.delenv("GRC_SECRET_KEY", raising=False)
+    monkeypatch.delenv("GRC_CORPUS_INDEX", raising=False)
+    monkeypatch.setenv("GRC_CORPUS_DIR", str(tmp_path / "no-corpus"))
     monkeypatch.setattr("sys.stdin", io.StringIO(PASSWORD + "\n"))
     assert (
         web_cli.main(["--data-dir", str(tmp_path), "adduser", "harshit", "--password-stdin"]) == 0

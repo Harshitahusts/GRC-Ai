@@ -65,6 +65,21 @@ docker compose up -d --build
 docker compose exec web grc-web adduser harshit
 ```
 
+### Corpus and Claude drafting
+
+Put the DPDP Act and Rules PDFs from meity.gov.in in `corpus/`, list them in
+`corpus/manifest.json`, then run `grc-corpus ingest` (steps in
+[corpus/README.md](corpus/README.md)). After a restart, the app:
+
+- checks every citation against the real Act and Rules instead of the sample index
+- opens the text of any cited provision with one click, and searches provisions on the
+  **Corpus** page
+- offers **Run with Claude drafting** on the Findings tab. Rules still decide status and
+  severity. Claude drafts each finding from the retrieved provisions and only the client
+  answers tied to that obligation. A citation that doesn't resolve, or that points to a
+  provision Claude wasn't shown, is flagged and blocks delivery. Needs `ANTHROPIC_API_KEY`
+  in `.env`.
+
 The app binds to this machine only (127.0.0.1) by default. It uses the **sample** register
 in `src/grc_agent/data/`. Point `GRC_REGISTER` and `GRC_CORPUS_INDEX` at the reviewed
 register and the real corpus index before any client use.
@@ -109,6 +124,8 @@ src/grc_agent/
   config.py         settings from environment variables
   cli.py            `grc-agent` command
   kpis/             citation verifier, engagement records, KPI scorecard, `grc-kpis`
+  corpus/           Act and Rules ingestion (H2), search and lookup (H3), `grc-corpus`
+  ai_assessment.py  Claude-drafted findings over the rule-based assessment (H6)
   web/              local web app (`grc-web`): FastAPI, templates, SQLite
   register.py       obligation register and intake questions
   assessment.py     rule-based gap assessment and readiness score

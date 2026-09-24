@@ -20,10 +20,22 @@ class AssessedFinding:
     obligation_id: str
     status: str  # gap | compliant | open_item | not_applicable
     severity: str
-    citation: str
-    citation_resolves: bool
+    citations: tuple[str, ...]
+    unresolved: tuple[str, ...]  # citations the verifier couldn't resolve; these block delivery
     summary: str
     remediation: str
+    drafted_by: str = "rules"  # rules | claude
+    confidence: str = ""  # high | medium | low, when drafted by Claude
+    needs_legal_review: bool = False
+    provisions: tuple[str, ...] = ()  # provisions shown to Claude
+
+    @property
+    def citation(self) -> str:
+        return "; ".join(self.citations)
+
+    @property
+    def citation_resolves(self) -> bool:
+        return bool(self.citations) and not self.unresolved
 
 
 def assess(
@@ -38,8 +50,8 @@ def _assess_one(o: Obligation, answers: dict[str, str], index: CorpusIndex) -> A
         obligation_id=o.id,
         status=status,
         severity=o.severity,
-        citation=o.source,
-        citation_resolves=index.resolves(o.source),
+        citations=(o.source,),
+        unresolved=() if index.resolves(o.source) else (o.source,),
         summary=summary,
         remediation=o.remediation if status in {"gap", "open_item"} else "",
     )

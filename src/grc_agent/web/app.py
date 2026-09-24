@@ -26,7 +26,9 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 from grc_agent.agent import Agent
+from grc_agent.ai_assessment import AssessmentError, ClaudeAssessor
 from grc_agent.assessment import assess, readiness_score
+from grc_agent.corpus import load_corpus
 from grc_agent.documents import DOCUMENT_TYPES, Block, EngagementFacts, build_document, to_docx
 from grc_agent.kpis import CorpusIndex, build_scorecard
 from grc_agent.kpis.models import DOCUMENT_OUTCOMES, VERDICTS, parse_engagement
@@ -73,7 +75,17 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
     app.state.login_failures = {}
     app.state.agents = {}
     app.state.register = load_register()
-    app.state.index = CorpusIndex.from_file(corpus_index_path())
+    app.state.corpus = load_corpus()
+    if os.getenv("GRC_CORPUS_INDEX"):
+        app.state.index = CorpusIndex.from_file(os.environ["GRC_CORPUS_INDEX"])
+        app.state.index_source = "GRC_CORPUS_INDEX"
+    elif app.state.corpus is not None:
+        app.state.index = app.state.corpus.index
+        app.state.index_source = "built corpus"
+    else:
+        app.state.index = CorpusIndex.from_file(corpus_index_path())
+        app.state.index_source = "sample index"
+    app.state.make_assessor = lambda corpus: ClaudeAssessor(corpus)
     app.add_middleware(
         SessionMiddleware,
         secret_key=_secret_key(data_dir),
@@ -216,7 +228,7 @@ def kpi_record(conn: sqlite3.Connection, eng: sqlite3.Row, register_size: int) -
                     "id": f"F-{f['id']}",
                     "obligation_id": f["obligation_id"],
                     "status": f["status"],
-                    "citations": [f["citation"]],
+                    "citations": db.finding_citations(f),
                     "verdict": f["verdict"],
                     "hallucination": bool(f["hallucination"]),
                 }
@@ -533,17 +545,49 @@ def _routes(app: FastAPI) -> None:
         user: User,
         conn: Conn,
     ):
-        await form_with_csrf(request)
+        form = await form_with_csrf(request)
         eng = get_engagement(conn, eid)
         require_open_agent_engagement(eng)
         if not eng["intake_submitted_at"]:
             flash(request, "Submit the intake before running the assessment.", "error")
             return redirect(f"/engagements/{eid}/intake")
-        results = assess(request.app.state.register, answers_of(conn, eid), request.app.state.index)
+        register, answers = request.app.state.register, answers_of(conn, eid)
+        use_claude = form.get("mode") == "claude"
+        if use_claude:
+            corpus = request.app.state.corpus
+            if corpus is None:
+                flash(request, "Build the corpus first (grc-corpus ingest) to use Claude.", "error")
+                return redirect(f"/engagements/{eid}/findings")
+            try:
+                assessor = request.app.state.make_assessor(corpus)
+                results = await run_in_threadpool(assessor.assess, register, answers)
+            except (TypeError, anthropic.CredentialsError) as exc:
+                if isinstance(exc, TypeError) and "authentication method" not in str(exc):
+                    raise
+                flash(
+                    request,
+                    "No Claude API credentials. Put ANTHROPIC_API_KEY in .env and restart.",
+                    "error",
+                )
+                return redirect(f"/engagements/{eid}/findings")
+            except AssessmentError as exc:
+                flash(request, f"Claude assessment failed, nothing was changed: {exc}", "error")
+                return redirect(f"/engagements/{eid}/findings")
+            except anthropic.APIError as exc:
+                flash(
+                    request,
+                    f"Claude API error ({exc.__class__.__name__}), nothing was changed.",
+                    "error",
+                )
+                return redirect(f"/engagements/{eid}/findings")
+        else:
+            results = assess(register, answers, request.app.state.index)
         conn.execute("DELETE FROM findings WHERE engagement_id = ?", (eid,))
         conn.executemany(
             "INSERT INTO findings (engagement_id, obligation_id, status, severity, citation, "
-            "citation_resolves, summary, remediation) VALUES (?,?,?,?,?,?,?,?)",
+            "citation_resolves, summary, remediation, citations_json, unresolved_json, "
+            "drafted_by, confidence, needs_legal_review, provisions_json) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             [
                 (
                     eid,
@@ -554,6 +598,12 @@ def _routes(app: FastAPI) -> None:
                     int(f.citation_resolves),
                     f.summary,
                     f.remediation,
+                    json.dumps(list(f.citations)),
+                    json.dumps(list(f.unresolved)),
+                    f.drafted_by,
+                    f.confidence or None,
+                    int(f.needs_legal_review),
+                    json.dumps(list(f.provisions)),
                 )
                 for f in results
             ],
@@ -567,7 +617,7 @@ def _routes(app: FastAPI) -> None:
         db.audit(
             conn,
             user,
-            "assessed",
+            "assessed_with_claude" if use_claude else "assessed",
             eid,
             {"findings": len(results), "unresolved": unresolved, "documents_cleared": removed},
         )
@@ -592,12 +642,24 @@ def _routes(app: FastAPI) -> None:
     ):
         eng = get_engagement(conn, eid)
         obligations = {o.id: o for o in request.app.state.register.obligations}
+        rows = []
+        for f in findings_of(conn, eid):
+            unresolved = set(db.finding_unresolved(f))
+            rows.append(
+                {
+                    **dict(f),
+                    "cites": [(c, c not in unresolved) for c in db.finding_citations(f)],
+                    "provisions": json.loads(f["provisions_json"] or "[]"),
+                }
+            )
         return render(
             request,
             "findings.html",
             eng=eng,
             s=_summary(conn, eng),
-            findings=findings_of(conn, eid),
+            findings=rows,
+            corpus_ready=request.app.state.corpus is not None,
+            index_source=request.app.state.index_source,
             obligations=obligations,
             verdicts=sorted(VERDICTS),
             tab="findings",
@@ -769,6 +831,38 @@ def _routes(app: FastAPI) -> None:
             headers={
                 "Content-Disposition": f'attachment; filename="{safe_client}-{doc["type"]}.docx"'
             },
+        )
+
+    # ---- corpus
+
+    @app.get("/corpus")
+    def corpus_page(request: Request, user: User, q: str = ""):
+        corpus = request.app.state.corpus
+        report = None
+        if corpus is not None and (corpus.build_dir / "report.json").exists():
+            report = json.loads((corpus.build_dir / "report.json").read_text("utf-8"))
+        hits = corpus.search(q, 8) if corpus is not None and q.strip() else []
+        return render(
+            request,
+            "corpus.html",
+            corpus=corpus,
+            report=report,
+            q=q,
+            hits=hits,
+            index_source=request.app.state.index_source,
+        )
+
+    @app.get("/corpus/provision")
+    def provision_page(request: Request, user: User, ref: str = ""):
+        corpus = request.app.state.corpus
+        chunks = corpus.provision(ref) if corpus is not None else []
+        return render(
+            request,
+            "provision.html",
+            ref=ref,
+            chunks=chunks,
+            corpus=corpus,
+            resolves=request.app.state.index.resolves(ref),
         )
 
     # ---- KPIs

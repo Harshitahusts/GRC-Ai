@@ -123,3 +123,8 @@ button.small { padding: .2rem .6rem; font-size: .85rem; }
 .chat .msg-user div { background: var(--info-bg); }
 .ask { display: flex; gap: .75rem; align-items: flex-end; margin-top: 1rem; }
 .ask textarea { flex: 1; margin: 0; }
+.assess-form { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; margin: 0 0 1rem; }
+.hit { padding: .6rem 0; border-bottom: 1px solid var(--border); }
+.hit:last-child { border-bottom: 0; }
+.hit p { margin: .2rem 0 0; }
+details summary { cursor: pointer; color: var(--muted); }
