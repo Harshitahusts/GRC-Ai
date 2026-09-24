@@ -193,7 +193,7 @@ def test_detail_page_and_connect_flow(authed):
 
 
 def test_detail_page_without_engagements_and_for_planned(authed):
-    assert "Create an engagement" in authed.get("/connectors/github").text
+    assert "Agent-assisted</strong> client engagement" in authed.get("/connectors/github").text
     page = authed.get("/connectors/okta").text
     assert "coming soon" in page and "For which engagement?" not in page
     assert authed.get("/connectors/okta/connect?engagement=1").status_code == 404

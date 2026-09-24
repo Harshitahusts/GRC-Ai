@@ -141,6 +141,23 @@ def test_setup_page_without_app(authed):
     assert "&#34;administration&#34;: &#34;read&#34;" in page or '"administration"' in page
 
 
+def test_github_page_links_to_app_setup(authed, gh):
+    page = authed.get("/connectors/github").text
+    assert "Set up the GitHub App" in page and "Agent-assisted" in page
+    app = authed.app
+    github_app.save_config(app.state.data_dir, app.state.secret_box, CONFIG)
+    page = authed.get("/connectors/github").text
+    assert "grc-agent-test" in page and "Set up the GitHub App" not in page
+
+
+def test_local_app_uses_a_public_homepage(authed, monkeypatch):
+    monkeypatch.delenv("GRC_PUBLIC_URL", raising=False)
+    page = authed.get("/settings/github-app").text
+    assert "https://github.com/Harshitahusts/GRC-Ai/github/events" in page
+    monkeypatch.setenv("GRC_PUBLIC_URL", "https://grc.firm.example/")
+    assert "https://grc.firm.example/github/events" in authed.get("/settings/github-app").text
+
+
 def test_manifest_callback_checks_state(authed, gh):
     response = authed.get("/settings/github-app/callback?code=abc123def456&state=forged")
     assert response.status_code == 400
