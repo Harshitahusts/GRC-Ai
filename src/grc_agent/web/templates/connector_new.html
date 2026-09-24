@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% from "_macros.html" import engagement_header %}
+{% block title %}Connect {{ c.name }} · {{ eng.client }}{% endblock %}
+{% block content %}
+{{ engagement_header(eng, s, tab) }}
+<div class="grid-2 wide-left">
+  <form method="post" action="/engagements/{{ eng.id }}/connectors" class="card" autocomplete="off">
+    <h2>Connect {{ c.name }}</h2>
+    <p class="muted small">{{ c.summary }}</p>
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="connector" value="{{ c.id }}">
+    {% for f in c.fields %}
+    <label>{{ f.label }}{% if not f.required %} <span class="muted small">(optional)</span>{% endif %}
+      {% if f.multiline %}
+      <textarea name="{{ f.name }}" rows="8" class="mono" {% if f.required %}required{% endif %} spellcheck="false"></textarea>
+      {% else %}
+      <input name="{{ f.name }}" type="{{ 'password' if f.secret else 'text' }}" placeholder="{{ f.placeholder }}" {% if f.required %}required{% endif %} spellcheck="false">
+      {% endif %}
+      {% if f.help %}<span class="muted small">{{ f.help }}</span>{% endif %}
+    </label>
+    {% endfor %}
+    <div class="actions">
+      <button class="primary">{{ "Connect and send a test message" if c.kind == "notify" else "Connect and run checks" }}</button>
+      <a href="/engagements/{{ eng.id }}/connectors">Cancel</a>
+    </div>
+  </form>
+  <aside class="card">
+    <h2>How to set it up</h2>
+    <ol class="small">{% for step in c.setup %}<li>{{ step }}</li>{% endfor %}</ol>
+    {% if c.permissions %}<p class="small"><strong>Access needed:</strong> {{ c.permissions }}</p>{% endif %}
+    <p class="small muted">The app checks the credentials before saving them, then stores them encrypted. Remove the connection when the engagement ends, and ask the client to revoke the access.</p>
+  </aside>
+</div>
+{% endblock %}

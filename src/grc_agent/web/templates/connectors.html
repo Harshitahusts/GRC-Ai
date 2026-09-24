@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Connectors{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Connectors</h1>
+    <p class="muted">Read-only links to a client's systems. Evidence connectors check how systems are set up and where data is stored. Chat connectors post engagement updates. Connect them from an engagement's <strong>Connectors</strong> tab.</p>
+  </div>
+</div>
+
+{% if connections %}
+<section class="card">
+  <h2>Connected</h2>
+  <table>
+    <thead><tr><th>Engagement</th><th>Connector</th><th>Status</th><th>Last synced</th></tr></thead>
+    <tbody>
+    {% for c in connections %}
+    <tr>
+      <td><a href="/engagements/{{ c.engagement_id }}/connectors">{{ c.client }}</a></td>
+      <td>{{ c.connector }}</td>
+      <td>{% if c.status == "ok" %}<span class="badge badge-pass">OK</span>{% else %}<span class="badge badge-fail">Error</span>{% endif %}</td>
+      <td class="muted small">{{ c.last_synced_at[:16].replace("T", " ") ~ " UTC" if c.last_synced_at else "–" }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+{% for category, items in categories %}
+<section class="card">
+  <h2>{{ category }}</h2>
+  <div class="connector-grid">
+    {% for c in items %}
+    <div class="connector {{ 'planned' if c.status == 'planned' }}">
+      <p class="connector-name"><strong>{{ c.name }}</strong>
+        {% if c.status == "planned" %}<span class="badge badge-none">Planned</span>
+        {% elif c.kind == "notify" %}<span class="badge sev-medium">Notifications</span>
+        {% else %}<span class="badge badge-pass">Evidence</span>{% endif %}</p>
+      <p class="small">{{ c.summary }}</p>
+      <p class="small muted">{{ c.why }}</p>
+      {% if c.permissions %}<p class="small muted">Access: {{ c.permissions }}</p>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endfor %}
+{% endblock %}

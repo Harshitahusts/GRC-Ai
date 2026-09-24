@@ -20,6 +20,8 @@ dependencies = [
     "python-docx>=1.1",
     "pypdf>=4.0",
     "markdown-it-py>=3.0",
+    "cryptography>=42",
+    "boto3>=1.34",
 ]
 
 [project.optional-dependencies]
@@ -44,3 +46,7 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+# The connector catalog is a data table of descriptions; wrapping them hurts readability.
+"src/grc_agent/connectors/catalog.py" = ["E501"]
