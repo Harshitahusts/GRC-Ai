@@ -1,0 +1,18 @@
+{
+  "sources": [
+    {
+      "file": "dpdp_act_2023.pdf",
+      "kind": "act",
+      "title": "Digital Personal Data Protection Act, 2023",
+      "source_url": "https://www.meity.gov.in/...",
+      "downloaded": "2026-09-25"
+    },
+    {
+      "file": "dpdp_rules_2025.pdf",
+      "kind": "rules",
+      "title": "Digital Personal Data Protection Rules, 2025",
+      "source_url": "https://www.meity.gov.in/...",
+      "downloaded": "2026-09-25"
+    }
+  ]
+}

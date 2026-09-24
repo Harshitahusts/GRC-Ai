@@ -60,6 +60,29 @@ CREATE TABLE IF NOT EXISTS documents (
     reviewed_by TEXT,
     reviewed_at TEXT
 );
+CREATE TABLE IF NOT EXISTS content (
+    id INTEGER PRIMARY KEY,
+    type TEXT NOT NULL CHECK (type IN ('docs', 'blog')),
+    slug TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    keyword TEXT NOT NULL DEFAULT '',
+    body_md TEXT NOT NULL DEFAULT '',
+    position INTEGER NOT NULL DEFAULT 100,
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
+    author TEXT NOT NULL,
+    reviewed_by TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    published_at TEXT,
+    UNIQUE (type, slug)
+);
+-- Starter content already imported, so a renamed or edited item is never re-imported.
+CREATE TABLE IF NOT EXISTS content_seeds (
+    type TEXT NOT NULL,
+    slug TEXT NOT NULL,
+    PRIMARY KEY (type, slug)
+);
 CREATE TABLE IF NOT EXISTS audit_log (
     id INTEGER PRIMARY KEY,
     at TEXT NOT NULL,
@@ -84,10 +107,74 @@ def connect(path: str | Path) -> sqlite3.Connection:
     return conn
 
 
+# Columns added after the first release. init_db adds any that are missing, so an
+# existing local database upgrades in place.
+MIGRATIONS = {
+    "findings": {
+        "citations_json": "TEXT",
+        "unresolved_json": "TEXT",
+        "drafted_by": "TEXT NOT NULL DEFAULT 'rules'",
+        "confidence": "TEXT",
+        "needs_legal_review": "INTEGER NOT NULL DEFAULT 0",
+        "provisions_json": "TEXT",
+    },
+}
+
+
 def init_db(path: str | Path) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     with connect(path) as conn:
         conn.executescript(SCHEMA)
+        for table, columns in MIGRATIONS.items():
+            existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+            for name, spec in columns.items():
+                if name not in existing:
+                    conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {spec}")
+
+
+def seed_content(conn: sqlite3.Connection, items: list[dict]) -> int:
+    """Import starter docs and posts as drafts, once each. Returns how many were added."""
+    added = 0
+    for item in items:
+        seen = conn.execute(
+            "SELECT 1 FROM content_seeds WHERE type = ? AND slug = ?", (item["type"], item["slug"])
+        ).fetchone()
+        if seen:
+            continue
+        conn.execute(
+            "INSERT OR IGNORE INTO content (type, slug, title, description, keyword, body_md, "
+            "position, status, author, created_at, updated_at) "
+            "VALUES (?,?,?,?,?,?,?, 'draft', 'starter content', ?, ?)",
+            (
+                item["type"],
+                item["slug"],
+                item["title"],
+                item["description"],
+                item["keyword"],
+                item["body_md"],
+                item["position"],
+                now(),
+                now(),
+            ),
+        )
+        conn.execute(
+            "INSERT INTO content_seeds (type, slug) VALUES (?, ?)", (item["type"], item["slug"])
+        )
+        added += 1
+    return added
+
+
+def finding_citations(row) -> list[str]:
+    """A finding's citations; rows from before multi-citation support hold just one."""
+    if row["citations_json"]:
+        return json.loads(row["citations_json"])
+    return [row["citation"]]
+
+
+def finding_unresolved(row) -> list[str]:
+    if row["unresolved_json"] is not None:
+        return json.loads(row["unresolved_json"])
+    return [] if row["citation_resolves"] else [row["citation"]]
 
 
 def audit(

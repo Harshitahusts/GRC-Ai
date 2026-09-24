@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Corpus{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Corpus</h1>
+    <p class="muted">The Act and Rules the agent cites. Citations are checked against the {{ index_source }}.</p>
+  </div>
+</div>
+
+{% if corpus is none %}
+<section class="card">
+  <h2>No corpus built yet</h2>
+  <p>Until it's built, citations are checked against a small <strong>sample</strong> index and Claude drafting is off.</p>
+  <ol>
+    <li>Download the DPDP Act 2023 and DPDP Rules 2025 PDFs from meity.gov.in into the <code>corpus/</code> folder.</li>
+    <li>Copy <code>corpus/manifest.example.json</code> to <code>corpus/manifest.json</code> and fill it in.</li>
+    <li>Run <code>grc-corpus ingest</code>, then restart the app.</li>
+  </ol>
+  <p class="small muted">Details: <code>corpus/README.md</code>.</p>
+</section>
+{% else %}
+<div class="grid-2 wide-left">
+  <section class="card">
+    <h2>Search provisions</h2>
+    <form method="get" action="/corpus" class="ask">
+      <input name="q" value="{{ q }}" placeholder="e.g. who must be told about a data breach" aria-label="Search">
+      <button class="primary">Search</button>
+    </form>
+    {% if q and not hits %}<p class="muted">No matches.</p>{% endif %}
+    {% for h in hits %}
+    <div class="hit">
+      <a href="/corpus/provision?ref={{ h.chunk.ref|urlencode }}"><strong>{{ h.chunk.ref }}</strong></a>
+      {% if h.chunk.heading %}<span class="muted">{{ h.chunk.heading }}</span>{% endif %}
+      <p class="small">{{ h.chunk.text[:260] }}{% if h.chunk.text|length > 260 %}…{% endif %}</p>
+    </div>
+    {% endfor %}
+  </section>
+  <section class="card">
+    <h2>Sources</h2>
+    {% if report %}
+      {% for src in report.sources %}
+      <p><strong>{{ src.file }}</strong> <span class="muted small">({{ src.kind }})</span><br>
+        <span class="small">{{ src.units }} numbered units · {{ src.chunks }} chunks · {{ src.first }} to {{ src.last }}</span></p>
+      {% if src.missing %}<p class="flash flash-error small">Missing: {{ src.missing|join(", ") }}</p>{% endif %}
+      {% for w in src.warnings %}<p class="flash flash-warn small">{{ w }}</p>{% endfor %}
+      {% endfor %}
+      <p class="small">{{ report.index_entries }} citable references.
+        {% if report.ok %}<span class="badge badge-pass">Ingestion clean</span>{% else %}<span class="badge badge-fail">Check issues</span>{% endif %}</p>
+      {% for m in report.manifest %}<p class="small muted">{{ m.title }}: <a href="{{ m.source_url }}" rel="noopener noreferrer">source</a>, downloaded {{ m.downloaded }}</p>{% endfor %}
+    {% else %}<p class="muted">{{ corpus.chunks|length }} chunks loaded.</p>{% endif %}
+  </section>
+</div>
+{% endif %}
+{% endblock %}

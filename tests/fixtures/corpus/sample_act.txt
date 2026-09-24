@@ -1,0 +1,53 @@
+REGISTERED NO. DL—(N)04/0007/2099
+THE GAZETTE OF INDIA
+EXTRAORDINARY
+THE SAMPLE DATA PROTECTION ACT, 2099
+AN ACT to provide for the handling of sample personal data and for matters connected therewith.
+BE it enacted by Parliament in the Fiftieth Year as follows:—
+CHAPTER I
+PRELIMINARY
+Short title and commencement.
+1. (1) This Act may be called the Sample Data Protection Act, 2099.
+(2) It shall come into force on such date as the Government may notify.
+Definitions.
+2. In this Act, unless the context otherwise requires,—
+(a) "Board" means the Sample Protection Board;
+(b) "child" means an individual who has not completed eighteen years of age;
+(c) "personal data" means any data about an individual who is identifiable.
+CHAPTER II
+OBLIGATIONS OF DATA FIDUCIARY
+Notice.
+3. (1) Every request for consent shall be accompanied by a notice informing the person of the personal data collected and the purpose of processing.
+(2) The notice shall be available in English or any language listed in the
+Eighth Schedule to the Constitution.
+2 THE GAZETTE OF INDIA EXTRAORDINARY [PART II—
+Consent.
+4. (1) Consent shall be free, specific, informed and unambiguous, given by a clear affirmative action.
+(2) The person may withdraw consent at any time, with ease comparable to giving it, and the withdrawal shall not affect processing done before it.
+General obligations of Data Fiduciary.
+5. (1) A Data Fiduciary shall protect personal data in its possession by taking reasonable security safeguards to prevent a personal data breach.
+(2) In the event of a personal data breach, the Data Fiduciary shall give intimation of the breach to the Board and to each affected person, in the form and manner prescribed.
+(3) A Data Fiduciary shall erase personal data—
+(a) when the person withdraws consent; or
+(b) as soon as the purpose is no longer served,
+unless retention is necessary for compliance with any law. The period of 12
+months in rule 4 applies to certain classes.
+(i) this is a sub-clause and not a new clause;
+(ii) so is this.
+3
+Processing of personal data of children.
+6. (1) A Data Fiduciary shall obtain verifiable consent of the parent before processing personal data of a child.
+(2) A Data Fiduciary shall not undertake tracking or behavioural monitoring of children or targeted advertising directed at children.
+CHAPTER III
+RIGHTS OF DATA PRINCIPAL
+Right to access information.
+7. A person shall have the right to obtain a summary of personal data processed and the processing activities undertaken.
+Right of grievance redressal.
+8. (1) A person shall have the right to readily available means of grievance redressal provided by a Data Fiduciary.
+(2) The Data Fiduciary shall respond to grievances within the period prescribed.
+Transfer outside India.
+9. The Government may, by notification, restrict the transfer of personal data to any country or territory outside India.
+THE SCHEDULE
+(See section 9)
+1. Breach of the obligation to take reasonable security safeguards: may extend to two hundred and fifty crore rupees.
+2. Breach of the obligation to give intimation of a personal data breach: may extend to two hundred crore rupees.

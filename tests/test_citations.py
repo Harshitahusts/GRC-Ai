@@ -14,6 +14,9 @@ from grc_agent.kpis.citations import CorpusIndex, normalize_citation
         ("R.7", "rule 7"),
         ("Schedule", "schedule"),
         ("Section 10A", "section 10a"),
+        ("Second Schedule", "schedule 2"),
+        ("the FIRST schedule", "schedule 1"),
+        ("Schedule 2", "schedule 2"),
     ],
 )
 def test_normalize(raw, expected):

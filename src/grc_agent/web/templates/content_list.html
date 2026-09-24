@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Docs & blog{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Docs &amp; blog</h1>
+    <p class="muted">Published items appear on the public <a href="/docs">/docs</a> and <a href="/blog">/blog</a> pages, in the <a href="/sitemap.xml">sitemap</a>, and can be found by search engines once the site is hosted publicly.</p>
+  </div>
+  <div class="actions" style="margin:0">
+    <a class="button" href="/content/new?type=docs">New doc</a>
+    <a class="button primary" href="/content/new?type=blog">New blog post</a>
+  </div>
+</div>
+{% for type_, label in [("docs", "Docs"), ("blog", "Blog posts")] %}
+<section class="card">
+  <h2>{{ label }}</h2>
+  {% set rows = items|selectattr("type", "equalto", type_)|list %}
+  {% if rows %}
+  <table>
+    <thead><tr><th>Title</th><th>Status</th><th>Focus keyword</th><th class="num">SEO checks</th><th>Updated</th></tr></thead>
+    <tbody>
+    {% for i in rows %}
+    <tr>
+      <td><a href="/content/{{ i.id }}">{{ i.title }}</a><br><span class="muted small">/{{ i.type }}/{{ i.slug }}</span></td>
+      <td>{% if i.status == "published" %}<span class="badge badge-pass">Published</span>{% else %}<span class="badge badge-none">Draft</span>{% endif %}</td>
+      <td class="small">{{ i.keyword or "–" }}</td>
+      <td class="num">{{ i.seo_ok }}/{{ i.seo_total }}</td>
+      <td class="muted small nowrap">{{ i.updated_at[:10] }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted">None yet.</p>{% endif %}
+</section>
+{% endfor %}
+{% endblock %}

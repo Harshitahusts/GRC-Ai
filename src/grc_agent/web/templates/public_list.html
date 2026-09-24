@@ -1,0 +1,26 @@
+{% extends "public_base.html" %}
+{% if type_ == "docs" %}
+  {% set heading = "DPDPA docs" %}
+  {% set intro = "Plain-English guides to India's Digital Personal Data Protection Act, 2023 and the DPDP Rules, 2025, with the section behind every point." %}
+{% else %}
+  {% set heading = "DPDPA blog" %}
+  {% set intro = "Practical articles on getting ready for India's data protection law." %}
+{% endif %}
+{% block title %}{{ heading }} · {{ site_name }}{% endblock %}
+{% block description %}{{ intro }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>{{ heading }}</h1><p class="muted">{{ intro }}</p></div></div>
+{% if items %}
+<div class="post-list">
+  {% for i in items %}
+  <article class="card">
+    <h2><a href="/{{ type_ }}/{{ i.slug }}">{{ i.title }}</a></h2>
+    <p>{{ i.description }}</p>
+    {% if type_ == "blog" and i.published_at %}<p class="muted small">{{ i.published_at[:10] }}</p>{% endif %}
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<p class="muted">Nothing published yet.</p>
+{% endif %}
+{% endblock %}

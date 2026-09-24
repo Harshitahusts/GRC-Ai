@@ -45,15 +45,15 @@ Windows, tick "Add python.exe to PATH"). Then, from the project folder:
 | System | Command |
 |---|---|
 | macOS / Linux | `./start.sh` |
-| Windows | double-click `start.bat` (or run it in a terminal) |
+| Windows | double-click `start.bat`, or run `.\start.bat` in PowerShell (`start.bat` in Command Prompt) |
 
 The first run sets up a `.venv`, installs the app, creates a `.env` from `.env.example`,
 asks you to create your login, then opens http://127.0.0.1:8000 in your browser. Later
 runs start in a few seconds. Press Ctrl+C to stop it. Add `--port 9000` to use another port.
 
 Put your `ANTHROPIC_API_KEY` in `.env` to enable the assistant page. Everything else works
-without it. Add more accounts with `.venv/bin/grc-web adduser NAME` (Windows:
-`.venv\Scripts\grc-web adduser NAME`), and change a password with `grc-web passwd NAME`.
+without it. Add more accounts with `.venv/bin/grc-web adduser NAME` (Windows PowerShell:
+`.\.venv\Scripts\grc-web adduser NAME`), and change a password with `grc-web passwd NAME`.
 
 Data (SQLite database and session secret) lives in `./var/`. It's git-ignored, so back up
 that folder. To update, run `git pull` and then start the app again.
@@ -64,6 +64,38 @@ To keep it running in the background and restart it after a reboot, use Docker:
 docker compose up -d --build
 docker compose exec web grc-web adduser harshit
 ```
+
+### Corpus and Claude drafting
+
+Put the DPDP Act and Rules PDFs from meity.gov.in in `corpus/`, list them in
+`corpus/manifest.json`, then run `grc-corpus ingest` (steps in
+[corpus/README.md](corpus/README.md)). After a restart, the app:
+
+- checks every citation against the real Act and Rules instead of the sample index
+- opens the text of any cited provision with one click, and searches provisions on the
+  **Corpus** page
+- offers **Run with Claude drafting** on the Findings tab. Rules still decide status and
+  severity. Claude drafts each finding from the retrieved provisions and only the client
+  answers tied to that obligation. A citation that doesn't resolve, or that points to a
+  provision Claude wasn't shown, is flagged and blocks delivery. Needs `ANTHROPIC_API_KEY`
+  in `.env`.
+
+### Docs and blog
+
+**Docs & blog** in the app is where you write and publish DPDPA guides and SEO articles in
+Markdown. The editor shows a live SEO checklist: title and description length, focus
+keyword placement, word count, subheadings, internal links, and links to unpublished pages.
+
+- It ships with 13 DPDPA docs and 2 blog posts, imported once as **drafts**. They were
+  written from general knowledge of the Act and Rules, so check every point and section
+  reference against the gazetted text before publishing.
+- Publishing needs a named reviewer.
+- Published items appear on public pages that need no login: `/docs`, `/blog`, and
+  `/sitemap.xml` and `/robots.txt` for search engines. Every page has its own title,
+  description, canonical link, Open Graph tags and article structured data.
+- Search engines can only find these pages once the site is hosted at a public address.
+  Set `GRC_PUBLIC_URL` (for example `https://www.example.in`) so canonical links and the
+  sitemap use it, and `GRC_SITE_NAME` for the site name.
 
 The app binds to this machine only (127.0.0.1) by default. It uses the **sample** register
 in `src/grc_agent/data/`. Point `GRC_REGISTER` and `GRC_CORPUS_INDEX` at the reviewed
@@ -109,6 +141,8 @@ src/grc_agent/
   config.py         settings from environment variables
   cli.py            `grc-agent` command
   kpis/             citation verifier, engagement records, KPI scorecard, `grc-kpis`
+  corpus/           Act and Rules ingestion (H2), search and lookup (H3), `grc-corpus`
+  ai_assessment.py  Claude-drafted findings over the rule-based assessment (H6)
   web/              local web app (`grc-web`): FastAPI, templates, SQLite
   register.py       obligation register and intake questions
   assessment.py     rule-based gap assessment and readiness score

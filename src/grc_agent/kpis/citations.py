@@ -32,12 +32,39 @@ _CITATION = re.compile(
 )
 
 
+_ORDINALS = {
+    word: str(i)
+    for i, word in enumerate(
+        [
+            "first",
+            "second",
+            "third",
+            "fourth",
+            "fifth",
+            "sixth",
+            "seventh",
+            "eighth",
+            "ninth",
+            "tenth",
+        ],
+        start=1,
+    )
+}
+_ORDINAL_SCHEDULE = re.compile(
+    r"^\s*(?:the\s+)?(" + "|".join(_ORDINALS) + r")\s+schedule\s*$", re.IGNORECASE
+)
+
+
 def normalize_citation(ref: str) -> str | None:
     """Return the canonical form of a citation, or None if it can't be parsed.
 
     Canonical form is lowercase with no spaces inside brackets, for example
-    "section 5(1)(a)", "rule 3(b)", "schedule".
+    "section 5(1)(a)", "rule 3(b)", "schedule", "schedule 2". "Second Schedule"
+    is the same as "Schedule 2".
     """
+    ordinal = _ORDINAL_SCHEDULE.match(ref)
+    if ordinal:
+        return f"schedule {_ORDINALS[ordinal[1].lower()]}"
     match = _CITATION.match(ref)
     if match is None:
         return None

@@ -20,7 +20,9 @@ REGISTER = load_register()
 def facts():
     answers = {"INFO-DATA": "Names, phone numbers", "Q-NOTICE": "no", "CTX-CHILDREN": "no"}
     findings = assess(REGISTER, answers, CorpusIndex.from_file(corpus_index_path()))
-    return EngagementFacts("Acme Pvt Ltd", "SaaS", answers, [f.__dict__ for f in findings])
+    return EngagementFacts(
+        "Acme Pvt Ltd", "SaaS", answers, [{**f.__dict__, "citation": f.citation} for f in findings]
+    )
 
 
 def test_every_document_type_builds_and_exports():

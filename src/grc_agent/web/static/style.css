@@ -123,3 +123,30 @@ button.small { padding: .2rem .6rem; font-size: .85rem; }
 .chat .msg-user div { background: var(--info-bg); }
 .ask { display: flex; gap: .75rem; align-items: flex-end; margin-top: 1rem; }
 .ask textarea { flex: 1; margin: 0; }
+.assess-form { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; margin: 0 0 1rem; }
+.hit { padding: .6rem 0; border-bottom: 1px solid var(--border); }
+.hit:last-child { border-bottom: 0; }
+.hit p { margin: .2rem 0 0; }
+details summary { cursor: pointer; color: var(--muted); }
+
+/* Docs and blog */
+.prose { max-width: 760px; line-height: 1.7; }
+.prose h1 { font-size: 1.9rem; margin-bottom: .35rem; }
+.prose h2 { font-size: 1.3rem; margin: 2rem 0 .6rem; }
+.prose h3 { font-size: 1.08rem; margin: 1.5rem 0 .4rem; }
+.prose table { margin: 1rem 0; }
+.prose blockquote { margin: 1rem 0; padding: .5rem 1rem; border-left: 3px solid var(--accent); background: var(--bg); }
+.prose code { background: var(--bg); padding: .1rem .3rem; border-radius: 4px; }
+.public-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 1rem; align-items: start; }
+.public-layout .prose { max-width: none; }
+@media (max-width: 900px) { .public-layout { grid-template-columns: 1fr; } }
+.side-nav ul { list-style: none; padding: 0; margin: 0; }
+.side-nav li { padding: .3rem 0; border-bottom: 1px solid var(--border); }
+.side-nav li:last-child { border-bottom: 0; }
+.side-nav a { text-decoration: none; }
+.side-nav a[aria-current] { font-weight: 700; }
+.post-list .card h2 { font-size: 1.15rem; margin-bottom: .3rem; }
+.post-list .card h2 a { text-decoration: none; }
+.post-list .card p { margin: .2rem 0; }
+.public-footer { max-width: 1200px; margin: 0 auto; padding: 0 1rem 2rem; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .9rem; }
