@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block title %}Data flows{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Data flows</h1>
+    <p class="muted">A live map of how each client's personal data moves, where it leaves India, and what needs fixing.</p>
+  </div>
+</div>
+{% if maps %}
+<div class="doc-grid">
+  {% for m in maps %}
+  {% set sm = m.flow.summary %}
+  {% set total = sm.issues.values()|sum %}
+  <a class="card flow-card" href="/engagements/{{ m.eng.id }}/dataflow">
+    <div class="row"><h3>{{ m.eng.client }}</h3><span class="mono muted small">ENG-{{ '%03d' % m.eng.id }}</span></div>
+    <p class="muted small">{{ m.eng.sector }}</p>
+    <div class="flow-card-stats">
+      <span><strong>{{ sm.flows }}</strong> flows</span>
+      <span><strong>{{ sm.systems }}</strong> systems</span>
+      <span class="{{ 'is-bad' if sm.issues.critical or sm.issues.serious }}"><strong>{{ total }}</strong> issues</span>
+    </div>
+    <p class="small">
+      {% if sm.leaves_india %}<span class="badge loc-outside">Data leaves India</span>{% else %}<span class="badge loc-india">Stays in India</span>{% endif %}
+      {% if not sm.assessed %}<span class="badge badge-none">Not assessed</span>{% endif %}
+    </p>
+    <span class="connector-cta">Open map {{ icon("i-arrow") }}</span>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<section class="card"><div class="empty">{{ icon("i-flow") }}<p><strong>No agent-assisted engagements yet.</strong> Each one gets a data-flow map from its intake.</p><a class="button primary" href="/engagements#new">{{ icon("i-plus") }} New engagement</a></div></section>
+{% endif %}
+{% endblock %}

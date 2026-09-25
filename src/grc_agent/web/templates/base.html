@@ -21,9 +21,10 @@
   </a>
   <nav class="side-links" aria-label="Main">
     {{ nav_link("/", "i-home", "Dashboard", path == "/") }}
-    {{ nav_link("/engagements", "i-briefcase", "Engagements", path.startswith("/engagements")) }}
+    {{ nav_link("/engagements", "i-briefcase", "Engagements", path.startswith("/engagements") and not path.endswith("/dataflow")) }}
     {{ nav_link("/assistant", "i-spark", "Assistant", path == "/assistant") }}
     <p class="nav-group">Evidence</p>
+    {{ nav_link("/dataflows", "i-flow", "Data flows", path.startswith("/dataflows") or path.endswith("/dataflow")) }}
     {{ nav_link("/connectors", "i-plug", "Connectors", path.startswith("/connectors") or path.startswith("/settings")) }}
     {{ nav_link("/corpus", "i-book", "Corpus", path.startswith("/corpus")) }}
     <p class="nav-group">Growth</p>
@@ -31,6 +32,10 @@
     {{ nav_link("/kpis", "i-chart", "KPIs", path == "/kpis") }}
   </nav>
   <div class="side-foot">
+    <a href="/notifications" class="bell" {% if path.startswith("/notifications") %}aria-current="page"{% endif %}>
+      <svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg><span>Notifications</span>
+      <span class="bell-count" id="bell-count" {% if not unread %}hidden{% endif %}>{{ unread }}</span>
+    </a>
     <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch light or dark theme">
       <svg class="icon icon-moon" aria-hidden="true"><use href="#i-moon"/></svg>
       <svg class="icon icon-sun" aria-hidden="true"><use href="#i-sun"/></svg>
@@ -56,6 +61,7 @@
     {% block content %}{% endblock %}
   </main>
 </div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
 <script>
 (() => {
   const btn = document.getElementById("theme-toggle");
@@ -68,6 +74,40 @@
   });
 })();
 </script>
+{% if user %}
+<script>
+// Live notifications: poll for the unread count and show a toast for anything new.
+(() => {
+  const badge = document.getElementById("bell-count");
+  const toasts = document.getElementById("toasts");
+  const baseTitle = document.title;
+  let latest = null;
+  function show(n) {
+    const a = document.createElement("a");
+    a.className = `toast level-${n.level}`;
+    a.href = `/notifications/${n.id}/open`;
+    a.textContent = n.title;
+    toasts.append(a);
+    setTimeout(() => a.classList.add("gone"), 7000);
+    setTimeout(() => a.remove(), 7600);
+  }
+  async function poll() {
+    try {
+      const r = await fetch(`/notifications/unread.json?after=${latest ?? 0}`, { headers: { Accept: "application/json" } });
+      if (!r.ok) return;
+      const d = await r.json();
+      if (latest !== null) d.new.forEach(show);
+      latest = d.latest;
+      badge.textContent = d.unread;
+      badge.hidden = !d.unread;
+      document.title = d.unread ? `(${d.unread}) ${baseTitle}` : baseTitle;
+    } catch (e) { /* offline or restarting: try again next time */ }
+  }
+  poll();
+  setInterval(poll, 20000);
+})();
+</script>
+{% endif %}
 {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -117,6 +117,34 @@ One-time setup for the firm:
 - Clients remove access at any time: uninstall the GitHub App, or delete the CloudFormation
   stack.
 
+### Data-flow map
+
+Each agent-assisted engagement has a **Data flow** step: a live map of how the client's
+personal data moves from people, through collection points and systems, to outside
+companies, deletion and anywhere outside India.
+
+- Built from the intake (data collected, tools and vendors, retention, children, foreign
+  services), connector evidence (e.g. AWS regions outside India) and the findings. Each gap
+  or open item is pinned to the step it affects, and flows are coloured by what they lead into.
+- Animated: dots move along each flow. Pause it, or it stays still for people who prefer
+  reduced motion.
+- Live: the page re-checks every 10 seconds and redraws when the intake, the assessment or
+  a connector check changes.
+- Ask it questions: "What leaves India?", "Where does email go?", "Show issues", "Which
+  vendors get data?". Matching steps are highlighted and the answer is written out.
+- The **mitigation plan** lists every issue in the flow, most urgent first, with the fix.
+  Download it as CSV.
+- Add systems or vendors the intake missed. **Data flows** in the sidebar lists every
+  client's map.
+
+### Notifications
+
+The bell in the sidebar tracks everything that happens: new engagements, intakes,
+assessments (and unresolved citations), stale assessments, documents, delivery, connector
+checks, failed logins and published content. Your own actions arrive already read, so the
+count shows what others did and what the system found. New items pop up as they happen
+(checked every 20 seconds). Filter by type, level or unread on the **Notifications** page.
+
 ### Docs and blog
 
 **Docs & blog** in the app is where you write and publish DPDPA guides and SEO articles in
