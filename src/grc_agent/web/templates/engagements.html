@@ -39,11 +39,7 @@
         {% for sector in sectors %}<option>{{ sector }}</option>{% endfor %}
       </select>
     </label>
-    <fieldset>
-      <legend>Type</legend>
-      <label class="inline"><input type="radio" name="mode" value="agent" checked> Agent-assisted</label>
-      <label class="inline"><input type="radio" name="mode" value="manual"> Manual baseline (hours only)</label>
-    </fieldset>
+    <input type="hidden" name="mode" value="agent">
     <button class="primary">Create</button>
   </form>
 </div>

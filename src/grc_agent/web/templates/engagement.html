@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import engagement_header %}
+{% from "_macros.html" import engagement_header, icon %}
 {% block title %}{{ eng.client }}{% endblock %}
 {% block content %}
 {{ engagement_header(eng, s, tab) }}
@@ -22,29 +22,34 @@
       <button class="primary" {% if not can_deliver %}disabled{% endif %}>Mark as delivered</button>
     </form>
     {% endif %}
-    {% if eng.mode == "agent" %}
-    <p class="small" style="margin-top:.8rem"><a href="/engagements/{{ eng.id }}/export.json">Export KPI record (JSON)</a></p>
-    {% endif %}
   </section>
 
+  {% if eng.mode == "manual" %}
   <form method="post" action="/engagements/{{ eng.id }}/details" class="card">
-    <h2>KPI details</h2>
+    <h2>Baseline details</h2>
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <label>Consultant hours (first call to delivery, including review)
       <input name="consultant_hours" type="number" step="0.25" min="0" value="{{ eng.consultant_hours if eng.consultant_hours is not none else '' }}">
     </label>
-    {% if eng.mode == "agent" %}
-    <fieldset>
-      <legend>Did the client complete the intake without help?</legend>
-      {% set u = eng.intake_completed_unaided %}
-      <label class="inline"><input type="radio" name="intake_completed_unaided" value="yes" {% if u == 1 %}checked{% endif %}> Yes</label>
-      <label class="inline"><input type="radio" name="intake_completed_unaided" value="no" {% if u == 0 %}checked{% endif %}> No</label>
-      <label class="inline"><input type="radio" name="intake_completed_unaided" value="" {% if u is none %}checked{% endif %}> Not recorded</label>
-    </fieldset>
-    <label class="inline"><input type="checkbox" name="fell_back_to_manual" {% if eng.fell_back_to_manual %}checked{% endif %}> Consultant fell back to manual drafting</label>
-    {% endif %}
     <button>Save details</button>
   </form>
+  {% else %}
+  <section class="card">
+    <div class="card-head"><h2>Risk &amp; data snapshot</h2><a class="small" href="/engagements/{{ eng.id }}/risks">Risk register {{ icon("i-arrow") }}</a></div>
+    {% set rs = snapshot.risks %}
+    <div class="snapshot">
+      <p><strong>{{ rs.open }}</strong><span>open risks</span></p>
+      <p class="{{ 'is-bad' if rs.by_level.critical or rs.by_level.high }}"><strong>{{ rs.by_level.critical + rs.by_level.high }}</strong><span>critical or high</span></p>
+      <p class="{{ 'is-warn' if snapshot.flow.leaves_india }}"><strong>{{ "Yes" if snapshot.flow.leaves_india else "No" }}</strong><span>data leaves India</span></p>
+    </div>
+    {% if snapshot.top %}
+    <ul class="queue">
+      {% for r in snapshot.top %}<li><span class="badge risk-{{ r.level }}">{{ r.score }}</span><span class="queue-text"><a href="/engagements/{{ eng.id }}/risks#{{ r.key }}">{{ r.title }}</a><small>{{ r.threat }}</small></span></li>{% endfor %}
+    </ul>
+    {% elif eng.assessed_at %}<p class="muted small">No open risks.</p>{% else %}<p class="muted small">Risks appear after the assessment.</p>{% endif %}
+    <p class="small"><a href="/engagements/{{ eng.id }}/dataflow">Data-flow map</a> · <a href="/assistant">Ask the GRC Analyst</a></p>
+  </section>
+  {% endif %}
 </div>
 
 <section class="card">

@@ -22,14 +22,13 @@
   <nav class="side-links" aria-label="Main">
     {{ nav_link("/", "i-home", "Dashboard", path == "/") }}
     {{ nav_link("/engagements", "i-briefcase", "Engagements", path.startswith("/engagements") and not path.endswith("/dataflow")) }}
-    {{ nav_link("/assistant", "i-spark", "Assistant", path == "/assistant") }}
+    {{ nav_link("/assistant", "i-spark", "GRC Analyst", path == "/assistant") }}
     <p class="nav-group">Evidence</p>
     {{ nav_link("/dataflows", "i-flow", "Data flows", path.startswith("/dataflows") or path.endswith("/dataflow")) }}
     {{ nav_link("/connectors", "i-plug", "Connectors", path.startswith("/connectors") or path.startswith("/settings")) }}
     {{ nav_link("/corpus", "i-book", "Corpus", path.startswith("/corpus")) }}
     <p class="nav-group">Growth</p>
     {{ nav_link("/content", "i-pen", "Docs & blog", path.startswith("/content")) }}
-    {{ nav_link("/kpis", "i-chart", "KPIs", path == "/kpis") }}
   </nav>
   <div class="side-foot">
     <a href="/notifications" class="bell" {% if path.startswith("/notifications") %}aria-current="page"{% endif %}>

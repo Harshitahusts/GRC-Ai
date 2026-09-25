@@ -77,7 +77,7 @@ class _Messages:
         }
         return _response("end_turn", _text(json.dumps(data)))
 
-    # -- assistant chat (agent.Agent)
+    # -- analyst chat (agent.Agent)
     def _chat(self, messages: list[dict[str, Any]], tools: set[str]) -> SimpleNamespace:
         last = messages[-1]
         results = [
@@ -89,30 +89,67 @@ class _Messages:
             return _response("end_turn", _text(self._summarize(results)))
 
         question = _content_text(last["content"])
+        q = question.lower()
+        say = lambda msg: _text(f"{DEMO_PREFIX} {msg}")  # noqa: E731
+        if re.search(r"\b(gdpr|iso ?27001|soc ?2|nist|hipaa|pci)\b", q):
+            return _response(
+                "end_turn",
+                say("This workspace covers India's DPDP Act and Rules only for now."),
+            )
         risk = re.search(r"likelihood\D{0,20}(\d)\D+impact\D{0,20}(\d)", question, re.I)
         if risk and "score_risk" in tools:
             return _response(
                 "tool_use",
-                _text(f"{DEMO_PREFIX} Scoring that risk with the score_risk tool."),
+                say("Scoring that risk on the 5x5 matrix."),
                 _tool_use("score_risk", {"likelihood": int(risk[1]), "impact": int(risk[2])}),
             )
-        control = re.search(r"\b([A-Z]{2}-\d{2})\b", question)
-        if control and "get_control" in tools:
-            return _response("tool_use", _tool_use("get_control", {"control_id": control[1]}))
-        words = [
-            w for w in re.findall(r"[a-z0-9]+", question.lower()) if w not in _STOP and len(w) > 2
-        ]
-        if words and "search_controls" in tools:
+        eng = re.search(r"\bENG-0*(\d+)\b", question, re.I)
+        if eng and "get_engagement" in tools:
+            eid = int(eng[1])
+            if re.search(r"evidence|request|fieldwork|collect", q):
+                calls = [("get_evidence", {"engagement_id": eid})]
+            elif re.search(r"flow|india|transfer|vendor|abroad|leave|processor", q):
+                calls = [("get_data_flow", {"engagement_id": eid})]
+            elif re.search(r"risk|threat|treat|likelihood|impact", q):
+                calls = [("get_risk_register", {"engagement_id": eid})]
+            elif re.search(r"finding|gap|open item|issue", q):
+                status = "gap" if "gap" in q else "all"
+                calls = [("get_findings", {"engagement_id": eid, "status": status})]
+            else:  # report, summary, status: the overview and the risks together
+                calls = [
+                    ("get_engagement", {"engagement_id": eid}),
+                    ("get_risk_register", {"engagement_id": eid}),
+                ]
+            names = ", ".join(n for n, _ in calls)
             return _response(
                 "tool_use",
-                _text(f"{DEMO_PREFIX} Searching the control catalog."),
-                _tool_use("search_controls", {"query": words[-1], "framework": None}),
+                say(f"Looking this up in the workspace ({names})."),
+                *[_tool_use(n, args) for n, args in calls],
+            )
+        if "list_engagements" in tools and re.search(
+            r"client|engagement|portfolio|today|queue|priorit|workload|all\b", q
+        ):
+            return _response(
+                "tool_use",
+                say("Checking every engagement in the workspace."),
+                _tool_use("list_engagements", {}),
+            )
+        section = re.search(r"\b(section|rule)\s+(\d+(?:\(\w+\))*)", question, re.I)
+        if section and "get_provision" in tools:
+            ref = f"{section[1].title()} {section[2]}"
+            return _response("tool_use", _tool_use("get_provision", {"ref": ref}))
+        words = [w for w in re.findall(r"[a-z]+", q) if w not in _STOP and len(w) > 3]
+        if words and "search_obligations" in tools:
+            return _response(
+                "tool_use",
+                say("Searching the DPDPA obligations register."),
+                _tool_use("search_obligations", {"query": words[-1]}),
             )
         return _response(
             "end_turn",
-            _text(
-                f'{DEMO_PREFIX} I can only run the tools in demo mode. Try "Score a risk with '
-                'likelihood 4 and impact 3" or "Which controls cover MFA?". Add an '
+            say(
+                'Demo mode can only run the tools. Try "What should I work on today?", '
+                '"Summarise ENG-001", or "What does DPDPA say about consent?". Add an '
                 "ANTHROPIC_API_KEY for real answers."
             ),
         )
@@ -129,24 +166,91 @@ class _Messages:
             except (TypeError, json.JSONDecodeError):
                 lines.append(f"- {content}")
                 continue
-            if isinstance(data, dict) and "score" in data:
-                lines.append(
-                    f"- Risk score {data['score']} (likelihood {data['likelihood']} x impact "
-                    f"{data['impact']}): {data['level']}."
-                )
-            elif isinstance(data, list):
-                if not data:
-                    lines.append("- No matching controls in the catalog.")
-                for c in data[:5]:
-                    maps = ", ".join(f"{k} {v}" for k, v in c.get("mappings", {}).items())
-                    lines.append(f"- {c['id']} {c['title']}: {c['summary']} ({maps})")
-            elif isinstance(data, dict) and "id" in data:
-                maps = ", ".join(f"{k} {v}" for k, v in data.get("mappings", {}).items())
-                lines.append(f"- {data['id']} {data['title']}: {data['summary']} ({maps})")
-            else:
-                lines.append(f"- {content}")
+            lines += _describe(data)
         lines.append("Add an ANTHROPIC_API_KEY for real, reasoned answers.")
         return "\n".join(lines)
+
+
+def _describe(data: Any) -> list[str]:
+    """Plain bullet points for a tool result, by its kind."""
+    kind = data.get("kind") if isinstance(data, dict) else None
+    if kind == "risk_score":
+        return [
+            f"- Risk score {data['score']} (likelihood {data['likelihood']} x impact "
+            f"{data['impact']}): {data['level']}."
+        ]
+    if kind == "obligations":
+        out = [f"- {len(data['results'])} matching obligation(s) in register {data['register']}:"]
+        if not data["results"]:
+            out = ["- No matching obligations in the DPDPA register."]
+        for o in data["results"][:5]:
+            out.append(
+                f"  - {o['id']} ({o['provision']}, {o['severity']}): {o['obligation']} "
+                f"Evidence to ask for: {o['evidence_to_request']}"
+            )
+        return out
+    if kind == "provision":
+        return [f"- {t['heading']}: {t['text'][:300]}" for t in data["text"][:2]]
+    if kind == "engagements":
+        out = []
+        for e in data["engagements"]:
+            top = f"; top risk: {e['top_risk']}" if e["top_risk"] else ""
+            ready = e["readiness"] if e["readiness"] is not None else "not assessed"
+            out.append(
+                f"- {e['client']} (ENG-{e['engagement_id']:03d}): {e['stage']}, readiness "
+                f"{ready}, {e['gaps']} gaps, {e['open_risks']} open risks{top}."
+            )
+        return out or ["- No agent-assisted engagements yet."]
+    if kind == "engagement":
+        reviewed = sum(d["reviewed"] for d in data["documents"])
+        stale = " The assessment is out of date." if data["stale_assessment"] else ""
+        return [
+            f"- {data['client']} ({data['sector']}): {data['stage']}, readiness "
+            f"{data['readiness'] if data['readiness'] is not None else 'not assessed'}.{stale}",
+            f"- {len(data['intake'])} intake answers, {len(data['connectors'])} connected "
+            f"system(s), {reviewed}/{len(data['documents'])} documents reviewed.",
+        ]
+    if kind == "findings":
+        out = [f"- {len(data['findings'])} finding(s) for {data['client']} ({data['status']}):"]
+        for f in data["findings"][:6]:
+            out.append(
+                f"  - {f['obligation_id']} {f['status'].replace('_', ' ')} ({f['severity']}): "
+                f"{f['summary']} Fix: {f['remediation'] or 'n/a'}"
+            )
+        return out
+    if kind == "risks":
+        s = data["summary"]
+        out = [
+            f"- {data['client']}: {s['open']} open risks ({s['by_level']['critical']} critical, "
+            f"{s['by_level']['high']} high), {s['overdue']} overdue, {s['unowned']} without "
+            "an owner."
+        ]
+        for r in [r for r in data["risks"] if r["status"] != "closed"][:5]:
+            out.append(
+                f"  - {r['score']} {r['level']}: {r['title']} Threat: {r['threat']}. "
+                f"Treatment: {r['treatment']}."
+            )
+        return out
+    if kind == "dataflow":
+        outside = [s["name"] for s in data["systems"] if s["location"] == "Outside India"]
+        where = (
+            "leaves India via " + ", ".join(outside) if data["leaves_india"] else "stays in India"
+        )
+        out = [f"- {data['client']}: personal data ({', '.join(data['personal_data'])}) {where}."]
+        for p in data["mitigation_plan"][:3]:
+            out.append(
+                f"  - {p['level']}: {p['issue']} ({', '.join(p['where'])}). Fix: {p['action']}"
+            )
+        return out
+    if kind == "evidence":
+        out = [
+            f"- {data['client']}: {len(data['collected_by_connectors'])} check(s) collected by "
+            f"connectors, {len(data['still_to_request'])} item(s) still to request:"
+        ]
+        for e in data["still_to_request"][:5]:
+            out.append(f"  - {e['obligation_id']} ({e['provision']}): {e['request_from_client']}")
+        return out
+    return [f"- {json.dumps(data)[:300]}"]
 
 
 class DemoClient:

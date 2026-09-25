@@ -135,6 +135,21 @@ CREATE TABLE IF NOT EXISTS dataflow_nodes (
     created_by TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
+-- Consultant edits to the generated risk register, keyed by risk (e.g. "finding:OBL-004").
+CREATE TABLE IF NOT EXISTS risk_edits (
+    engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+    risk_key TEXT NOT NULL,
+    likelihood INTEGER CHECK (likelihood BETWEEN 1 AND 5),
+    impact INTEGER CHECK (impact BETWEEN 1 AND 5),
+    treatment TEXT,
+    owner TEXT,
+    due TEXT,
+    status TEXT,
+    notes TEXT,
+    updated_by TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (engagement_id, risk_key)
+);
 CREATE TABLE IF NOT EXISTS audit_log (
     id INTEGER PRIMARY KEY,
     at TEXT NOT NULL,

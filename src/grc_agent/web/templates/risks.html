@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% from "_macros.html" import engagement_header, icon %}
+{% block title %}Risks · {{ eng.client }}{% endblock %}
+{% block content %}
+{{ engagement_header(eng, s, tab) }}
+{% set level_label = {"critical": "Critical", "high": "High", "medium": "Medium", "low": "Low"} %}
+{% set locked = eng.delivered_at is not none %}
+
+<section class="tiles risk-tiles" aria-label="Risk summary">
+  <div class="tile"><p class="tile-label">Open risks</p><p class="tile-value">{{ rs.open }}</p><p class="muted small">{{ rs.closed }} closed</p></div>
+  <div class="tile {{ 'is-bad' if rs.by_level.critical or rs.by_level.high }}"><p class="tile-label">Critical &amp; high</p><p class="tile-value">{{ rs.by_level.critical + rs.by_level.high }}</p><p class="muted small">{{ rs.by_level.critical }} critical · {{ rs.by_level.high }} high</p></div>
+  <div class="tile {{ 'is-warn' if rs.overdue }}"><p class="tile-label">Overdue</p><p class="tile-value">{{ rs.overdue }}</p><p class="muted small">past their due date</p></div>
+  <div class="tile"><p class="tile-label">No owner yet</p><p class="tile-value">{{ rs.unowned }}</p><p class="muted small">{{ rs.accepted }} accepted with a reason</p></div>
+</section>
+
+<div class="grid-2 risk-top">
+  <section class="card">
+    <div class="card-head"><h2>Risk matrix</h2><span class="muted small">open risks · likelihood × impact</span></div>
+    <div class="heat-wrap">
+      <span class="heat-y">Impact →</span>
+      <table class="heatmap">
+        <caption class="sr-only">Number of open risks in each likelihood and impact cell</caption>
+        <tbody>
+          {% for row in heat %}
+          <tr>
+            <th scope="row" class="heat-axis">{{ row[0].impact }}</th>
+            {% for c in row %}
+            <td class="heat-cell zone-{{ c.level }}{{ ' has' if c.count }}" {% if c.count %}tabindex="0" title="{{ c.titles|join('\n') }}"{% endif %}
+                aria-label="Likelihood {{ c.likelihood }}, impact {{ c.impact }}: {{ c.count }} risk{{ '' if c.count == 1 else 's' }} ({{ level_label[c.level] }})">
+              {% if c.count %}<span>{{ c.count }}</span>{% endif %}
+            </td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+          <tr><th></th>{% for l in range(1, 6) %}<th scope="col" class="heat-axis">{{ l }}</th>{% endfor %}</tr>
+        </tbody>
+      </table>
+      <span class="heat-x">Likelihood →</span>
+    </div>
+    <div class="legend risk-legend">
+      {% for lvl in ["low", "medium", "high", "critical"] %}<span><i class="zone-{{ lvl }}"></i>{{ level_label[lvl] }}</span>{% endfor %}
+    </div>
+  </section>
+  <section class="card">
+    <h2>How scores are set</h2>
+    <ul class="plain small">
+      <li><strong>Risk = likelihood × impact</strong>, each 1 (rare, negligible) to 5 (almost certain, severe).</li>
+      <li><strong>Starting likelihood:</strong> a gap is likely (4); an open item or a warning is possible (3); a failed connector check is likely (4).</li>
+      <li><strong>Starting impact</strong> follows the obligation's severity: critical 5, high 4, medium 3, low 2.</li>
+      <li><strong>Levels:</strong> 1–5 low, 6–11 medium, 12–19 high, 20–25 critical.</li>
+      <li><strong>Treatments:</strong> mitigate (fix it), accept (needs a written reason), transfer (contract or insurance), avoid (stop the processing).</li>
+    </ul>
+    <p class="small muted">Risks come from the findings and connector checks, so they update when those change. Your edits are kept.</p>
+  </section>
+</div>
+
+<section class="card">
+  <div class="card-head"><h2>Risk register</h2><span class="muted small">{{ risks|length }} risks, highest first</span></div>
+  {% if risks %}
+  <table class="table risk-table">
+    <thead><tr><th>Risk</th><th class="num">L</th><th class="num">I</th><th>Score</th><th>Treatment</th><th>Owner · due</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    {% for r in risks %}
+    <tr id="{{ r.key }}" class="{{ 'is-closed' if r.status == 'closed' }}">
+      <td>
+        <strong>{{ r.title }}</strong>
+        <p class="small"><span class="muted">Threat:</span> {{ r.threat }}</p>
+        <p class="small"><span class="muted">Vulnerability:</span> {{ r.vulnerability }}</p>
+        <p class="small muted">{{ r.provision }} · {{ "Finding" if r.source == "finding" else "Connector check" }} · <a href="{{ r.link }}">open</a>{% if r.edited %} · edited{% endif %}</p>
+      </td>
+      <td class="num">{{ r.likelihood }}</td>
+      <td class="num">{{ r.impact }}</td>
+      <td class="nowrap"><span class="badge risk-{{ r.level }}">{{ r.score }} · {{ level_label[r.level] }}</span></td>
+      <td class="small">{{ treatments[r.treatment].split(":")[0] }}{% if r.action and r.treatment == "mitigate" %}<p class="muted">{{ r.action }}</p>{% endif %}{% if r.notes %}<p class="muted">Note: {{ r.notes }}</p>{% endif %}</td>
+      <td class="small">{{ r.owner or "—" }}{% if r.due %}<br><span class="{{ 'overdue' if r.overdue() else 'muted' }}">{{ r.due }}{% if r.overdue() %} · overdue{% endif %}</span>{% endif %}</td>
+      <td class="nowrap"><span class="badge status-{{ r.status }}">{{ statuses[r.status] }}</span></td>
+      <td>
+        {% if not locked %}
+        <details class="risk-edit">
+          <summary class="button small">Edit</summary>
+          <form method="post" action="/engagements/{{ eng.id }}/risks" class="risk-form">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <input type="hidden" name="risk_key" value="{{ r.key }}">
+            <label>Likelihood <select name="likelihood">{% for n in range(1, 6) %}<option {% if n == r.likelihood %}selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
+            <label>Impact <select name="impact">{% for n in range(1, 6) %}<option {% if n == r.impact %}selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
+            <label class="wide">Treatment <select name="treatment">{% for k, label in treatments.items() %}<option value="{{ k }}" {% if k == r.treatment %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+            <label>Owner <input name="owner" value="{{ r.owner }}" maxlength="80" placeholder="e.g. CTO"></label>
+            <label>Due <input type="date" name="due" value="{{ r.due }}"></label>
+            <label class="wide">Status <select name="status">{% for k, label in statuses.items() %}<option value="{{ k }}" {% if k == r.status %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+            <label class="wide">Notes <textarea name="notes" rows="2" maxlength="1000" placeholder="Required when accepting a risk">{{ r.notes }}</textarea></label>
+            <button class="primary small wide">Save</button>
+          </form>
+        </details>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">{{ icon("i-shield") }}<p><strong>No risks yet.</strong> {% if eng.assessed_at %}Nothing open: every obligation is compliant or not applicable.{% else %}Run the assessment on the <a href="/engagements/{{ eng.id }}/findings">Findings</a> step first.{% endif %}</p></div>
+  {% endif %}
+</section>
+{% endblock %}
