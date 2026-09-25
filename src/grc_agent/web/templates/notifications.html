@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block title %}Notifications{% endblock %}
+{% block content %}
+{% set level_icon = {"critical": "i-x", "serious": "i-alert", "warning": "i-clock", "good": "i-check", "info": "i-info"} %}
+{% set level_label = {"critical": "Critical", "serious": "Serious", "warning": "Needs attention", "good": "Done", "info": "Update"} %}
+<div class="page-head">
+  <div>
+    <h1>Notifications</h1>
+    <p class="muted">Everything happening across engagements, assessments, documents, connectors and security. {{ unread }} unread.</p>
+  </div>
+  {% if unread %}
+  <form method="post" action="/notifications/read">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="back" value="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}">
+    <button>{{ icon("i-check") }} Mark all as read</button>
+  </form>
+  {% endif %}
+</div>
+
+<div class="notif-layout">
+  <aside class="card notif-filters" aria-label="Filter notifications">
+    {% macro qs(s=show, c=category, l=level) -%}?show={{ s }}{% if c %}&category={{ c }}{% endif %}{% if l %}&level={{ l }}{% endif %}{%- endmacro %}
+    <p class="tile-label">Show</p>
+    <nav class="filter-links">
+      <a href="{{ qs(s='all') }}" {% if show != "unread" %}aria-current="page"{% endif %}>All</a>
+      <a href="{{ qs(s='unread') }}" {% if show == "unread" %}aria-current="page"{% endif %}>Unread <span>{{ unread }}</span></a>
+    </nav>
+    <p class="tile-label">Type</p>
+    <nav class="filter-links">
+      <a href="{{ qs(c='') }}" {% if not category %}aria-current="page"{% endif %}>Everything</a>
+      {% for key, label in categories.items() %}
+      <a href="{{ qs(c=key) }}" {% if category == key %}aria-current="page"{% endif %}>{{ label }} <span>{{ counts.get(key, 0) }}</span></a>
+      {% endfor %}
+    </nav>
+    <p class="tile-label">Level</p>
+    <nav class="filter-links">
+      <a href="{{ qs(l='') }}" {% if not level %}aria-current="page"{% endif %}>Any</a>
+      {% for key in ["critical", "serious", "warning", "good", "info"] %}
+      <a href="{{ qs(l=key) }}" {% if level == key %}aria-current="page"{% endif %}><i class="dot-{{ key }}" aria-hidden="true"></i>{{ level_label[key] }}</a>
+      {% endfor %}
+    </nav>
+  </aside>
+
+  <section class="card notif-list">
+    {% if items %}
+    {% set ns = namespace(day="") %}
+    <ul class="notifications">
+      {% for n in items %}
+      {% if n.at[:10] != ns.day %}{% set ns.day = n.at[:10] %}<li class="notif-day">{{ ns.day }}</li>{% endif %}
+      <li class="notif level-{{ n.level }} {{ 'is-read' if n.read else 'is-unread' }}">
+        <span class="status-icon" aria-hidden="true">{{ icon(level_icon[n.level]) }}</span>
+        <a class="notif-text" href="/notifications/{{ n.id }}/open">
+          <strong>{{ n.title }}</strong>
+          <span class="muted small">{{ level_label[n.level] }} · {{ categories.get(n.category, n.category) }} · {{ n.actor }} · <time datetime="{{ n.at }}">{{ n.at[11:16] }} UTC</time></span>
+        </a>
+        {% if not n.read %}<span class="unread-dot" title="Unread"><span class="sr-only">Unread</span></span>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty">
+      {{ icon("i-bell") }}
+      <p><strong>{{ "No unread notifications." if show == "unread" else "No notifications yet." }}</strong> They appear here as work happens.</p>
+    </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

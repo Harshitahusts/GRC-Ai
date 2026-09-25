@@ -108,6 +108,33 @@ CREATE TABLE IF NOT EXISTS evidence (
     data_json TEXT NOT NULL DEFAULT '{}',
     collected_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY,
+    at TEXT NOT NULL,
+    actor TEXT NOT NULL,
+    engagement_id INTEGER,
+    category TEXT NOT NULL,
+    level TEXT NOT NULL CHECK (level IN ('info', 'good', 'warning', 'serious', 'critical')),
+    title TEXT NOT NULL,
+    link TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS notification_reads (
+    username TEXT NOT NULL COLLATE NOCASE,
+    notification_id INTEGER NOT NULL REFERENCES notifications(id) ON DELETE CASCADE,
+    PRIMARY KEY (username, notification_id)
+);
+-- Client data-flow map: systems and vendors a consultant adds on top of the generated map.
+CREATE TABLE IF NOT EXISTS dataflow_nodes (
+    id INTEGER PRIMARY KEY,
+    engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+    name TEXT NOT NULL,
+    stage TEXT NOT NULL,
+    location TEXT NOT NULL DEFAULT 'unknown',
+    categories TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL DEFAULT '',
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS audit_log (
     id INTEGER PRIMARY KEY,
     at TEXT NOT NULL,
@@ -209,9 +236,13 @@ def audit(
     engagement_id: int | None = None,
     detail: str | dict = "",
 ) -> None:
+    data = detail if isinstance(detail, dict) else {}
     if isinstance(detail, dict):
         detail = json.dumps(detail)
     conn.execute(
         "INSERT INTO audit_log (at, username, engagement_id, action, detail) VALUES (?,?,?,?,?)",
         (now(), username, engagement_id, action, detail),
     )
+    from grc_agent.web import notify  # here to avoid a circular import
+
+    notify.from_audit(conn, username, action, engagement_id, data, detail)

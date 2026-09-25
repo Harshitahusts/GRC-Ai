@@ -48,7 +48,7 @@ from grc_agent.documents import DOCUMENT_TYPES, Block, EngagementFacts, build_do
 from grc_agent.kpis import CorpusIndex, build_scorecard
 from grc_agent.kpis.models import DOCUMENT_OUTCOMES, VERDICTS, parse_engagement
 from grc_agent.register import CHOICES, corpus_index_path, load_register
-from grc_agent.web import connector_views, db
+from grc_agent.web import connector_views, dataflow_views, db, notification_views, notify
 from grc_agent.web.security import (
     DUMMY_HASH,
     csrf_matches,
@@ -119,6 +119,8 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
     _routes(app)
     connector_views.register(app)
+    notification_views.register(app)
+    dataflow_views.register(app)
     return app
 
 
@@ -162,9 +164,15 @@ def redirect(url: str) -> RedirectResponse:
 def render(request: Request, name: str, status_code: int = 200, **context: Any) -> HTMLResponse:
     if "csrf" not in request.session:
         request.session["csrf"] = new_csrf_token()
+    user = request.session.get("user")
+    unread = 0
+    if user:
+        with db.connect(request.app.state.db_path) as c:
+            unread = notify.unread_count(c, user)
     context.update(
         request=request,
-        user=request.session.get("user"),
+        user=user,
+        unread=unread,
         csrf=request.session["csrf"],
         flashes=request.session.pop("flash", []),
         register=request.app.state.register,

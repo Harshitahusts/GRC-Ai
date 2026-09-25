@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% from "_macros.html" import engagement_header, icon %}
+{% block title %}Data flow · {{ eng.client }}{% endblock %}
+{% block content %}
+{{ engagement_header(eng, s, tab) }}
+{% set level_label = {"critical": "Critical", "serious": "Serious", "warning": "Needs attention"} %}
+{% set sm = flow.summary %}
+
+<div id="flow-app" data-src="/engagements/{{ eng.id }}/dataflow.json">
+<script type="application/json" id="flow-data">{{ flow|tojson }}</script>
+
+<section class="tiles flow-tiles" aria-label="Data-flow summary">
+  <div class="tile">
+    <p class="tile-label">{{ icon("i-flow") }} Personal data flows</p>
+    <p class="tile-value" id="sum-flows">{{ sm.flows }}</p>
+    <p class="muted small"><span id="sum-systems">{{ sm.systems }}</span> systems and outside companies</p>
+  </div>
+  <div class="tile">
+    <p class="tile-label">Issues in the flow</p>
+    <p class="tile-value" id="sum-issues">{{ sm.issues.values()|sum }}</p>
+    <p class="muted small" id="sum-issues-detail">{{ sm.issues.critical }} critical · {{ sm.issues.serious }} serious · {{ sm.issues.warning }} to check</p>
+  </div>
+  <div class="tile {{ 'is-warn' if sm.leaves_india }}" id="sum-abroad-tile">
+    <p class="tile-label">Leaves India?</p>
+    <p class="tile-value" id="sum-abroad">{{ "Yes" if sm.leaves_india else "No" }}</p>
+    <p class="muted small">Section 16: transfers outside India</p>
+  </div>
+  <div class="tile live-tile">
+    <p class="tile-label"><span class="live-dot" aria-hidden="true"></span> Live map</p>
+    <p class="small" id="flow-live" aria-live="off">Live</p>
+    <p class="muted small">Updates on its own when the intake, the assessment or a connector check changes.</p>
+  </div>
+</section>
+
+<section class="card flow-toolbar">
+  <form id="flow-ask" class="flow-ask" role="search">
+    <label class="sr-only" for="flow-query">Ask about this data flow</label>
+    <input id="flow-query" type="search" placeholder='Ask about the flow, e.g. "where does email go?"' autocomplete="off">
+    <button class="primary">Ask</button>
+    <button type="button" id="flow-clear">Clear</button>
+  </form>
+  <div class="ask-chips">
+    {% for q in ["What leaves India?", "Show issues", "Which vendors get data?", ("Where does " ~ (flow.categories[0]|lower if flow.categories else "email") ~ " go?"), "How long is data kept?"] %}
+    <button type="button" class="suggestion-chip" data-ask="{{ q }}">{{ q }}</button>
+    {% endfor %}
+  </div>
+  <p class="flow-answer" id="flow-answer" role="status" hidden></p>
+</section>
+
+<div class="flow-layout">
+  <section class="card flow-map" aria-label="Data-flow map">
+    <div class="flow-map-head">
+      <div class="legend" aria-label="Legend">
+        <span><i class="lg status-ok"></i>No issues</span>
+        <span><i class="lg status-warning"></i>Needs attention</span>
+        <span><i class="lg status-serious"></i>Serious / critical</span>
+        <span><i class="lg status-pending"></i>Not assessed</span>
+        <span><i class="abroad-key"></i>Outside India</span>
+      </div>
+      <button type="button" class="small" id="flow-pause" aria-pressed="false">Pause animation</button>
+    </div>
+    <div class="flow-canvas" id="flow-canvas">
+      <svg id="flow-svg" role="group" aria-label="Personal data moving from people through the client's systems"></svg>
+    </div>
+    <noscript><p class="muted">The map needs JavaScript. The mitigation plan below works without it.</p></noscript>
+  </section>
+  <aside class="card flow-panel" id="flow-panel" aria-live="polite"></aside>
+</div>
+
+<section class="card">
+  <div class="card-head">
+    <div>
+      <h2>Mitigation plan</h2>
+      <p class="muted small" style="margin:0">Every issue in the flow, most urgent first, with the fix. Built from the findings and connector checks, so it updates with them.</p>
+    </div>
+    <a class="button small" href="/engagements/{{ eng.id }}/dataflow/plan.csv">Download CSV</a>
+  </div>
+  <p class="muted" id="plan-empty" {% if flow.plan %}hidden{% endif %}>{{ "No issues found in this flow." if sm.assessed else "Run the assessment to find issues in this flow." }}</p>
+  <table class="table plan-table" id="plan-table" {% if not flow.plan %}hidden{% endif %}>
+    <thead><tr><th class="num">#</th><th>Level</th><th>Where</th><th>Issue</th><th>Action</th><th>Provision</th></tr></thead>
+    <tbody id="plan-body">
+      {% for p in flow.plan %}
+      <tr class="level-{{ p.level }}">
+        <td class="num">{{ loop.index }}</td>
+        <td><span class="badge flow-badge status-{{ p.level }}">{{ level_label[p.level] }}</span></td>
+        <td>{{ p.where|join(", ") }}</td>
+        <td><strong>{{ p.title }}</strong>{% if p.detail %}<p class="muted small">{{ p.detail }}</p>{% endif %}</td>
+        <td>{{ p.action }}</td>
+        <td class="nowrap small"><a href="{{ p.link }}">{{ p.provision or "Open" }}</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% if not eng.delivered_at %}
+<details class="card add-system">
+  <summary><strong>{{ icon("i-plus") }} Add a system or vendor the intake missed</strong></summary>
+  <form method="post" action="/engagements/{{ eng.id }}/dataflow/nodes" class="add-system-form">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Name <input name="name" required maxlength="80" placeholder="e.g. Internal CRM, Freshdesk, payroll vendor"></label>
+    <label>Where it sits
+      <select name="stage">{% for key, label in stage_choices %}<option value="{{ key }}" {% if key == "vendors" %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label>Location
+      <select name="location">{% for key, label in locations.items() %}<option value="{{ key }}" {% if key == "unknown" %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label>Receives data from
+      <select name="source"><option value="">Default for its stage</option>{% for n in flow.nodes %}<option value="{{ n.id }}">{{ n.name }}</option>{% endfor %}</select></label>
+    <label class="wide">Personal data it handles <input name="categories" maxlength="500" placeholder="e.g. names, emails, salary"></label>
+    <div class="actions wide"><button class="primary">Add to the map</button></div>
+  </form>
+</details>
+{% endif %}
+</div>
+<template id="remove-template">
+  <form method="post" action="/engagements/{{ eng.id }}/dataflow/nodes/NODE/delete" class="remove-node">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="small">Remove from the map</button>
+  </form>
+</template>
+{% endblock %}
+{% block scripts %}<script src="/static/dataflow.js"></script>{% endblock %}
