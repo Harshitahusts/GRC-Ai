@@ -10,7 +10,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 
 from grc_agent import dataflow
-from grc_agent.web import connector_views, db
+from grc_agent.web import db
 
 STAGE_CHOICES = [(k, label) for k, label in dataflow.STAGES]
 
@@ -22,21 +22,9 @@ def safe_cell(value: object) -> object:
 
 
 def flow_for(request: Request, conn: sqlite3.Connection, eng: sqlite3.Row) -> dict:
-    from grc_agent.web.app import answers_of, findings_of
+    from grc_agent.web.analyst import flow_for as build
 
-    eid = eng["id"]
-    custom = conn.execute(
-        "SELECT * FROM dataflow_nodes WHERE engagement_id = ? ORDER BY id", (eid,)
-    ).fetchall()
-    return dataflow.build(
-        eid,
-        answers_of(conn, eid),
-        [dict(f) for f in findings_of(conn, eid)],
-        {o.id: o for o in request.app.state.register.obligations},
-        connector_views.evidence_rows(conn, eid),
-        [dict(c) for c in custom],
-        assessed=bool(eng["assessed_at"]),
-    )
+    return build(conn, request.app, eng)
 
 
 def register(app: FastAPI) -> None:

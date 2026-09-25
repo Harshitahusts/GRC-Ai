@@ -45,10 +45,20 @@ from grc_agent.content import (
 )
 from grc_agent.corpus import load_corpus
 from grc_agent.documents import DOCUMENT_TYPES, Block, EngagementFacts, build_document, to_docx
-from grc_agent.kpis import CorpusIndex, build_scorecard
-from grc_agent.kpis.models import DOCUMENT_OUTCOMES, VERDICTS, parse_engagement
+from grc_agent.kpis import CorpusIndex
+from grc_agent.kpis.models import DOCUMENT_OUTCOMES, VERDICTS
+from grc_agent.prompts import ANALYST_PROMPT
 from grc_agent.register import CHOICES, corpus_index_path, load_register
-from grc_agent.web import connector_views, dataflow_views, db, notification_views, notify
+from grc_agent.risk import summary as risk_summary
+from grc_agent.web import (
+    analyst,
+    connector_views,
+    dataflow_views,
+    db,
+    notification_views,
+    notify,
+    risk_views,
+)
 from grc_agent.web.security import (
     DUMMY_HASH,
     csrf_matches,
@@ -57,6 +67,8 @@ from grc_agent.web.security import (
 )
 
 HERE = Path(__file__).parent
+FOCUS = "[Focus: "  # prefix on questions asked with a client selected
+
 SECTORS = ["EdTech", "BFSI", "Healthcare", "SaaS", "Retail", "Other"]
 OUTCOME_LABELS = {
     "usable": "Usable as is (wording-only edits)",
@@ -121,6 +133,7 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
     connector_views.register(app)
     notification_views.register(app)
     dataflow_views.register(app)
+    risk_views.register(app)
     return app
 
 
@@ -288,13 +301,6 @@ def kpi_record(conn: sqlite3.Connection, eng: sqlite3.Row, register_size: int) -
     return record
 
 
-def scorecard(request: Request, conn: sqlite3.Connection):
-    size = len(request.app.state.register.obligations)
-    rows = conn.execute("SELECT * FROM engagements ORDER BY id").fetchall()
-    records = [parse_engagement(kpi_record(conn, e, size)) for e in rows]
-    return build_scorecard(records, request.app.state.index)
-
-
 User = Annotated[str, Depends(current_user)]
 Conn = Annotated[sqlite3.Connection, Depends(get_conn)]
 
@@ -370,7 +376,6 @@ def _routes(app: FastAPI) -> None:
         user: User,
         conn: Conn,
     ):
-        card = scorecard(request, conn)
         engagements = conn.execute("SELECT * FROM engagements ORDER BY id DESC").fetchall()
         summaries = [_summary(conn, e) for e in engagements]
         agent = [s for s in summaries if s["mode"] == "agent"]
@@ -387,7 +392,6 @@ def _routes(app: FastAPI) -> None:
         return render(
             request,
             "dashboard.html",
-            card=card,
             summaries=summaries[:8],
             total=len(summaries),
             activity=activity,
@@ -396,6 +400,13 @@ def _routes(app: FastAPI) -> None:
             avg_readiness=round(sum(scores) / len(scores)) if scores else None,
             pipeline=_pipeline(agent),
             attention=_attention(agent, connections),
+            risk_queue=analyst.queue(conn, request.app),
+            leaves_india=sum(
+                1
+                for e in engagements
+                if e["mode"] == "agent"
+                and analyst.flow_for(conn, request.app, e)["summary"]["leaves_india"]
+            ),
             connections_ok=sum(1 for c in connections if c["status"] == "ok"),
             connections_total=len(connections),
         )
@@ -449,11 +460,20 @@ def _routes(app: FastAPI) -> None:
             "SELECT * FROM audit_log WHERE engagement_id = ? ORDER BY id DESC LIMIT 20", (eid,)
         ).fetchall()
         checks = delivery_checks(conn, eng)
+        snapshot = None
+        if eng["mode"] == "agent":
+            risks = analyst.risks_for(conn, request.app, eid)
+            snapshot = {
+                "risks": risk_summary(risks),
+                "top": [r for r in risks if r.status != "closed"][:3],
+                "flow": analyst.flow_for(conn, request.app, eng)["summary"],
+            }
         return render(
             request,
             "engagement.html",
             eng=eng,
             s=_summary(conn, eng),
+            snapshot=snapshot,
             checks=checks,
             can_deliver=all(ok for _, ok in checks),
             conflicts=connector_views.conflicts(
@@ -1224,20 +1244,19 @@ def _routes(app: FastAPI) -> None:
 
     # ---- KPIs
 
-    @app.get("/kpis")
-    def kpis_page(
-        request: Request,
-        user: User,
-        conn: Conn,
-    ):
-        return render(request, "kpis.html", card=scorecard(request, conn))
-
     # ---- assistant
 
+    def analyst_agent(request: Request, user: str) -> Agent:
+        agents = request.app.state.agents
+        if user not in agents:
+            agents[user] = Agent(
+                tools=analyst.analyst_tools(request.app), system_prompt=ANALYST_PROMPT
+            )
+        return agents[user]
+
     @app.get("/assistant")
-    def assistant_page(request: Request, user: User):
+    def assistant_page(request: Request, user: User, conn: Conn):
         agent = request.app.state.agents.get(user)
-        # Replies are Markdown; raw HTML in them is escaped, never rendered.
         # One bubble per reply, even when Claude wrote text before and after using a tool.
         merged: list[list[str]] = []
         for role, text in _chat_history(agent):
@@ -1245,24 +1264,53 @@ def _routes(app: FastAPI) -> None:
                 merged[-1][1] += "\n\n" + text
             else:
                 merged.append([role, text])
-        history = [
-            (role, Markup(render_markdown(text)) if role == "assistant" else text)
-            for role, text in merged
-        ]
-        return render(request, "assistant.html", history=history)
+        history = []
+        for role, text in merged:
+            if role == "assistant":
+                history.append((role, Markup(render_markdown(text)), ""))
+            else:
+                focus, _, question = (
+                    text.partition("\n") if text.startswith(FOCUS) else ("", "", text)
+                )
+                history.append((role, question, focus.removeprefix(FOCUS).rstrip("]")))
+        engagements = conn.execute(
+            "SELECT id, client FROM engagements WHERE mode = 'agent' ORDER BY id DESC"
+        ).fetchall()
+        focus_id = request.session.get("analyst_focus")
+        focus = next((e for e in engagements if e["id"] == focus_id), None)
+        return render(
+            request,
+            "assistant.html",
+            history=history,
+            engagements=engagements,
+            focus=focus,
+            queue=analyst.queue(conn, request.app)[:6],
+        )
+
+    @app.post("/assistant/focus")
+    async def assistant_focus(request: Request, user: User, conn: Conn):
+        form = await form_with_csrf(request)
+        value = str(form.get("focus", ""))
+        request.session["analyst_focus"] = int(value) if value.isdigit() else None
+        return redirect("/assistant")
 
     @app.post("/assistant")
-    async def assistant_ask(request: Request, user: User):
+    async def assistant_ask(request: Request, user: User, conn: Conn):
         form = await form_with_csrf(request)
         question = str(form.get("question", "")).strip()[:4000]
         if not question:
             return redirect("/assistant")
-        agents = request.app.state.agents
-        agent = agents.get(user) or agents.setdefault(user, Agent())
+        focus_id = request.session.get("analyst_focus")
+        focus = conn.execute(
+            "SELECT id, client FROM engagements WHERE id = ? AND mode = 'agent'", (focus_id,)
+        ).fetchone()
+        if focus:  # the analyst sees which client the question is about
+            question = f"{FOCUS}ENG-{focus['id']:03d} {focus['client']}]\n{question}"
+        agent = analyst_agent(request, user)
         try:
             result = await run_in_threadpool(agent.ask, question)
             if result.tool_calls:
-                flash(request, "Tools used: " + ", ".join(result.tool_calls))
+                flash(request, "Tools used: " + ", ".join(dict.fromkeys(result.tool_calls)))
         except (TypeError, anthropic.CredentialsError) as exc:
             if isinstance(exc, TypeError) and "authentication method" not in str(exc):
                 raise

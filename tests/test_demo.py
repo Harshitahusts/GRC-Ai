@@ -31,8 +31,8 @@ def test_mode_switch(monkeypatch):
     "question, tool, expected",
     [
         ("Score a risk with likelihood 4 and impact 3", "score_risk", "Risk score 12"),
-        ("Which controls cover MFA?", "search_controls", "AC-02 Multi-factor authentication"),
-        ("Tell me about AC-03", "get_control", "AC-03 Access reviews"),
+        ("What does DPDPA require for consent?", "search_obligations", "OBL-002 (Section 6(1)"),
+        ("What does it say about grievances?", "search_obligations", "OBL-008"),
     ],
 )
 def test_assistant_runs_real_tools(question, tool, expected):
@@ -41,9 +41,14 @@ def test_assistant_runs_real_tools(question, tool, expected):
     assert result.text.startswith(DEMO_PREFIX) and expected in result.text
 
 
+def test_other_frameworks_are_out_of_scope():
+    result = Agent(settings=DEMO).ask("Map this to ISO 27001 and SOC 2")
+    assert result.tool_calls == [] and "DPDP Act and Rules only" in result.text
+
+
 def test_assistant_keeps_conversation():
     agent = Agent(settings=DEMO)
-    agent.ask("Which controls cover MFA?")
+    agent.ask("What does DPDPA require for consent?")
     agent.ask("Score a risk with likelihood 2 and impact 2")
     assert [m["role"] for m in agent.messages].count("user") == 4  # 2 questions + 2 tool results
 
@@ -102,8 +107,8 @@ def test_web_banner_assistant_and_delivery_block(demo_app):
     page = demo_app.get("/").text
     assert "Demo mode: AI answers and drafted findings are simulated" in page
 
-    page = post(demo_app, "/assistant", {"question": "Which controls cover MFA?"}).text
-    assert "AC-02 Multi-factor authentication" in page and "Tools used: search_controls" in page
+    page = post(demo_app, "/assistant", {"question": "What does DPDPA require for consent?"}).text
+    assert "OBL-002" in page and "Tools used: search_obligations" in page
 
     eid = create(demo_app)
     post(demo_app, f"/engagements/{eid}/intake", {**ALL_YES, "action": "submit"})

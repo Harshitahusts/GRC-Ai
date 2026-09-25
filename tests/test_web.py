@@ -6,6 +6,8 @@ import pytest
 from docx import Document
 from helpers import ALL_YES, PASSWORD, create, login, post
 
+from grc_agent.kpis import build_scorecard
+from grc_agent.kpis.models import parse_engagement
 from grc_agent.web import cli as web_cli
 from grc_agent.web.security import hash_password, verify_password
 
@@ -20,7 +22,7 @@ def test_password_hashing():
 
 
 def test_pages_require_login(client):
-    for path in ["/", "/engagements", "/kpis", "/assistant", "/engagements/1"]:
+    for path in ["/", "/engagements", "/assistant", "/dataflows", "/engagements/1/risks"]:
         response = client.get(path, follow_redirects=False)
         assert response.status_code == 303 and response.headers["location"] == "/login"
     assert client.get("/healthz").json() == {"status": "ok"}
@@ -107,8 +109,10 @@ def test_full_engagement_to_north_star(authed):
     record = authed.get(f"{base}/export.json").json()
     assert record["completed"] and len(record["findings"]) == 13 and len(record["documents"]) == 5
 
-    kpis = authed.get("/kpis").text
-    assert 'data-north-star="1"' in kpis
+    # KPIs are computed from these records by grc-kpis; the app no longer has a KPI page.
+    card = build_scorecard([parse_engagement(record)], authed.app.state.index)
+    assert card.verified_engagements == 1
+    assert authed.get("/kpis").status_code == 404
 
     # Delivered engagements are locked.
     assert post(authed, f"{base}/intake", {**ALL_YES, "action": "save"}).status_code == 400
@@ -163,7 +167,7 @@ def test_manual_baseline_feeds_kpis(authed):
     assert "Consultant hours recorded" in authed.get(f"/engagements/{eid}").text
     post(authed, f"/engagements/{eid}/details", {"consultant_hours": "18"})
     post(authed, f"/engagements/{eid}/deliver")
-    assert "Manual baseline: 18.0 h" in authed.get("/kpis").text
+    assert authed.get(f"/engagements/{eid}/export.json").json()["consultant_hours"] == 18.0
     assert post(authed, f"/engagements/{eid}/intake", {"action": "save"}).status_code == 400
 
 
@@ -172,7 +176,7 @@ def test_unknown_engagement_is_404(authed):
 
 
 class FakeAgent:
-    def __init__(self, exc=None):
+    def __init__(self, exc=None, **settings):
         self.exc, self.messages = exc, []
 
     def ask(self, question):
@@ -195,7 +199,7 @@ class FakeAgent:
     ],
 )
 def test_assistant_without_credentials(authed, monkeypatch, exc):
-    monkeypatch.setattr("grc_agent.web.app.Agent", lambda: FakeAgent(exc))
+    monkeypatch.setattr("grc_agent.web.app.Agent", lambda **kw: FakeAgent(exc))
     page = post(authed, "/assistant", {"question": "hello"}).text
     assert "No Claude API credentials" in page
 
@@ -245,7 +249,8 @@ def test_assistant_reply_around_a_tool_call_is_one_bubble(authed, monkeypatch):
 
 def test_assistant_empty_state_suggests_questions(authed):
     page = authed.get("/assistant").text
-    assert "How can I help?" in page and 'data-question="Which controls cover MFA?"' in page
+    assert "How can I help?" in page
+    assert 'data-question="What should I work on today across all clients?"' in page
 
 
 def test_init_creates_first_account_only_once(tmp_path, monkeypatch, capsys):

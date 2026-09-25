@@ -24,7 +24,7 @@
 {% set steps = [
   ("intake", "/engagements/%d/intake" % eng.id, "Intake", eng.intake_submitted_at is not none, ""),
   ("findings", "/engagements/%d/findings" % eng.id, "Findings", eng.assessed_at is not none and not s.stale, s.unresolved ~ " unresolved" if s.unresolved else ""),
-  ("documents", "/engagements/%d/documents" % eng.id, "Documents & review", s.documents and s.reviewed == s.documents, "%d/%d reviewed" % (s.reviewed, s.documents) if s.documents else ""),
+  ("documents", "/engagements/%d/documents" % eng.id, "Documents", s.documents and s.reviewed == s.documents, "%d/%d reviewed" % (s.reviewed, s.documents) if s.documents else ""),
 ] %}
 <nav class="stepper" aria-label="Engagement workflow">
   <a href="/engagements/{{ eng.id }}" class="step-overview" {% if tab == "overview" %}aria-current="page"{% endif %}>
@@ -34,7 +34,9 @@
     <span class="step-dot">{% if done %}<svg class="icon" aria-hidden="true"><use href="#i-check"/></svg><span class="sr-only">Done:</span>{% else %}{{ loop.index }}{% endif %}</span>
     <span class="step-text"><strong>{{ label }}</strong><small>{% if note %}{{ note }}{% elif done %}Done{% else %}To do{% endif %}</small></span></a>
   {% endfor %}
-  <a href="/engagements/{{ eng.id }}/dataflow" class="step-side" {% if tab == "dataflow" %}aria-current="page"{% endif %}>
+  <a href="/engagements/{{ eng.id }}/risks" class="step-side" {% if tab == "risks" %}aria-current="page"{% endif %}>
+    <span class="step-dot"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg></span><span class="step-text"><strong>Risks</strong><small>Register</small></span></a>
+  <a href="/engagements/{{ eng.id }}/dataflow" class="step-side step-side-2" {% if tab == "dataflow" %}aria-current="page"{% endif %}>
     <span class="step-dot"><svg class="icon" aria-hidden="true"><use href="#i-flow"/></svg></span><span class="step-text"><strong>Data flow</strong><small>Live map</small></span></a>
   <a href="/engagements/{{ eng.id }}/connectors" class="step-side step-side-2" {% if tab == "connectors" %}aria-current="page"{% endif %}>
     <span class="step-dot"><svg class="icon" aria-hidden="true"><use href="#i-plug"/></svg></span><span class="step-text"><strong>Connectors</strong><small>Evidence</small></span></a>

@@ -126,6 +126,12 @@ def _rule(
         verb = "added to" if action == "dataflow_node_added" else "removed from"
         title = f"{client}: {d.get('name', 'a system')} {verb} the data-flow map"
         return "engagement", "info", title, f"{base}/dataflow"
+    if action == "risk_updated":
+        title = d.get("title", "a risk")
+        if d.get("treatment") == "accept" and d.get("status") != "closed":
+            return "assessment", "warning", f"{client}: risk accepted: {title}", f"{base}/risks"
+        verb = "closed" if d.get("status") == "closed" else "updated"
+        return "assessment", "info", f"{client}: risk {verb}: {title}", f"{base}/risks"
     if action == "github_app_created":
         return (
             "connectors",

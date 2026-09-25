@@ -1,11 +1,13 @@
 # GRC-Ai
 
-A starter AI agent for **governance, risk, and compliance (GRC)** work, built on the
-[Claude API](https://docs.claude.com) with the official `anthropic` Python SDK.
+A GRC workspace for **India's Digital Personal Data Protection Act, 2023 and the DPDP
+Rules, 2025**, built on the [Claude API](https://docs.claude.com) with the official
+`anthropic` Python SDK. It covers DPDPA only for now; other frameworks come later.
 
-The agent chats with you, and when it needs facts it calls local tools: it searches a
-control catalog (mapped to ISO/IEC 27001, SOC 2, and NIST CSF) and scores risks on a
-5x5 matrix.
+The GRC Analyst chats with you and, when it needs facts, calls tools: the DPDPA
+obligations register, the text of the Act and Rules, 5x5 risk scoring, and (in the web
+app) read-only views of the workspace's engagements, findings, risks, evidence and data
+flows.
 
 ## Setup
 
@@ -34,8 +36,27 @@ dashboard. Each engagement follows these steps:
    draft-for-lawyer. A person has to review each one before it can be downloaded as .docx.
 4. **Delivery:** blocked until every check passes (the plan's "hard stop"), with no override.
 
-The dashboard shows the North Star, the pilot KPIs and recent activity. There's also a
-Claude assistant page.
+The dashboard shows what needs attention, the pipeline, top risks across clients, and
+recent activity.
+
+### Risk register
+
+Each engagement has a **Risks** step: every gap or open item, and every failed connector
+check, becomes a risk with a threat (what could happen), a vulnerability (what's
+missing) and a score of likelihood x impact (1-5 each). Starting scores follow the rules:
+a gap is likely (4), an open item possible (3), and impact follows the obligation's
+severity. Change the scores, and record the treatment (mitigate, accept with a reason,
+transfer, avoid), owner, due date and status. A 5x5 matrix shows where the open risks sit.
+
+### GRC Analyst
+
+The **GRC Analyst** page is an AI analyst that works from the workspace's live data. Pick
+a client (or all clients) and ask: "What should I work on today?", "Summarise ENG-001 for
+management", "What evidence should I request?", "Draft the audit report". It follows an
+analyst's workflow (planning, fieldwork, evidence evaluation, risk assessment,
+reporting), fetches the data before answering, cites DPDPA provisions from the register
+and corpus, and can't change anything. The **Analyst queue** lists the highest open risks
+across clients, overdue first.
 
 ### Run it on your computer
 
@@ -51,11 +72,11 @@ The first run sets up a `.venv`, installs the app, creates a `.env` from `.env.e
 asks you to create your login, then opens http://127.0.0.1:8000 in your browser. Later
 runs start in a few seconds. Press Ctrl+C to stop it. Add `--port 9000` to use another port.
 
-Put your `ANTHROPIC_API_KEY` in `.env` to enable the assistant page and Claude drafting.
+Put your `ANTHROPIC_API_KEY` in `.env` to enable the GRC Analyst and Claude drafting.
 Everything else works without it.
 
 **No API key yet?** Add `GRC_AI_MODE=demo` to `.env` and restart. A built-in stand-in for
-Claude then answers in the same format as the real API: the assistant calls the real tools,
+Claude then answers in the same format as the real API: the analyst calls the real tools,
 and drafted findings go through the same citation checks. Its text is a placeholder, not AI.
 A banner shows on every page, and an engagement with demo findings can't be delivered.
 Remove the line once you have a key. Add more accounts with `.venv/bin/grc-web adduser NAME` (Windows PowerShell:
@@ -169,7 +190,7 @@ register and the real corpus index before any client use.
 ## Usage
 
 ```bash
-grc-agent "Which controls cover MFA, and how do they map to SOC 2?"
+grc-agent "What does the DPDP Act require for consent?"
 grc-agent -v                     # interactive chat; -v shows tool calls
 ```
 
@@ -180,12 +201,12 @@ from grc_agent import Agent
 
 agent = Agent()
 print(agent.ask("Score a risk with likelihood 4 and impact 3").text)
-print(agent.ask("What controls would reduce it?").text)  # same conversation
+print(agent.ask("Which DPDPA obligation covers security safeguards?").text)  # same conversation
 ```
 
-## Pilot KPIs
+## Pilot KPIs (command line)
 
-`grc-kpis` scores the DPDPA pilot against the build plan's KPIs: the North Star
+`grc-kpis` scores the DPDPA pilot against the build plan's KPIs (they're no longer shown in the web app): the North Star
 (**Verified Engagements Delivered**) and eight pilot thresholds, including zero
 fabricated citations. For each engagement that doesn't count yet, it lists what's blocking it.
 
@@ -212,7 +233,7 @@ src/grc_agent/
   register.py       obligation register and intake questions
   assessment.py     rule-based gap assessment and readiness score
   documents.py      draft documents (gap report, RoPA, notice, playbook, DPA)
-  data/controls.json  sample control catalog
+  risk.py           DPDPA risk register (threats, likelihood x impact, treatments)
 tests/              unit tests (use a fake client; no API key needed)
 docs/kpis.md        KPI definitions and dictionary
 examples/kpis/      fictional engagement records and a sample corpus index
@@ -252,5 +273,5 @@ ruff check .    # lint
 ruff format .   # format
 ```
 
-The control catalog is sample data with our own short summaries and approximate
-framework mappings. Check the official framework documents before relying on it.
+The obligations register is a sample. Check it against the gazetted Act and Rules before
+relying on it with clients.

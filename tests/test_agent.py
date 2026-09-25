@@ -65,7 +65,11 @@ def test_request_uses_settings_and_fallbacks():
     assert call["model"] == "m"
     assert call["output_config"] == {"effort": "low"}
     assert call["fallbacks"] == "default"
-    assert {t["name"] for t in call["tools"]} == {"search_controls", "get_control", "score_risk"}
+    assert {t["name"] for t in call["tools"]} == {
+        "search_obligations",
+        "get_provision",
+        "score_risk",
+    }
 
 
 def test_conversation_continues_across_asks():
@@ -87,13 +91,13 @@ def test_refusal_is_reported():
 
 def test_stops_at_max_turns():
     loop = [
-        response("tool_use", tool_use(f"t{i}", "get_control", {"control_id": "AC-01"}))
+        response("tool_use", tool_use(f"t{i}", "score_risk", {"likelihood": 2, "impact": 2}))
         for i in range(3)
     ]
     agent, _ = make_agent(loop, max_turns=3)
     result = agent.ask("loop forever")
     assert result.stop_reason == "max_turns"
-    assert result.tool_calls == ["get_control"] * 3
+    assert result.tool_calls == ["score_risk"] * 3
 
 
 def test_failed_request_rolls_back_history():

@@ -1,18 +1,30 @@
 {% extends "base.html" %}
 {% from "_macros.html" import icon %}
-{% block title %}Assistant{% endblock %}
+{% block title %}GRC Analyst{% endblock %}
 {% block content %}
-{% set name = "Demo (not AI)" if demo_mode else "Claude" %}
-{% set suggestions = [
-  "Which controls cover MFA?",
-  "Score a risk with likelihood 4 and impact 3",
-  "What does a DPDPA privacy notice need to include?",
-  "How should we handle a data breach under the DPDP Rules?",
-] %}
+{% set name = "Demo (not AI)" if demo_mode else "GRC Analyst" %}
+{% if focus %}
+  {% set tag = "ENG-%03d" % focus.id %}
+  {% set suggestions = [
+    "Summarise " ~ tag ~ " for management",
+    "What are the top risks for " ~ tag ~ " and how should we treat them?",
+    "What evidence should I request from " ~ tag ~ "?",
+    "Where does " ~ tag ~ "'s personal data go, and does it leave India?",
+    "Which gaps in " ~ tag ~ " should we fix first?",
+    "Draft the audit report for " ~ tag,
+  ] %}
+{% else %}
+  {% set suggestions = [
+    "What should I work on today across all clients?",
+    "Which clients have critical or high risks?",
+    "What does DPDPA require for consent?",
+    "Score a risk with likelihood 4 and impact 5",
+  ] %}
+{% endif %}
 <div class="page-head">
   <div>
-    <h1>Assistant</h1>
-    <p class="muted">Ask about controls, risks and DPDPA concepts. General guidance only: findings for clients come from the assessment, not from chat.</p>
+    <h1>GRC Analyst</h1>
+    <p class="muted">Your DPDPA analyst. It works from this workspace's live data: engagements, findings, risks, evidence and data flows. Findings for clients still come from the assessment and human review.</p>
   </div>
   {% if history %}
   <form method="post" action="/assistant/reset">
@@ -24,20 +36,30 @@
 
 <div class="chat-layout">
   <section class="card chat" aria-label="Conversation">
+    <form method="post" action="/assistant/focus" class="focus-bar" id="focus-form">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label for="focus">Working on</label>
+      <select name="focus" id="focus" onchange="this.form.requestSubmit()">
+        <option value="">All clients</option>
+        {% for e in engagements %}<option value="{{ e.id }}" {% if focus and focus.id == e.id %}selected{% endif %}>{{ e.client }} (ENG-{{ '%03d' % e.id }})</option>{% endfor %}
+      </select>
+      <noscript><button class="small">Set</button></noscript>
+      <span class="muted small">DPDPA only</span>
+    </form>
     <div class="chat-log" id="chat-log" aria-live="polite">
-      {% for role, text in history %}
+      {% for role, text, about in history %}
       <div class="msg msg-{{ role }}">
         <span class="msg-avatar" aria-hidden="true">{% if role == "user" %}{{ user[:1]|upper }}{% else %}{{ icon("i-spark") }}{% endif %}</span>
         <div class="msg-body">
-          <small>{{ "You" if role == "user" else name }}</small>
+          <small>{{ "You" if role == "user" else name }}{% if about %} · <span class="about">{{ about }}</span>{% endif %}</small>
           <div class="{{ 'prose-chat' if role == 'assistant' else 'plain-text' }}">{{ text }}</div>
         </div>
       </div>
       {% else %}
       <div class="chat-empty">
         <span class="chat-empty-icon" aria-hidden="true">{{ icon("i-spark") }}</span>
-        <h2>How can I help?</h2>
-        <p class="muted">Try one of these, or ask your own question.</p>
+        <h2>{% if focus %}What do you need on {{ focus.client }}?{% else %}How can I help?{% endif %}</h2>
+        <p class="muted">Pick a question, or ask your own. It looks the answer up in your workspace first.</p>
         <div class="suggestions">
           {% for q in suggestions %}<button type="button" class="suggestion" data-question="{{ q }}">{{ q }}</button>{% endfor %}
         </div>
@@ -48,22 +70,45 @@
         <div class="msg-body"><small>{{ name }}</small><div><span class="dots" aria-label="Thinking"><i></i><i></i><i></i></span></div></div>
       </div>
     </div>
+    {% if history %}
+    <div class="followups">
+      {% for q in suggestions[:4] %}<button type="button" class="suggestion-chip" data-question="{{ q }}">{{ q }}</button>{% endfor %}
+    </div>
+    {% endif %}
     <form method="post" action="/assistant" class="composer" id="composer">
       <input type="hidden" name="csrf" value="{{ csrf }}">
-      <textarea name="question" id="question" rows="1" maxlength="4000" required placeholder="Ask a question" aria-label="Question"></textarea>
+      <textarea name="question" id="question" rows="1" maxlength="4000" required placeholder="{{ 'Ask about ' ~ focus.client if focus else 'Ask the analyst' }}" aria-label="Question"></textarea>
       <button class="primary" id="send" aria-label="Send">{{ icon("i-arrow") }}<span>Send</span></button>
     </form>
     <p class="composer-hint muted small">Enter to send · Shift+Enter for a new line</p>
   </section>
 
-  <aside class="card chat-side">
-    <h2>What it can do</h2>
-    <ul class="capabilities">
-      <li>{{ icon("i-shield") }}<span><strong>Search controls</strong><small>Find controls by topic, like MFA or encryption.</small></span></li>
-      <li>{{ icon("i-book") }}<span><strong>Look up a control</strong><small>Full details for a control ID, like AC-02.</small></span></li>
-      <li>{{ icon("i-chart") }}<span><strong>Score a risk</strong><small>Likelihood × impact on a 5×5 matrix.</small></span></li>
-    </ul>
-    <p class="small muted">Tools it used appear above the conversation after each answer. It doesn't see client engagements yet.</p>
+  <aside class="chat-side-stack">
+    <section class="card chat-side">
+      <h2>Analyst queue</h2>
+      {% if queue %}
+      <ul class="queue">
+        {% for r in queue %}
+        <li>
+          <span class="badge risk-{{ r.level }}">{{ r.score }}</span>
+          <span class="queue-text"><a href="/engagements/{{ r.eid }}/risks#{{ r.key }}">{{ r.title }}</a><small>{{ r.client }}{% if r.overdue %} · <strong class="overdue">overdue</strong>{% elif r.due %} · due {{ r.due }}{% endif %}{% if not r.owner %} · no owner{% endif %}</small></span>
+        </li>
+        {% endfor %}
+      </ul>
+      <p class="small muted">Highest open risks across clients, overdue first.</p>
+      {% else %}<p class="muted small">No open risks. Run assessments to fill the queue.</p>{% endif %}
+    </section>
+    <section class="card chat-side">
+      <h2>What it can see</h2>
+      <ul class="capabilities">
+        <li>{{ icon("i-briefcase") }}<span><strong>Engagements</strong><small>Stage, readiness, intake answers, documents.</small></span></li>
+        <li>{{ icon("i-shield") }}<span><strong>Findings &amp; evidence</strong><small>Gaps, open items, connector checks, what to request.</small></span></li>
+        <li>{{ icon("i-alert") }}<span><strong>Risk registers</strong><small>Threats, likelihood × impact, treatments, owners.</small></span></li>
+        <li>{{ icon("i-flow") }}<span><strong>Data flows</strong><small>Systems, vendors, data leaving India.</small></span></li>
+        <li>{{ icon("i-book") }}<span><strong>The DPDP Act &amp; Rules</strong><small>Obligations register and provision text.</small></span></li>
+      </ul>
+      <p class="small muted">Read-only: it can't change anything in the workspace.</p>
+    </section>
   </aside>
 </div>
 {% endblock %}
@@ -92,7 +137,7 @@
     box.readOnly = true;
     log.scrollTop = log.scrollHeight;
   });
-  document.querySelectorAll(".suggestion").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll("[data-question]").forEach(b => b.addEventListener("click", () => {
     box.value = b.dataset.question; grow(); form.requestSubmit();
   }));
   log.scrollTop = log.scrollHeight;
