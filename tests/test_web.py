@@ -108,7 +108,7 @@ def test_full_engagement_to_north_star(authed):
     assert record["completed"] and len(record["findings"]) == 13 and len(record["documents"]) == 5
 
     kpis = authed.get("/kpis").text
-    assert "Verified Engagements Delivered: 1" in kpis
+    assert 'data-north-star="1"' in kpis
 
     # Delivered engagements are locked.
     assert post(authed, f"{base}/intake", {**ALL_YES, "action": "save"}).status_code == 400
@@ -205,6 +205,47 @@ def test_assistant_conversation(authed, monkeypatch):
     page = post(authed, "/assistant", {"question": "hello <b>"}).text
     assert "hello &lt;b&gt;" in page and "Hi there" in page and "Tools used: score_risk" in page
     assert "Hi there" not in post(authed, "/assistant/reset").text
+
+
+def test_assistant_replies_render_markdown_safely(authed, monkeypatch):
+    from types import SimpleNamespace
+
+    class MarkdownAgent(FakeAgent):
+        def ask(self, question):
+            reply = "**Bold** point\n\n- one\n- two\n\n<script>alert(1)</script>"
+            self.messages += [
+                {"role": "user", "content": question},
+                {"role": "assistant", "content": [SimpleNamespace(type="text", text=reply)]},
+            ]
+            return SimpleNamespace(tool_calls=[])
+
+    monkeypatch.setattr("grc_agent.web.app.Agent", MarkdownAgent)
+    page = post(authed, "/assistant", {"question": "hi"}).text
+    assert "<strong>Bold</strong>" in page and "<li>one</li>" in page
+    assert "<script>alert(1)</script>" not in page and "&lt;script&gt;" in page
+
+
+def test_assistant_reply_around_a_tool_call_is_one_bubble(authed, monkeypatch):
+    from types import SimpleNamespace
+
+    class ToolAgent(FakeAgent):
+        def ask(self, question):
+            self.messages += [
+                {"role": "user", "content": question},
+                {"role": "assistant", "content": [SimpleNamespace(type="text", text="Checking.")]},
+                {"role": "user", "content": [{"type": "tool_result"}]},
+                {"role": "assistant", "content": [SimpleNamespace(type="text", text="Done.")]},
+            ]
+            return SimpleNamespace(tool_calls=["score_risk"])
+
+    monkeypatch.setattr("grc_agent.web.app.Agent", ToolAgent)
+    page = post(authed, "/assistant", {"question": "hi"}).text
+    assert page.count('class="msg msg-assistant"') == 1 and "Checking." in page and "Done." in page
+
+
+def test_assistant_empty_state_suggests_questions(authed):
+    page = authed.get("/assistant").text
+    assert "How can I help?" in page and 'data-question="Which controls cover MFA?"' in page
 
 
 def test_init_creates_first_account_only_once(tmp_path, monkeypatch, capsys):

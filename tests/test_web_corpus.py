@@ -116,4 +116,4 @@ def test_failed_claude_run_keeps_previous_findings(with_corpus):
     app.state.make_assessor = lambda corpus: Broken()
     page = post(client, f"/engagements/{eid}/assess", {"mode": "claude"}).text
     assert "nothing was changed" in page
-    assert page.count('class="status-') == 13  # the rule-based findings are still there
+    assert page.count('data-status="') == 13  # the rule-based findings are still there

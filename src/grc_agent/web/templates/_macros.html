@@ -21,12 +21,21 @@
   {% endif %}
 </div>
 {% if eng.mode == "agent" %}
-<nav class="tabs">
-  <a href="/engagements/{{ eng.id }}" {% if tab == "overview" %}aria-current="page"{% endif %}>Overview</a>
-  <a href="/engagements/{{ eng.id }}/intake" {% if tab == "intake" %}aria-current="page"{% endif %}>1. Intake</a>
-  <a href="/engagements/{{ eng.id }}/findings" {% if tab == "findings" %}aria-current="page"{% endif %}>2. Findings{% if s.unresolved %} <span class="badge badge-fail">{{ s.unresolved }}</span>{% endif %}</a>
-  <a href="/engagements/{{ eng.id }}/documents" {% if tab == "documents" %}aria-current="page"{% endif %}>3. Documents &amp; review{% if s.documents %} <span class="muted">{{ s.reviewed }}/{{ s.documents }}</span>{% endif %}</a>
-  <a href="/engagements/{{ eng.id }}/connectors" {% if tab == "connectors" %}aria-current="page"{% endif %}>Connectors</a>
+{% set steps = [
+  ("intake", "/engagements/%d/intake" % eng.id, "Intake", eng.intake_submitted_at is not none, ""),
+  ("findings", "/engagements/%d/findings" % eng.id, "Findings", eng.assessed_at is not none and not s.stale, s.unresolved ~ " unresolved" if s.unresolved else ""),
+  ("documents", "/engagements/%d/documents" % eng.id, "Documents & review", s.documents and s.reviewed == s.documents, "%d/%d reviewed" % (s.reviewed, s.documents) if s.documents else ""),
+] %}
+<nav class="stepper" aria-label="Engagement workflow">
+  <a href="/engagements/{{ eng.id }}" class="step-overview" {% if tab == "overview" %}aria-current="page"{% endif %}>
+    <span class="step-dot"><svg class="icon" aria-hidden="true"><use href="#i-home"/></svg></span><span class="step-text"><strong>Overview</strong><small>{{ "Delivered" if eng.delivered_at else "Delivery checklist" }}</small></span></a>
+  {% for key, href, label, done, note in steps %}
+  <a href="{{ href }}" class="{{ 'done' if done }}" {% if tab == key %}aria-current="page"{% endif %}>
+    <span class="step-dot">{% if done %}<svg class="icon" aria-hidden="true"><use href="#i-check"/></svg><span class="sr-only">Done:</span>{% else %}{{ loop.index }}{% endif %}</span>
+    <span class="step-text"><strong>{{ label }}</strong><small>{% if note %}{{ note }}{% elif done %}Done{% else %}To do{% endif %}</small></span></a>
+  {% endfor %}
+  <a href="/engagements/{{ eng.id }}/connectors" class="step-side" {% if tab == "connectors" %}aria-current="page"{% endif %}>
+    <span class="step-dot"><svg class="icon" aria-hidden="true"><use href="#i-plug"/></svg></span><span class="step-text"><strong>Connectors</strong><small>Evidence</small></span></a>
 </nav>
 {% endif %}
 {% if s.stale %}

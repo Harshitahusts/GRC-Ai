@@ -1,14 +1,17 @@
 {% extends "base.html" %}
-{% from "_macros.html" import engagement_header %}
+{% from "_macros.html" import engagement_header, icon %}
 {% block title %}Findings · {{ eng.client }}{% endblock %}
 {% block content %}
 {{ engagement_header(eng, s, tab) }}
+{% set status_labels = {"gap": "Gaps", "open_item": "Open items", "compliant": "Compliant", "not_applicable": "Not applicable"} %}
+{% set counts = {} %}
+{% for st in status_labels %}{% set _ = counts.update({st: findings|selectattr("status", "equalto", st)|list|length}) %}{% endfor %}
 
 <section class="card">
-  <div class="row">
+  <div class="card-head">
     <div>
-      <h2>Findings</h2>
-      <p class="muted small">One finding per obligation in register {{ register.version }}. Status and severity always come from rules. Citations are checked against the {{ index_source }}.</p>
+      <h2>Assessment</h2>
+      <p class="muted small" style="margin:0">One finding per obligation in register {{ register.version }}. Status and severity always come from rules. Citations are checked against the {{ index_source }}.</p>
     </div>
   </div>
   {% if not eng.delivered_at %}
@@ -19,7 +22,7 @@
       {{ "Re-run" if eng.assessed_at else "Run" }} rule-based assessment</button>
     <button name="mode" value="claude" class="primary" {% if disabled or not corpus_ready %}disabled{% endif %}
       title="{{ 'Build the corpus first: grc-corpus ingest' if not corpus_ready else 'Rules decide status; Claude drafts each finding from the retrieved provisions' }}">
-      {{ "Re-run" if eng.assessed_at else "Run" }} with {{ "demo" if demo_mode else "Claude" }} drafting</button>
+      {{ icon("i-spark") }} {{ "Re-run" if eng.assessed_at else "Run" }} with {{ "demo" if demo_mode else "Claude" }} drafting</button>
     <span class="muted small">{% if corpus_ready %}Claude drafting takes a minute or two.{% else %}Claude drafting needs the corpus: <a href="/corpus">set it up</a>.{% endif %}</span>
   </form>
   {% endif %}
@@ -27,66 +30,99 @@
   {% for c in conflicts %}<p class="flash flash-error">{{ c }}</p>{% endfor %}
 
   {% if findings %}
-  <table class="findings">
-    <thead><tr><th>Obligation</th><th>Status</th><th>Severity</th><th>Provision</th><th>Accuracy scoring</th></tr></thead>
-    <tbody>
-    {% for f in findings %}
-    {% set o = obligations.get(f.obligation_id) %}
-    <tr id="f{{ f.id }}" class="status-{{ f.status }}">
-      <td><strong>{{ f.obligation_id }}</strong> {{ o.obligation if o else "" }}
-        <p class="muted small">{{ f.summary }}</p>
-        {% if f.remediation %}<p class="small"><strong>Next step:</strong> {{ f.remediation }}</p>{% endif %}
-        {% if o and f.status in ("gap", "open_item") %}<p class="small muted">Evidence to ask for: {{ o.evidence }}</p>{% endif %}
-        {% set ev = f.evidence %}
-        {% if ev.pass or ev.fail or ev.warn %}
-        <p class="small"><a href="/engagements/{{ eng.id }}/connectors">Connector evidence</a>:
-          {% if ev.pass %}<span class="badge badge-pass">{{ ev.pass }} pass</span>{% endif %}
-          {% if ev.warn %}<span class="badge status-badge-open_item">{{ ev.warn }} warning</span>{% endif %}
-          {% if ev.fail %}<span class="badge badge-fail">{{ ev.fail }} fail</span>{% endif %}</p>
-        {% endif %}
-      </td>
-      <td><span class="badge status-badge-{{ f.status }}">{{ f.status.replace("_", " ") }}</span></td>
-      <td><span class="badge sev-{{ f.severity }}">{{ f.severity }}</span></td>
-      <td>
-        {% for ref, ok in f.cites %}
-        <div class="nowrap"><a href="/corpus/provision?ref={{ ref|urlencode }}">{{ ref }}</a>
-          {% if ok %}<span class="badge badge-pass" title="Resolves in the corpus index">✓</span>
-          {% else %}<span class="badge badge-fail" title="Doesn't resolve, or wasn't among the provisions Claude was shown. Blocks delivery.">✗ unresolved</span>{% endif %}
-        </div>
-        {% endfor %}
-        {% if f.drafted_by == "demo" %}
-        <p class="small"><span class="badge badge-fail">Demo placeholder</span></p>
-        {% endif %}
-        {% if f.drafted_by == "claude" %}
-        <p class="small muted">Drafted by Claude · {{ f.confidence }} confidence</p>
-        {% if f.needs_legal_review %}<span class="badge badge-fail">Legal review</span>{% endif %}
-        {% if f.provisions %}<details class="small"><summary>Provisions shown</summary>{{ f.provisions|join(", ") }}</details>{% endif %}
-        {% endif %}
-      </td>
-      <td>
-        <form method="post" action="/engagements/{{ eng.id }}/findings/{{ f.id }}" class="verdict">
-          <input type="hidden" name="csrf" value="{{ csrf }}">
-          <select name="verdict" aria-label="Verdict for {{ f.obligation_id }}">
-            <option value="">Unscored</option>
-            {% for v in verdicts %}<option value="{{ v }}" {% if f.verdict == v %}selected{% endif %}>{{ v|capitalize }}</option>{% endfor %}
-          </select>
-          <label class="inline small"><input type="checkbox" name="hallucination" {% if f.hallucination %}checked{% endif %}> Hallucination</label>
-          <button class="small">Save</button>
-        </form>
-      </td>
-    </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  {% if not eng.delivered_at %}
-  <form method="post" action="/engagements/{{ eng.id }}/documents/generate" class="actions">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <button class="primary" {% if s.stale %}disabled{% endif %}>{{ "Regenerate draft pack" if s.documents else "Generate draft pack" }}</button>
-    {% if s.documents %}<span class="muted small">Regenerating clears existing reviews.</span>{% endif %}
-  </form>
-  {% endif %}
-  {% else %}
-  <p class="muted">No findings yet. {% if eng.intake_submitted_at %}Run the assessment.{% else %}Submit the <a href="/engagements/{{ eng.id }}/intake">intake</a> first.{% endif %}</p>
+  <div class="status-summary">
+    <div class="stackbar" role="img" aria-label="{% for st, label in status_labels.items() %}{{ label }}: {{ counts[st] }}{{ ', ' if not loop.last }}{% endfor %}">
+      {% for st in status_labels %}{% if counts[st] %}<span class="seg seg-{{ st }}" style="flex: {{ counts[st] }}" title="{{ status_labels[st] }}: {{ counts[st] }}"></span>{% endif %}{% endfor %}
+    </div>
+    <div class="filters" role="group" aria-label="Show findings">
+      <button type="button" class="filter" data-filter="all" aria-pressed="true">All <span>{{ findings|length }}</span></button>
+      {% for st, label in status_labels.items() %}
+      <button type="button" class="filter filter-{{ st }}" data-filter="{{ st }}" aria-pressed="false" {% if not counts[st] %}disabled{% endif %}><i aria-hidden="true"></i>{{ label }} <span>{{ counts[st] }}</span></button>
+      {% endfor %}
+    </div>
+  </div>
   {% endif %}
 </section>
+
+{% if findings %}
+<div class="finding-list" id="findings">
+  {% for f in findings %}
+  {% set o = obligations.get(f.obligation_id) %}
+  <article id="f{{ f.id }}" class="card finding status-{{ f.status }}" data-status="{{ f.status }}">
+    <div class="finding-main">
+      <div class="finding-meta">
+        <span class="mono muted">{{ f.obligation_id }}</span>
+        <span class="badge status-badge-{{ f.status }}">{{ f.status.replace("_", " ") }}</span>
+        <span class="badge sev-{{ f.severity }}">{{ f.severity }}</span>
+        {% if f.drafted_by == "demo" %}<span class="badge badge-fail">Demo placeholder</span>{% endif %}
+        {% if f.drafted_by == "claude" %}<span class="badge badge-none">{{ icon("i-spark") }} Drafted by Claude · {{ f.confidence }} confidence</span>{% endif %}
+        {% if f.needs_legal_review %}<span class="badge badge-fail">Legal review</span>{% endif %}
+      </div>
+      <h3>{{ o.obligation if o else f.obligation_id }}</h3>
+      <p class="text-2">{{ f.summary }}</p>
+      {% if f.remediation %}<p class="next-step"><strong>Next step:</strong> {{ f.remediation }}</p>{% endif %}
+      {% if o and f.status in ("gap", "open_item") %}<p class="small muted">Evidence to ask for: {{ o.evidence }}</p>{% endif %}
+      {% set ev = f.evidence %}
+      {% if ev.pass or ev.fail or ev.warn %}
+      <p class="small"><a href="/engagements/{{ eng.id }}/connectors">Connector evidence</a>:
+        {% if ev.pass %}<span class="badge badge-pass">{{ ev.pass }} pass</span>{% endif %}
+        {% if ev.warn %}<span class="badge status-badge-open_item">{{ ev.warn }} warning</span>{% endif %}
+        {% if ev.fail %}<span class="badge badge-fail">{{ ev.fail }} fail</span>{% endif %}</p>
+      {% endif %}
+    </div>
+    <div class="finding-side">
+      <p class="tile-label">Provision</p>
+      {% for ref, ok in f.cites %}
+      <div class="nowrap cite"><a href="/corpus/provision?ref={{ ref|urlencode }}">{{ ref }}</a>
+        {% if ok %}<span class="badge badge-pass" title="Resolves in the corpus index">✓</span>
+        {% else %}<span class="badge badge-fail" title="Doesn't resolve, or wasn't among the provisions Claude was shown. Blocks delivery.">✗ unresolved</span>{% endif %}
+      </div>
+      {% endfor %}
+      {% if f.drafted_by == "claude" and f.provisions %}<details class="small"><summary>Provisions shown</summary>{{ f.provisions|join(", ") }}</details>{% endif %}
+      <form method="post" action="/engagements/{{ eng.id }}/findings/{{ f.id }}" class="verdict">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <p class="tile-label">Accuracy scoring</p>
+        <select name="verdict" aria-label="Verdict for {{ f.obligation_id }}">
+          <option value="">Unscored</option>
+          {% for v in verdicts %}<option value="{{ v }}" {% if f.verdict == v %}selected{% endif %}>{{ v|capitalize }}</option>{% endfor %}
+        </select>
+        <label class="inline small"><input type="checkbox" name="hallucination" {% if f.hallucination %}checked{% endif %}> Hallucination</label>
+        <button class="small">Save</button>
+      </form>
+    </div>
+  </article>
+  {% endfor %}
+  <p class="muted empty-filter" hidden>No findings with this status.</p>
+</div>
+
+{% if not eng.delivered_at %}
+<form method="post" action="/engagements/{{ eng.id }}/documents/generate" class="action-bar">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <span class="muted small">{% if s.documents %}Regenerating clears existing reviews.{% else %}Next: turn these findings into the client's draft document pack.{% endif %}</span>
+  <button class="primary" {% if s.stale %}disabled{% endif %}>{{ "Regenerate draft pack" if s.documents else "Generate draft pack" }} {{ icon("i-arrow") }}</button>
+</form>
+{% endif %}
+{% else %}
+<section class="card">
+  <div class="empty">
+    {{ icon("i-shield") }}
+    <p><strong>No findings yet.</strong> {% if eng.intake_submitted_at %}Run the assessment above.{% else %}Submit the <a href="/engagements/{{ eng.id }}/intake">intake</a> first.{% endif %}</p>
+  </div>
+</section>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+(() => {
+  const buttons = document.querySelectorAll(".filter");
+  const cards = document.querySelectorAll(".finding");
+  const empty = document.querySelector(".empty-filter");
+  buttons.forEach(b => b.addEventListener("click", () => {
+    buttons.forEach(x => x.setAttribute("aria-pressed", x === b));
+    let shown = 0;
+    cards.forEach(c => { c.hidden = b.dataset.filter !== "all" && c.dataset.status !== b.dataset.filter; shown += !c.hidden; });
+    if (empty) empty.hidden = shown > 0;
+  }));
+})();
+</script>
 {% endblock %}

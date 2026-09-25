@@ -23,6 +23,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup
 from starlette.middleware.sessions import SessionMiddleware
 
 from grc_agent.agent import Agent
@@ -1228,7 +1229,19 @@ def _routes(app: FastAPI) -> None:
     @app.get("/assistant")
     def assistant_page(request: Request, user: User):
         agent = request.app.state.agents.get(user)
-        return render(request, "assistant.html", history=_chat_history(agent))
+        # Replies are Markdown; raw HTML in them is escaped, never rendered.
+        # One bubble per reply, even when Claude wrote text before and after using a tool.
+        merged: list[list[str]] = []
+        for role, text in _chat_history(agent):
+            if merged and role == "assistant" and merged[-1][0] == "assistant":
+                merged[-1][1] += "\n\n" + text
+            else:
+                merged.append([role, text])
+        history = [
+            (role, Markup(render_markdown(text)) if role == "assistant" else text)
+            for role, text in merged
+        ]
+        return render(request, "assistant.html", history=history)
 
     @app.post("/assistant")
     async def assistant_ask(request: Request, user: User):
