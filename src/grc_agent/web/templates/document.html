@@ -19,7 +19,7 @@
     {% endfor %}
   </article>
 
-  <aside class="card">
+  <aside class="card doc-review">
     <h2>Review</h2>
     {% if doc.reviewed_at %}
       <p><span class="badge badge-pass">Reviewed</span></p>
@@ -29,7 +29,7 @@
     {% if not eng.delivered_at %}
     <form method="post" action="/engagements/{{ eng.id }}/documents/{{ doc.id }}/review">
       <input type="hidden" name="csrf" value="{{ csrf }}">
-      <fieldset>
+      <fieldset class="review-options">
         <legend>{{ "Change the review" if doc.reviewed_at else "How usable is this draft?" }}</legend>
         {% for o in outcomes %}
         <label class="inline block"><input type="radio" name="outcome" value="{{ o }}" required {% if doc.outcome == o %}checked{% endif %}> {{ outcome_labels[o] }}</label>
@@ -40,7 +40,7 @@
       <button class="primary">Record review</button>
     </form>
     {% endif %}
-    <p class="small"><a href="/engagements/{{ eng.id }}/documents">Back to all documents</a></p>
+    <p class="small" style="margin-top:1rem"><a href="/engagements/{{ eng.id }}/documents">← Back to all documents</a></p>
   </aside>
 </div>
 {% endblock %}

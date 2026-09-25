@@ -1,54 +1,100 @@
 {% extends "base.html" %}
-{% from "_macros.html" import engagement_header %}
+{% from "_macros.html" import engagement_header, meter %}
 {% block title %}Intake · {{ eng.client }}{% endblock %}
 {% block content %}
 {{ engagement_header(eng, s, tab) }}
 {% set locked = eng.delivered_at is not none %}
+{% set sections = register.sections() %}
 
-<form method="post" action="/engagements/{{ eng.id }}/intake" class="card intake" id="intake">
-  <input type="hidden" name="csrf" value="{{ csrf }}">
-  <p class="muted">Answer in terms of how the business works today. "Not sure" is a valid answer: it becomes a follow-up item, never a pass. Skipped questions become open items too.</p>
-  {% if eng.intake_submitted_at %}<p class="small muted">Submitted {{ eng.intake_submitted_at[:16].replace("T", " ") }} UTC. You can still edit answers until delivery.</p>{% endif %}
-  <fieldset {% if locked %}disabled{% endif %}>
-  {% for section, questions in register.sections() %}
-    <h2>{{ section }}</h2>
-    {% for q in questions %}
-    <div class="question" data-question="{{ q.id }}"
-      {% if q.show_if %}data-show-if="{{ q.show_if.question }}" data-equals="{{ q.show_if.equals }}"{% endif %}>
-      <p class="q-text">{{ q.text }}</p>
-      {% if q.help %}<p class="muted small">{{ q.help }}</p>{% endif %}
-      {% if q.type == "text" %}
-        <textarea name="q_{{ q.id }}" rows="2" maxlength="5000">{{ answers.get(q.id, "") }}</textarea>
-      {% else %}
-        <div class="choices" role="radiogroup">
-          {% for value, label in choices.items() %}
-          <label class="inline"><input type="radio" name="q_{{ q.id }}" value="{{ value }}" {% if answers.get(q.id) == value %}checked{% endif %}> {{ label }}</label>
-          {% endfor %}
+<div class="intake-layout">
+  <aside class="intake-nav card" aria-label="Intake sections">
+    <p class="tile-label">Progress</p>
+    <p class="intake-progress"><strong id="answered">0</strong> of <span id="total">0</span> answered</p>
+    <span class="meter" id="progress-meter" role="meter" aria-label="Questions answered" aria-valuemin="0"><span style="width: 0%"></span></span>
+    <ol class="section-links">
+      {% for section, questions in sections %}
+      <li><a href="#sec-{{ loop.index }}" data-section="{{ loop.index }}"><span>{{ section }}</span><small class="count"></small></a></li>
+      {% endfor %}
+    </ol>
+    {% if eng.intake_submitted_at %}<p class="small muted">Submitted {{ eng.intake_submitted_at[:16].replace("T", " ") }} UTC. You can still edit answers until delivery.</p>{% endif %}
+  </aside>
+
+  <form method="post" action="/engagements/{{ eng.id }}/intake" class="intake" id="intake">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <p class="flash flash-info small">Answer in terms of how the business works today. "Not sure" is a valid answer: it becomes a follow-up item, never a pass. Skipped questions become open items too.</p>
+    <fieldset {% if locked %}disabled{% endif %}>
+    {% for section, questions in sections %}
+      <section class="card intake-section" id="sec-{{ loop.index }}" data-section="{{ loop.index }}">
+        <h2><span class="section-num">{{ loop.index }}</span> {{ section }}</h2>
+        {% for q in questions %}
+        <div class="question" data-question="{{ q.id }}"
+          {% if q.show_if %}data-show-if="{{ q.show_if.question }}" data-equals="{{ q.show_if.equals }}"{% endif %}>
+          <p class="q-text" id="q-{{ q.id }}">{{ q.text }}</p>
+          {% if q.help %}<p class="muted small">{{ q.help }}</p>{% endif %}
+          {% if q.type == "text" %}
+            <textarea name="q_{{ q.id }}" rows="2" maxlength="5000" aria-labelledby="q-{{ q.id }}">{{ answers.get(q.id, "") }}</textarea>
+          {% else %}
+            <div class="choices" role="radiogroup" aria-labelledby="q-{{ q.id }}">
+              {% for value, label in choices.items() %}
+              <label class="choice choice-{{ value }}"><input type="radio" name="q_{{ q.id }}" value="{{ value }}" {% if answers.get(q.id) == value %}checked{% endif %}><span>{{ label }}</span></label>
+              {% endfor %}
+            </div>
+          {% endif %}
         </div>
-      {% endif %}
-    </div>
+        {% endfor %}
+      </section>
     {% endfor %}
-  {% endfor %}
-  </fieldset>
-  {% if not locked %}
-  <div class="actions">
-    <button name="action" value="save">Save draft</button>
-    <button name="action" value="submit" class="primary">{{ "Save answers" if eng.intake_submitted_at else "Submit intake" }}</button>
-  </div>
-  {% endif %}
-</form>
+    </fieldset>
+    {% if not locked %}
+    <div class="action-bar">
+      <span class="muted small" id="save-hint">Drafts are saved only when you click Save draft.</span>
+      <div class="head-actions">
+        <button name="action" value="save">Save draft</button>
+        <button name="action" value="submit" class="primary">{{ "Save answers" if eng.intake_submitted_at else "Submit intake" }}</button>
+      </div>
+    </div>
+    {% endif %}
+  </form>
+</div>
 {% endblock %}
 {% block scripts %}
 <script>
-// Show follow-up questions only when the question they depend on is answered "yes".
-const form = document.getElementById("intake");
-function refresh() {
-  form.querySelectorAll("[data-show-if]").forEach(el => {
-    const picked = form.querySelector(`input[name="q_${el.dataset.showIf}"]:checked`);
-    el.hidden = !(picked && picked.value === el.dataset.equals);
-  });
-}
-form.addEventListener("change", refresh);
-refresh();
+(() => {
+  const form = document.getElementById("intake");
+  const links = document.querySelectorAll(".section-links a");
+  function answered(q) {
+    const t = q.querySelector("textarea");
+    return t ? t.value.trim() !== "" : !!q.querySelector("input:checked");
+  }
+  function refresh() {
+    // Follow-up questions show only when the question they depend on has the right answer.
+    form.querySelectorAll("[data-show-if]").forEach(el => {
+      const picked = form.querySelector(`input[name="q_${el.dataset.showIf}"]:checked`);
+      el.hidden = !(picked && picked.value === el.dataset.equals);
+    });
+    let done = 0, total = 0;
+    form.querySelectorAll(".intake-section").forEach(sec => {
+      const qs = [...sec.querySelectorAll(".question")].filter(q => !q.hidden);
+      const n = qs.filter(answered).length;
+      done += n; total += qs.length;
+      const link = document.querySelector(`.section-links a[data-section="${sec.dataset.section}"]`);
+      link.querySelector(".count").textContent = `${n}/${qs.length}`;
+      link.classList.toggle("complete", qs.length > 0 && n === qs.length);
+    });
+    document.getElementById("answered").textContent = done;
+    document.getElementById("total").textContent = total;
+    const m = document.getElementById("progress-meter");
+    m.setAttribute("aria-valuemax", total); m.setAttribute("aria-valuenow", done);
+    m.firstElementChild.style.width = total ? `${Math.round(100 * done / total)}%` : "0%";
+  }
+  form.addEventListener("change", refresh);
+  form.addEventListener("input", refresh);
+  refresh();
+  // Highlight the section in view.
+  const io = new IntersectionObserver(entries => entries.forEach(e => {
+    if (e.isIntersecting) links.forEach(a => a.toggleAttribute("aria-current", a.dataset.section === e.target.dataset.section));
+  }), { rootMargin: "-30% 0px -60% 0px" });
+  form.querySelectorAll(".intake-section").forEach(sec => io.observe(sec));
+})();
 </script>
 {% endblock %}

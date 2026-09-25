@@ -1,33 +1,58 @@
 {% extends "base.html" %}
-{% from "_macros.html" import engagement_header %}
+{% from "_macros.html" import engagement_header, meter, icon %}
 {% block title %}Documents · {{ eng.client }}{% endblock %}
 {% block content %}
 {{ engagement_header(eng, s, tab) }}
 
 <section class="card">
-  <h2>Draft pack and review gate</h2>
-  <p class="muted small">Read each document in full and record a review. A document can't be exported until it's reviewed, and the engagement can't be delivered until all of them are.</p>
-  {% if documents %}
-  <table>
-    <thead><tr><th>Document</th><th>Generated</th><th>Review</th><th></th></tr></thead>
-    <tbody>
-    {% for d in documents %}
-    <tr>
-      <td><a href="/engagements/{{ eng.id }}/documents/{{ d.id }}">{{ document_types[d.type] }}</a>
-        {% if d.type == "dpa" %}<br><span class="badge badge-fail">Draft for lawyer</span>{% endif %}</td>
-      <td class="muted small">{{ d.generated_at[:16].replace("T", " ") }} UTC</td>
-      <td>{% if d.reviewed_at %}<span class="badge badge-pass">Reviewed</span> <span class="small">{{ d.outcome.replace("_", " ") }} · {{ d.reviewed_by }}</span>
-          {% else %}<span class="badge badge-none">Needs review</span>{% endif %}</td>
-      <td class="nowrap">
-        <a href="/engagements/{{ eng.id }}/documents/{{ d.id }}">{{ "View" if d.reviewed_at else "Review" }}</a>
-        {% if d.reviewed_at %} · <a href="/engagements/{{ eng.id }}/documents/{{ d.id }}/download">Download .docx</a>{% endif %}
-      </td>
-    </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-  <p class="muted">No documents yet. Generate the draft pack from the <a href="/engagements/{{ eng.id }}/findings">Findings</a> tab.</p>
-  {% endif %}
+  <div class="card-head">
+    <div>
+      <h2>Draft pack and review gate</h2>
+      <p class="muted small" style="margin:0">Read each document in full and record a review. A document can't be exported until it's reviewed, and the engagement can't be delivered until all of them are.</p>
+    </div>
+    {% if documents %}
+    <div class="review-progress">
+      <strong>{{ s.reviewed }}<small>/{{ s.documents }}</small></strong>
+      <span class="muted small">reviewed</span>
+      {{ meter(s.reviewed, s.documents, "Documents reviewed") }}
+    </div>
+    {% endif %}
+  </div>
 </section>
+
+{% if documents %}
+<div class="doc-grid">
+  {% for d in documents %}
+  <article class="card doc-card {{ 'is-reviewed' if d.reviewed_at }}">
+    <div class="doc-icon" aria-hidden="true">{{ icon("i-book") }}</div>
+    <div class="doc-body">
+      <h3><a class="strong-link" href="/engagements/{{ eng.id }}/documents/{{ d.id }}">{{ document_types[d.type] }}</a></h3>
+      <p class="muted small">Generated {{ d.generated_at[:16].replace("T", " ") }} UTC</p>
+      <p>
+        {% if d.reviewed_at %}<span class="badge badge-pass">Reviewed</span> <span class="small muted">{{ d.outcome.replace("_", " ") }} · {{ d.reviewed_by }}</span>
+        {% else %}<span class="badge status-badge-open_item">Needs review</span>{% endif %}
+        {% if d.type == "dpa" %}<span class="badge badge-fail">Draft for lawyer</span>{% endif %}
+      </p>
+    </div>
+    <div class="doc-actions">
+      <a class="button {{ '' if d.reviewed_at else 'primary' }} small" href="/engagements/{{ eng.id }}/documents/{{ d.id }}">{{ "View" if d.reviewed_at else "Review" }}</a>
+      {% if d.reviewed_at %}<a class="button small" href="/engagements/{{ eng.id }}/documents/{{ d.id }}/download">Download .docx</a>{% endif %}
+    </div>
+  </article>
+  {% endfor %}
+</div>
+{% if s.documents and s.reviewed == s.documents and not eng.delivered_at %}
+<div class="action-bar">
+  <span class="small"><strong>All documents reviewed.</strong> <span class="muted">Check the delivery checklist and mark the engagement delivered.</span></span>
+  <a class="button primary" href="/engagements/{{ eng.id }}">Go to delivery {{ icon("i-arrow") }}</a>
+</div>
+{% endif %}
+{% else %}
+<section class="card">
+  <div class="empty">
+    {{ icon("i-book") }}
+    <p><strong>No documents yet.</strong> Generate the draft pack from the <a href="/engagements/{{ eng.id }}/findings">Findings</a> step.</p>
+  </div>
+</section>
+{% endif %}
 {% endblock %}

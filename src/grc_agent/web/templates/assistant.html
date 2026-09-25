@@ -1,27 +1,102 @@
 {% extends "base.html" %}
+{% from "_macros.html" import icon %}
 {% block title %}Assistant{% endblock %}
 {% block content %}
+{% set name = "Demo (not AI)" if demo_mode else "Claude" %}
+{% set suggestions = [
+  "Which controls cover MFA?",
+  "Score a risk with likelihood 4 and impact 3",
+  "What does a DPDPA privacy notice need to include?",
+  "How should we handle a data breach under the DPDP Rules?",
+] %}
 <div class="page-head">
   <div>
     <h1>Assistant</h1>
-    <p class="muted">Ask Claude about controls, risks and DPDPA concepts. General guidance only: findings for clients come from the assessment, not from chat.</p>
+    <p class="muted">Ask about controls, risks and DPDPA concepts. General guidance only: findings for clients come from the assessment, not from chat.</p>
   </div>
+  {% if history %}
   <form method="post" action="/assistant/reset">
     <input type="hidden" name="csrf" value="{{ csrf }}">
-    <button>New conversation</button>
+    <button>{{ icon("i-plus") }} New conversation</button>
   </form>
+  {% endif %}
 </div>
 
-<section class="card chat">
-  {% for role, text in history %}
-  <div class="msg msg-{{ role }}"><small>{{ "You" if role == "user" else ("Demo (not AI)" if demo_mode else "Claude") }}</small><div>{{ text }}</div></div>
-  {% else %}
-  <p class="muted">No messages yet. Try "Score a risk with likelihood 4 and impact 3" or "Which controls cover MFA?".</p>
-  {% endfor %}
-  <form method="post" action="/assistant" class="ask">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <textarea name="question" rows="3" maxlength="4000" required placeholder="Ask a question" aria-label="Question"></textarea>
-    <button class="primary">Send</button>
-  </form>
-</section>
+<div class="chat-layout">
+  <section class="card chat" aria-label="Conversation">
+    <div class="chat-log" id="chat-log" aria-live="polite">
+      {% for role, text in history %}
+      <div class="msg msg-{{ role }}">
+        <span class="msg-avatar" aria-hidden="true">{% if role == "user" %}{{ user[:1]|upper }}{% else %}{{ icon("i-spark") }}{% endif %}</span>
+        <div class="msg-body">
+          <small>{{ "You" if role == "user" else name }}</small>
+          <div class="{{ 'prose-chat' if role == 'assistant' else 'plain-text' }}">{{ text }}</div>
+        </div>
+      </div>
+      {% else %}
+      <div class="chat-empty">
+        <span class="chat-empty-icon" aria-hidden="true">{{ icon("i-spark") }}</span>
+        <h2>How can I help?</h2>
+        <p class="muted">Try one of these, or ask your own question.</p>
+        <div class="suggestions">
+          {% for q in suggestions %}<button type="button" class="suggestion" data-question="{{ q }}">{{ q }}</button>{% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+      <div class="msg msg-assistant thinking" id="thinking" hidden>
+        <span class="msg-avatar" aria-hidden="true">{{ icon("i-spark") }}</span>
+        <div class="msg-body"><small>{{ name }}</small><div><span class="dots" aria-label="Thinking"><i></i><i></i><i></i></span></div></div>
+      </div>
+    </div>
+    <form method="post" action="/assistant" class="composer" id="composer">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <textarea name="question" id="question" rows="1" maxlength="4000" required placeholder="Ask a question" aria-label="Question"></textarea>
+      <button class="primary" id="send" aria-label="Send">{{ icon("i-arrow") }}<span>Send</span></button>
+    </form>
+    <p class="composer-hint muted small">Enter to send · Shift+Enter for a new line</p>
+  </section>
+
+  <aside class="card chat-side">
+    <h2>What it can do</h2>
+    <ul class="capabilities">
+      <li>{{ icon("i-shield") }}<span><strong>Search controls</strong><small>Find controls by topic, like MFA or encryption.</small></span></li>
+      <li>{{ icon("i-book") }}<span><strong>Look up a control</strong><small>Full details for a control ID, like AC-02.</small></span></li>
+      <li>{{ icon("i-chart") }}<span><strong>Score a risk</strong><small>Likelihood × impact on a 5×5 matrix.</small></span></li>
+    </ul>
+    <p class="small muted">Tools it used appear above the conversation after each answer. It doesn't see client engagements yet.</p>
+  </aside>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(() => {
+  const form = document.getElementById("composer");
+  const box = document.getElementById("question");
+  const log = document.getElementById("chat-log");
+  const grow = () => { box.style.height = "auto"; box.style.height = Math.min(box.scrollHeight, 200) + "px"; };
+  box.addEventListener("input", grow);
+  box.addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit(); }
+  });
+  form.addEventListener("submit", e => {
+    if (!box.value.trim()) { e.preventDefault(); return; }
+    const mine = document.createElement("div");
+    mine.className = "msg msg-user";
+    mine.innerHTML = '<span class="msg-avatar" aria-hidden="true"></span><div class="msg-body"><small>You</small><div class="plain-text"></div></div>';
+    mine.querySelector(".msg-avatar").textContent = {{ user[:1]|upper|tojson }};
+    mine.querySelector(".plain-text").textContent = box.value;
+    document.querySelector(".chat-empty")?.remove();
+    log.insertBefore(mine, document.getElementById("thinking"));
+    document.getElementById("thinking").hidden = false;
+    document.getElementById("send").disabled = true;
+    box.readOnly = true;
+    log.scrollTop = log.scrollHeight;
+  });
+  document.querySelectorAll(".suggestion").forEach(b => b.addEventListener("click", () => {
+    box.value = b.dataset.question; grow(); form.requestSubmit();
+  }));
+  log.scrollTop = log.scrollHeight;
+  box.focus();
+})();
+</script>
 {% endblock %}
