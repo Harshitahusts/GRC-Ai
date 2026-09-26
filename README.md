@@ -75,6 +75,11 @@ workspace on http://127.0.0.1:8001. Sign in as `demo` / `grc-demo-2026`.
 - `start-demo.bat --reset` starts from fresh sample data. `--live-seconds 0` turns the live
   activity off.
 - Without an `ANTHROPIC_API_KEY`, the analyst gives simulated answers in the demo.
+- **Share it on your office network:** double-click **`start-demo-lan.bat`** (or run
+  `grc-web demo --lan`). It prints a link such as `http://192.168.1.20:8001` that anyone on
+  the same Wi-Fi or LAN can open. No outside service is involved. If Windows Firewall asks,
+  allow Python on **Private networks** only. The link only works inside your network and
+  only while the window stays open.
 
 ### Search, shortcuts and planned buttons
 
