@@ -36,6 +36,11 @@ def main(argv: list[str] | None = None) -> int:
     serve.add_argument("--port", type=int, default=8000)
     serve.add_argument("--reload", action="store_true", help="Restart on code changes (dev).")
     serve.add_argument("--open", action="store_true", help="Open the app in a browser.")
+    serve.add_argument(
+        "--lan",
+        action="store_true",
+        help="Share on your local network (listens on all interfaces, prints the link).",
+    )
 
     demo = sub.add_parser(
         "demo", help="Start a separate demo tenant with sample data (never your main data)."
@@ -47,6 +52,11 @@ def main(argv: list[str] | None = None) -> int:
     demo.add_argument("--reset", action="store_true", help="Throw away and re-create the demo.")
     demo.add_argument("--seed-only", action="store_true", help="Create the data, don't serve.")
     demo.add_argument("--open", action="store_true", help="Open the demo in a browser.")
+    demo.add_argument(
+        "--lan",
+        action="store_true",
+        help="Share the demo on your local network, e.g. http://192.168.1.20:8001",
+    )
     demo.add_argument(
         "--live-seconds",
         type=float,
@@ -67,7 +77,8 @@ def main(argv: list[str] | None = None) -> int:
     data_dir = Path(args.data_dir)
 
     if args.command == "serve":
-        return _serve(data_dir, args.host, args.port, args.reload, args.open)
+        host = "0.0.0.0" if args.lan else args.host
+        return _serve(data_dir, host, args.port, args.reload, args.open)
     if args.command == "demo":
         return _demo(args)
     if args.command == "init":
@@ -97,6 +108,16 @@ def _serve(data_dir: Path, host: str, port: int, reload: bool, open_browser: boo
         )
         return 1
     print(f"GRC agent running at {url}  (data: {data_dir.resolve()})")
+    if host in ("0.0.0.0", "::"):
+        ip = lan_ip()
+        if ip:
+            print(f"On your network: http://{ip}:{port}  (share this link with colleagues)")
+        else:
+            print("Couldn't find this computer's network address. Run ipconfig to look it up.")
+        print(
+            "Anyone on the same network can open it. If Windows asks, allow Python through the\n"
+            "firewall on Private networks only. Other devices must use the same Wi-Fi or LAN."
+        )
     print("Press Ctrl+C to stop.")
     if open_browser:
         import threading
@@ -136,7 +157,21 @@ def _demo(args) -> int:
     )
     if args.seed_only:
         return 0
-    return _serve(data_dir, "127.0.0.1", args.port, False, args.open)
+    return _serve(data_dir, "0.0.0.0" if args.lan else "127.0.0.1", args.port, False, args.open)
+
+
+def lan_ip() -> str | None:
+    """This computer's address on the local network. Sends nothing: a UDP connect
+    only asks the OS which interface it would route through."""
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+        try:
+            s.connect(("10.254.254.254", 1))
+            ip = s.getsockname()[0]
+        except OSError:
+            return None
+    return None if ip.startswith("127.") else ip
 
 
 def _port_in_use(host: str, port: int) -> bool:
