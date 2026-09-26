@@ -80,6 +80,9 @@
     </div>
   </header>
   {% endif %}
+  {% if demo_tenant and user %}
+  <div class="tenant-banner" role="status"><svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg><span><strong>Demo tenant.</strong> Sample clients and data for demos, not real. Colleagues act every minute or so, and connector syncs are simulated. Your main workspace is separate and untouched.</span></div>
+  {% endif %}
   {% if demo_mode and user %}
   <div class="demo-banner" role="status"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg><span>Demo mode: AI answers and drafted findings are simulated placeholders, not real AI. Don't use them with clients. Set <code>ANTHROPIC_API_KEY</code> and remove <code>GRC_AI_MODE=demo</code> from <code>.env</code> to use Claude.</span></div>
   {% endif %}

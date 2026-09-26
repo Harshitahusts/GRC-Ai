@@ -16,6 +16,7 @@ dist/
 
 # Local app data (database, secret key)
 /var/
+/var-demo/
 
 # Generated corpus build (recreate with grc-corpus ingest)
 /corpus/build/

@@ -58,6 +58,24 @@ reporting), fetches the data before answering, cites DPDPA provisions from the r
 and corpus, and can't change anything. The **Analyst queue** lists the highest open risks
 across clients, overdue first.
 
+### Demo tenant (sample data for demos)
+
+Double-click **`start-demo.bat`** (or run `grc-web demo --open`) to open a separate demo
+workspace on http://127.0.0.1:8001. Sign in as `demo` / `grc-demo-2026`.
+
+- It lives in `./var-demo`, apart from your real workspace in `./var`, which it never touches.
+  It refuses to seed into a folder that holds a real workspace.
+- Six sample clients sit at every pipeline stage, from intake to delivered. They come with
+  findings, documents, a risk register, data-flow maps, and AWS and GitHub evidence spread
+  over the past month.
+- It looks live. Every 40 seconds or so a colleague does something: re-syncs a connector,
+  reviews a finding or picks up a risk. Notifications, pop-ups, the risk register and the
+  data-flow map update while you present. "Run checks again" is simulated, and no real
+  GitHub or AWS calls are made.
+- `start-demo.bat --reset` starts from fresh sample data. `--live-seconds 0` turns the live
+  activity off.
+- Without an `ANTHROPIC_API_KEY`, the analyst gives simulated answers in the demo.
+
 ### Search, shortcuts and planned buttons
 
 Press **Ctrl K** (or **/**) on any page to search pages and actions. Press **?** to see
