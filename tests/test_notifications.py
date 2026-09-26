@@ -45,7 +45,7 @@ def test_workflow_events_become_notifications(authed, priya):
     assert "intake changed after the assessment. Re-run it." in page
     # Filters
     only = priya.get("/notifications?category=assessment").text
-    assert "assessment complete" in only and "New engagement" not in only
+    assert "assessment complete" in only and "New engagement: Acme" not in only
     warnings = priya.get("/notifications?level=warning").text
     assert "Re-run it." in warnings and "assessment complete" not in warnings
 

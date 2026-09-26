@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_macros.html" import icon %}
-{% block title %}Log in{% endblock %}
+{% block title %}Sign in{% endblock %}
 {% block main_class %}login{% endblock %}
 {% block content %}
 <section class="login-aside">
@@ -9,25 +9,48 @@
     <span class="brand-text">GRC agent<small>DPDPA</small></span>
   </span>
   <div>
+    <p class="login-eyebrow">India's DPDP Act 2023 &amp; Rules 2025</p>
     <h2>DPDPA readiness assessments, drafted in hours, verified by you.</h2>
     <ul>
-      <li>{{ icon("i-check") }} Guided client intake mapped to every obligation in the Act and Rules.</li>
-      <li>{{ icon("i-check") }} Findings with provision-level citations, checked before delivery.</li>
-      <li>{{ icon("i-check") }} Read-only evidence from the client's GitHub and AWS.</li>
+      <li>{{ icon("i-check") }}<span><strong>Guided intake</strong> mapped to every obligation in the Act and Rules.</span></li>
+      <li>{{ icon("i-check") }}<span><strong>Risk register and data-flow map</strong> built from the client's own answers and evidence.</span></li>
+      <li>{{ icon("i-check") }}<span><strong>A GRC Analyst</strong> that reads your workspace and cites the provision it relies on.</span></li>
     </ul>
   </div>
-  <p class="small" style="color:#8e9ab3;margin:0">Internal use only.</p>
+  <p class="login-foot">{{ icon("i-shield") }} Your data stays in this workspace. Internal use only.</p>
 </section>
 <div class="login-main">
-  <form method="post" action="/login" class="card login-card">
-    <h1>Log in</h1>
+  <div class="login-card card">
+    <h1>Sign in</h1>
     <p class="muted">Welcome back. Sign in to your workspace.</p>
-    {% if error %}<div class="flash flash-error" role="alert">{{ error }}</div>{% endif %}
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <label>Username <input name="username" autocomplete="username" required autofocus></label>
-    <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
-    <button class="primary">Log in</button>
-    <p class="muted small" style="margin-top:1rem">No account? Create one on the server with <code>grc-web adduser NAME</code>.</p>
-  </form>
+
+    <div class="sso">
+      <button type="button" data-soon="sso-google"><span class="sso-mark sso-g" aria-hidden="true">G</span>Continue with Google<span class="soon-tag">Soon</span></button>
+      <button type="button" data-soon="sso-microsoft"><span class="sso-mark sso-m" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Continue with Microsoft<span class="soon-tag">Soon</span></button>
+    </div>
+    <p class="divider"><span>or with your username</span></p>
+
+    {% if error %}<div class="flash flash-error login-error" id="login-err" role="alert">{{ icon("i-alert") }} {{ error }}</div>{% endif %}
+    <form method="post" action="/login" id="login-form">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label for="username">Username</label>
+      <input id="username" name="username" autocomplete="username" required value="{{ username or '' }}"
+             {% if not username %}autofocus{% endif %} {% if error %}aria-invalid="true" aria-describedby="login-err"{% endif %}>
+      <div class="label-row">
+        <label for="password">Password</label>
+        <button type="button" class="link small" data-soon="forgot-password">Forgot password?</button>
+      </div>
+      <div class="password-field">
+        <input id="password" name="password" type="password" autocomplete="current-password" required
+               {% if username %}autofocus{% endif %} {% if error %}aria-invalid="true"{% endif %}>
+        <button type="button" class="reveal" id="reveal" aria-label="Show password" aria-pressed="false">{{ icon("i-eye") }}</button>
+      </div>
+      <p class="caps" id="caps" hidden>{{ icon("i-alert") }} Caps Lock is on</p>
+      <label class="inline remember"><input type="checkbox" data-soon="remember-me"> Keep me signed in <span class="soon-tag">Soon</span></label>
+      <button type="submit" class="primary"><span class="spinner" aria-hidden="true"></span><span class="label">Sign in</span></button>
+    </form>
+    <p class="login-alt small muted">New to the workspace? <button type="button" class="link small" data-soon="request-access">Request access</button></p>
+    <p class="login-alt small muted">Admins can also add users on the server with <code>grc-web adduser NAME</code>. · <a href="/docs">Read the DPDPA docs</a></p>
+  </div>
 </div>
 {% endblock %}
