@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}GRC agent{% endblock %} · GRC agent</title>
   <script>try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%231f63b8'/%3E%3Cpath d='M12 5l6 2.3v4.5c0 3.7-2.6 6-6 6.7-3.4-.7-6-3-6-6.7V7.3z' fill='none' stroke='white' stroke-width='1.8'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body class="{% if user %}app{% endif %}">
@@ -29,6 +30,8 @@
     {{ nav_link("/corpus", "i-book", "Corpus", path.startswith("/corpus")) }}
     <p class="nav-group">Growth</p>
     {{ nav_link("/content", "i-pen", "Docs & blog", path.startswith("/content")) }}
+    <p class="nav-group">System</p>
+    {{ nav_link("/data-manager", "i-database", "Data manager", path.startswith("/data-manager")) }}
   </nav>
   <div class="side-foot">
     <a href="/notifications" class="bell" {% if path.startswith("/notifications") %}aria-current="page"{% endif %}>
@@ -50,6 +53,33 @@
 </aside>
 {% endif %}
 <div class="{% if user %}shell{% endif %}">
+  {% if user %}
+  <header class="app-bar">
+    <button type="button" class="search-trigger" id="open-palette" aria-haspopup="dialog" aria-controls="palette">
+      <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
+      <span>Search pages and actions…</span>
+      <kbd>Ctrl K</kbd>
+    </button>
+    <div class="app-bar-actions">
+      <a class="button small primary" href="/engagements#new"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg><span class="hide-sm">New engagement</span></a>
+      <button type="button" class="icon-button" id="open-shortcuts" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts"><svg class="icon" aria-hidden="true"><use href="#i-help"/></svg></button>
+      <details class="user-menu">
+        <summary aria-label="Account menu"><span class="avatar" aria-hidden="true">{{ user[:1]|upper }}</span><span class="hide-sm">{{ user }}</span></summary>
+        <div class="menu" role="menu">
+          <p class="menu-head">Signed in as <strong>{{ user }}</strong></p>
+          <button type="button" role="menuitem" data-soon="profile"><svg class="icon" aria-hidden="true"><use href="#i-user"/></svg>Profile &amp; password<span class="soon-tag">Soon</span></button>
+          <button type="button" role="menuitem" data-soon="two-factor"><svg class="icon" aria-hidden="true"><use href="#i-key"/></svg>Two-step verification<span class="soon-tag">Soon</span></button>
+          <a role="menuitem" href="/notifications"><svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg>Notifications</a>
+          <button type="button" role="menuitem" data-soon="help"><svg class="icon" aria-hidden="true"><use href="#i-book"/></svg>Help centre<span class="soon-tag">Soon</span></button>
+          <form method="post" action="/logout">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <button role="menuitem"><svg class="icon" aria-hidden="true"><use href="#i-logout"/></svg>Log out</button>
+          </form>
+        </div>
+      </details>
+    </div>
+  </header>
+  {% endif %}
   {% if demo_mode and user %}
   <div class="demo-banner" role="status"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg><span>Demo mode: AI answers and drafted findings are simulated placeholders, not real AI. Don't use them with clients. Set <code>ANTHROPIC_API_KEY</code> and remove <code>GRC_AI_MODE=demo</code> from <code>.env</code> to use Claude.</span></div>
   {% endif %}
@@ -61,16 +91,64 @@
   </main>
 </div>
 <div class="toasts" id="toasts" aria-live="polite"></div>
+<script type="application/json" id="planned-features">{{ planned|tojson }}</script>
+{% if user %}
+<dialog class="palette" id="palette" aria-label="Search">
+  <div class="palette-input">
+    <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
+    <input type="search" id="palette-q" placeholder="Search pages and actions…" autocomplete="off" aria-controls="palette-list" aria-label="Search">
+    <kbd>Esc</kbd>
+  </div>
+  <ul class="palette-list" id="palette-list" role="listbox">
+    {% set items = [
+      ("Pages", "Dashboard", "/", "i-home", "g d"),
+      ("Pages", "Engagements", "/engagements", "i-briefcase", "g e"),
+      ("Pages", "GRC Analyst", "/assistant", "i-spark", "g a"),
+      ("Pages", "Data flows", "/dataflows", "i-flow", "g f"),
+      ("Pages", "Connectors", "/connectors", "i-plug", "g c"),
+      ("Pages", "Corpus: DPDP Act and Rules", "/corpus", "i-book", ""),
+      ("Pages", "Docs & blog", "/content", "i-pen", ""),
+      ("Pages", "Notifications", "/notifications", "i-bell", "g n"),
+      ("Pages", "Data manager", "/data-manager", "i-database", "g m"),
+      ("Actions", "New engagement", "/engagements#new", "i-plus", "n"),
+      ("Actions", "Ask the GRC Analyst", "/assistant", "i-spark", ""),
+      ("Actions", "Unread notifications", "/notifications?show=unread", "i-bell", ""),
+    ] %}
+    {% for group, label, href, ic, keys in items %}
+    <li role="option" data-group="{{ group }}"><a href="{{ href }}"><svg class="icon" aria-hidden="true"><use href="#{{ ic }}"/></svg><span>{{ label }}</span><small>{{ group }}</small>{% if keys %}<kbd>{{ keys }}</kbd>{% endif %}</a></li>
+    {% endfor %}
+    <li role="option" data-group="Actions"><button type="button" data-action="theme"><svg class="icon" aria-hidden="true"><use href="#i-moon"/></svg><span>Switch light / dark theme</span><small>Actions</small></button></li>
+    <li role="option" data-group="Search" data-keep class="palette-search-all"><button type="button" data-soon="global-search"><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg><span>Search all records for <q id="palette-echo">…</q></span><span class="soon-tag">Soon</span></button></li>
+  </ul>
+  <p class="palette-foot muted small"><kbd>↑</kbd> <kbd>↓</kbd> to move · <kbd>Enter</kbd> to open · <kbd>?</kbd> for all shortcuts</p>
+</dialog>
+<dialog class="shortcuts" id="shortcuts" aria-labelledby="shortcuts-title">
+  <div class="card-head"><h2 id="shortcuts-title">Keyboard shortcuts</h2><form method="dialog"><button class="icon-button" aria-label="Close">✕</button></form></div>
+  <dl>
+    <dt><kbd>Ctrl</kbd> <kbd>K</kbd> or <kbd>/</kbd></dt><dd>Search pages and actions</dd>
+    <dt><kbd>n</kbd></dt><dd>New engagement</dd>
+    <dt><kbd>g</kbd> then <kbd>d</kbd></dt><dd>Dashboard</dd>
+    <dt><kbd>g</kbd> then <kbd>e</kbd></dt><dd>Engagements</dd>
+    <dt><kbd>g</kbd> then <kbd>a</kbd></dt><dd>GRC Analyst</dd>
+    <dt><kbd>g</kbd> then <kbd>f</kbd></dt><dd>Data flows</dd>
+    <dt><kbd>g</kbd> then <kbd>c</kbd></dt><dd>Connectors</dd>
+    <dt><kbd>g</kbd> then <kbd>n</kbd></dt><dd>Notifications</dd>
+    <dt><kbd>g</kbd> then <kbd>m</kbd></dt><dd>Data manager</dd>
+    <dt><kbd>?</kbd></dt><dd>This list</dd>
+  </dl>
+</dialog>
+{% endif %}
+<script src="/static/app.js" defer></script>
 <script>
 (() => {
-  const btn = document.getElementById("theme-toggle");
-  if (!btn) return;
-  btn.addEventListener("click", () => {
+  window.toggleTheme = () => {
     const root = document.documentElement;
     const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
     root.dataset.theme = dark ? "light" : "dark";
     try { localStorage.setItem("theme", root.dataset.theme); } catch (e) {}
-  });
+  };
+  const btn = document.getElementById("theme-toggle");
+  if (btn) btn.addEventListener("click", window.toggleTheme);
 })();
 </script>
 {% if user %}

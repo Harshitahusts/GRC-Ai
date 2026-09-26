@@ -54,11 +54,13 @@ from grc_agent.web import (
     analyst,
     connector_views,
     dataflow_views,
+    datamanager,
     db,
     notification_views,
     notify,
     risk_views,
 )
+from grc_agent.web.planned import PLANNED
 from grc_agent.web.security import (
     DUMMY_HASH,
     csrf_matches,
@@ -193,6 +195,7 @@ def render(request: Request, name: str, status_code: int = 200, **context: Any) 
         document_types=DOCUMENT_TYPES,
         choices=CHOICES,
         outcome_labels=OUTCOME_LABELS,
+        planned=PLANNED,
     )
     return templates.TemplateResponse(request, name, context, status_code=status_code)
 
@@ -343,6 +346,7 @@ def _routes(app: FastAPI) -> None:
                 "login.html",
                 status_code=429,
                 error="Too many failed attempts. Wait 5 minutes and try again.",
+                username=username,
             )
 
         row = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
@@ -351,7 +355,11 @@ def _routes(app: FastAPI) -> None:
             failures[key] = (count + 1, window_start)
             db.audit(conn, username or "-", "login_failed")
             return render(
-                request, "login.html", status_code=401, error="Wrong username or password."
+                request,
+                "login.html",
+                status_code=401,
+                error="Wrong username or password.",
+                username=username,
             )
 
         failures.pop(key, None)
@@ -409,6 +417,18 @@ def _routes(app: FastAPI) -> None:
             ),
             connections_ok=sum(1 for c in connections if c["status"] == "ok"),
             connections_total=len(connections),
+            store=datamanager.report(conn, request.app.state.db_path, check_integrity=False),
+        )
+
+    # ---- data manager (read-only storage monitor)
+
+    @app.get("/data-manager")
+    def data_manager(request: Request, user: User, conn: Conn):
+        return render(
+            request,
+            "data_manager.html",
+            store=datamanager.report(conn, request.app.state.db_path),
+            planned_here={k: v for k, v in PLANNED.items() if v["area"] == "Data manager"},
         )
 
     # ---- engagements

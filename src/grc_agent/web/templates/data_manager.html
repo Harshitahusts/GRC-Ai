@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block title %}Data manager{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Data manager</h1>
+    <p class="muted">Keeps an eye on what this workspace stores, where it lives and how long it should stay. Read-only for now.</p>
+  </div>
+  <div class="head-actions">
+    <a class="button" href="/data-manager">{{ icon("i-refresh") }} Re-check</a>
+    <button type="button" class="button" data-soon="export-data">{{ icon("i-download") }} Export all data<span class="soon-tag">Soon</span></button>
+    <button type="button" class="button primary" data-soon="backup-now">{{ icon("i-database") }} Back up now<span class="soon-tag">Soon</span></button>
+  </div>
+</div>
+
+<section class="tiles dash-tiles" aria-label="Storage at a glance">
+  <div class="tile {{ '' if store.healthy else 'is-bad' }}">
+    <p class="tile-label">Health</p>
+    <p class="tile-value">{{ "Healthy" if store.healthy else "Check" }}</p>
+    <p class="muted small">Integrity: {{ store.integrity }}</p>
+  </div>
+  <div class="tile">
+    <p class="tile-label">Database size</p>
+    <p class="tile-value">{{ store.total_size }}</p>
+    <p class="muted small">{{ store.free_pct }}% free space · {{ store.journal }} journal</p>
+  </div>
+  <div class="tile">
+    <p class="tile-label">Records</p>
+    <p class="tile-value">{{ "{:,}".format(store.rows) }}</p>
+    <p class="muted small">across {{ store.tables|length }} tables</p>
+  </div>
+  <div class="tile {{ 'is-warn' if store.personal_rows }}">
+    <p class="tile-label">Personal data</p>
+    <p class="tile-value">{{ "{:,}".format(store.personal_rows) }}</p>
+    <p class="muted small">rows in {{ store.personal_tables }} tables</p>
+  </div>
+  <div class="tile">
+    <p class="tile-label">Last backup</p>
+    <p class="tile-value">Never</p>
+    <p class="muted small"><button type="button" class="link small" data-soon="schedule-backups">Schedule backups</button></p>
+  </div>
+</section>
+
+<div class="grid-2 wide-left">
+  <section class="card">
+    <div class="card-head">
+      <h2>Watch list</h2>
+      <span class="muted small">Checked <time datetime="{{ store.checked_at }}">{{ store.checked_at[:16].replace("T", " ") }} UTC</time></span>
+    </div>
+    <ul class="attention">
+      {% for w in store.watch %}
+      <li class="level-{{ w.level }}">
+        <span class="status-icon" aria-hidden="true">{{ icon({"critical": "i-x", "serious": "i-alert", "warning": "i-clock", "good": "i-check"}[w.level]) }}</span>
+        <span class="attention-text"><strong>{{ w.title }}</strong><span>{{ w.detail }}</span></span>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Where it's stored</h2></div>
+    <p class="small muted">One SQLite file on this machine. Connector secrets are encrypted with the key in the same folder, so back both up together and keep them private.</p>
+    <p class="small"><code class="wrap">{{ store.db_path }}</code></p>
+    <ul class="plain small">
+      {% for f in store.files %}
+      <li class="file-row"><span>{{ icon("i-database") if f.name.endswith(".db") else icon("i-key") if "key" in f.name or "secret" in f.name else icon("i-book") }} {{ f.name }}</span><span class="muted">{{ f.size }}</span></li>
+      {% endfor %}
+    </ul>
+  </section>
+</div>
+
+<section class="card">
+  <div class="card-head">
+    <h2>Data catalogue</h2>
+    <div class="head-actions">
+      <button type="button" class="button small" data-soon="set-retention">{{ icon("i-clock") }} Set retention<span class="soon-tag">Soon</span></button>
+      <button type="button" class="button small" data-soon="purge-expired">{{ icon("i-x") }} Purge expired<span class="soon-tag">Soon</span></button>
+    </div>
+  </div>
+  {% set cats = store.tables|map(attribute="category")|unique|sort %}
+  <div class="table-filter" data-filter-table="catalogue">
+    <input type="search" placeholder="Filter tables…" aria-label="Filter tables">
+    <div class="chips" role="group" aria-label="Category">
+      <button type="button" class="chip" data-cat="" aria-pressed="true">All</button>
+      {% for c in cats %}<button type="button" class="chip" data-cat="{{ c }}" aria-pressed="false">{{ c }}</button>{% endfor %}
+    </div>
+    <span class="muted small" data-count>{{ store.tables|length }} shown</span>
+  </div>
+  <table class="table" id="catalogue">
+    <thead><tr><th>Table</th><th>What it holds</th><th>Category</th><th class="num">Rows</th><th class="hide-sm">Newest</th><th class="hide-sm">Retention</th></tr></thead>
+    <tbody>
+    {% for t in store.tables %}
+    <tr data-cat="{{ t.category }}">
+      <td><code>{{ t.name }}</code>{% if t.personal %} <span class="badge badge-personal" title="Holds personal data">Personal</span>{% endif %}</td>
+      <td class="small">{{ t.purpose }}{% if not t.known %} <span class="badge badge-fail">Uncatalogued</span>{% endif %}</td>
+      <td class="small">{{ t.category }}</td>
+      <td class="num">{{ "{:,}".format(t.rows) }}</td>
+      <td class="hide-sm small muted nowrap">{{ t.newest[:10] if t.newest else "–" }}</td>
+      <td class="hide-sm small">{{ t.retention }}{% if t.expired %}<br><strong class="overdue">{{ t.expired }} past retention</strong>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <div class="card-head"><h2>Coming next</h2><span class="muted small">Buttons are in place; the backend comes next</span></div>
+  <ul class="planned-list">
+    {% for key, p in planned_here.items() %}
+    <li><strong>{{ p.label }}</strong><span class="muted small">{{ p.backend }}</span></li>
+    {% endfor %}
+  </ul>
+  <p class="small"><button type="button" class="button small" data-soon="vacuum">{{ icon("i-refresh") }} Compact the database<span class="soon-tag">Soon</span></button></p>
+</section>
+{% endblock %}

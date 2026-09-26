@@ -4,29 +4,73 @@
 {% block content %}
 <div class="page-head">
   <div>
+    <p class="eyebrow" id="greeting" data-user="{{ user }}">Welcome back, {{ user }}</p>
     <h1>Dashboard</h1>
-    <p class="muted">Welcome back, {{ user }}. {{ total }} engagement{{ "" if total == 1 else "s" }} in the workspace.</p>
+    <p class="muted">{{ total }} engagement{{ "" if total == 1 else "s" }} in the workspace.</p>
   </div>
   <div class="head-actions">
-    <a class="button" href="/assistant">{{ icon("i-spark") }} Ask the analyst</a>
+    <label class="sr-only" for="period">Period</label>
+    <select id="period" class="compact" data-soon="date-range">
+      <option>All time</option><option>Last 7 days</option><option>Last 30 days</option><option>This quarter</option>
+    </select>
+    <a class="button" href="/" title="Refresh">{{ icon("i-refresh") }}<span class="sr-only">Refresh</span></a>
+    <button type="button" class="button" data-soon="customise-dashboard">{{ icon("i-sliders") }} Customise<span class="soon-tag">Soon</span></button>
     <a class="button primary" href="/engagements#new">{{ icon("i-plus") }} New engagement</a>
   </div>
 </div>
+
+{% set steps = [
+  ("Create your first engagement", total > 0, "/engagements#new", "Add a client and pick their sector."),
+  ("Complete a client intake", pipeline|rejectattr("stage", "equalto", "Intake")|sum(attribute="count") > 0, "/engagements", "Answer the DPDPA questionnaire with the client."),
+  ("Connect an evidence source", connections_total > 0, "/connectors", "Read-only GitHub or AWS checks back the findings."),
+  ("Deliver an assessment", delivered > 0, "/engagements", "Review findings and documents, then deliver."),
+] %}
+{% set done = steps|selectattr(1)|list|length %}
+{% if done < steps|length %}
+<section class="card setup" id="getting-started" aria-labelledby="setup-title">
+  <div class="card-head">
+    <div>
+      <h2 id="setup-title">Getting started</h2>
+      <p class="muted small">{{ done }} of {{ steps|length }} done</p>
+    </div>
+    <button type="button" class="link small" id="hide-setup">Hide</button>
+  </div>
+  <span class="meter" role="img" aria-label="{{ done }} of {{ steps|length }} steps done"><span style="width: {{ (100 * done / steps|length)|round|int }}%"></span></span>
+  <ol class="setup-steps">
+    {% for label, ok, href, hint in steps %}
+    <li class="{{ 'is-done' if ok }}">
+      <span class="step-dot" aria-hidden="true">{{ icon("i-check") if ok else loop.index }}</span>
+      <span><a href="{{ href }}">{{ label }}</a><small>{{ hint }}</small></span>
+      <span class="sr-only">{{ "Done" if ok else "To do" }}</span>
+    </li>
+    {% endfor %}
+  </ol>
+</section>
+{% endif %}
+
+<section class="quick" aria-label="Quick actions">
+  <a class="quick-item" href="/engagements#new"><span class="quick-icon">{{ icon("i-plus") }}</span><span><strong>New engagement</strong><small>Start a client intake</small></span></a>
+  <a class="quick-item" href="/assistant"><span class="quick-icon">{{ icon("i-spark") }}</span><span><strong>Ask the analyst</strong><small>Questions on any client</small></span></a>
+  <a class="quick-item" href="/dataflows"><span class="quick-icon">{{ icon("i-flow") }}</span><span><strong>Data flows</strong><small>Where client data goes</small></span></a>
+  <button type="button" class="quick-item" data-soon="export-portfolio"><span class="quick-icon">{{ icon("i-download") }}</span><span><strong>Export report</strong><small>Portfolio PDF / Excel</small></span><span class="soon-tag">Soon</span></button>
+  <button type="button" class="quick-item" data-soon="invite-teammate"><span class="quick-icon">{{ icon("i-users") }}</span><span><strong>Invite teammate</strong><small>Add a consultant</small></span><span class="soon-tag">Soon</span></button>
+  <button type="button" class="quick-item" data-soon="schedule-review"><span class="quick-icon">{{ icon("i-calendar") }}</span><span><strong>Schedule review</strong><small>Book time with a client</small></span><span class="soon-tag">Soon</span></button>
+</section>
 
 {% set live_risks = risk_queue %}
 {% set crit_high = live_risks|selectattr("level", "in", ["critical", "high"])|list|length %}
 {% set overdue = live_risks|selectattr("overdue")|list|length %}
 <section class="tiles dash-tiles" aria-label="Headline numbers">
-  <div class="tile">
+  <a class="tile tile-link" href="/engagements">
     <p class="tile-label">In progress</p>
     <p class="tile-value">{{ in_progress }}</p>
     <p class="muted small">engagements not yet delivered</p>
-  </div>
-  <div class="tile">
+  </a>
+  <a class="tile tile-link" href="/engagements">
     <p class="tile-label">Delivered</p>
     <p class="tile-value">{{ delivered }}</p>
     <p class="muted small">DPDPA assessments</p>
-  </div>
+  </a>
   <div class="tile">
     <p class="tile-label">Average readiness</p>
     <p class="tile-value">{{ avg_readiness if avg_readiness is not none else "–" }}{% if avg_readiness is not none %}<small>/100</small>{% endif %}</p>
@@ -141,6 +185,7 @@
     </ul>
     {% else %}<p class="muted">No open risks. They appear here once engagements are assessed.</p>{% endif %}
     <p class="small muted">Connectors healthy: <strong>{{ connections_ok }}/{{ connections_total }}</strong> · <a href="/connectors">Connectors</a></p>
+    <p class="small muted store-line"><span class="dot-status {{ 'ok' if store.healthy else 'bad' }}" aria-hidden="true"></span>Data store: <strong>{{ store.total_size }}</strong>, {{ "{:,}".format(store.rows) }} records, {{ store.watch|length }} to watch · <a href="/data-manager">Data manager</a></p>
   </section>
 </div>
 

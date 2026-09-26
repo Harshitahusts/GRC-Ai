@@ -58,6 +58,25 @@ reporting), fetches the data before answering, cites DPDPA provisions from the r
 and corpus, and can't change anything. The **Analyst queue** lists the highest open risks
 across clients, overdue first.
 
+### Search, shortcuts and planned buttons
+
+Press **Ctrl K** (or **/**) on any page to search pages and actions. Press **?** to see
+all keyboard shortcuts, for example **g** then **d** for the dashboard and **n** for a
+new engagement. Some buttons (Google and Microsoft sign-in, forgot password, backups,
+export, invite a teammate) are designed but not built yet. They show a "coming soon"
+toast. Each one is listed in `src/grc_agent/web/planned.py` with a note on what its
+backend will do.
+
+### Data manager
+
+**Data manager** in the sidebar keeps an eye on what the workspace stores. It shows
+the database size and health, the number of records and how many hold personal data,
+and a catalogue of every table with its purpose and suggested retention. A watch
+list flags tables missing from the catalogue, rows past their retention, wasted space
+and missing backups. The page only reads for now.
+
+See [docs/SYSTEM_DESIGN.md](docs/SYSTEM_DESIGN.md) for how each request flows from click to feedback.
+
 ### Run it on your computer
 
 You need Python 3.10 or newer ([python.org](https://www.python.org/downloads/); on
