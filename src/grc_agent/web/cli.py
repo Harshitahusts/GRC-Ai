@@ -3,6 +3,7 @@
 grc-web adduser NAME     create an account (prompts for a password)
 grc-web passwd NAME      change an account's password
 grc-web serve            start the app on http://127.0.0.1:8000
+grc-web demo             start a separate demo tenant with sample clients on port 8001
 """
 
 from __future__ import annotations
@@ -36,6 +37,23 @@ def main(argv: list[str] | None = None) -> int:
     serve.add_argument("--reload", action="store_true", help="Restart on code changes (dev).")
     serve.add_argument("--open", action="store_true", help="Open the app in a browser.")
 
+    demo = sub.add_parser(
+        "demo", help="Start a separate demo tenant with sample data (never your main data)."
+    )
+    demo.add_argument(
+        "--dir", default="var-demo", help="Folder for the demo tenant (default: ./var-demo)."
+    )
+    demo.add_argument("--port", type=int, default=8001)
+    demo.add_argument("--reset", action="store_true", help="Throw away and re-create the demo.")
+    demo.add_argument("--seed-only", action="store_true", help="Create the data, don't serve.")
+    demo.add_argument("--open", action="store_true", help="Open the demo in a browser.")
+    demo.add_argument(
+        "--live-seconds",
+        type=float,
+        default=None,
+        help="How often a colleague acts in the live demo (0 turns it off; default 40).",
+    )
+
     sub.add_parser("init", help="Create the first account if none exist.")
 
     for name, text in (("adduser", "Create an account."), ("passwd", "Change a password.")):
@@ -50,6 +68,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "serve":
         return _serve(data_dir, args.host, args.port, args.reload, args.open)
+    if args.command == "demo":
+        return _demo(args)
     if args.command == "init":
         return _init(data_dir)
     return _set_password(
@@ -92,6 +112,31 @@ def _serve(data_dir: Path, host: str, port: int, reload: bool, open_browser: boo
         log_level="info",
     )
     return 0
+
+
+def _demo(args) -> int:
+    from dotenv import load_dotenv
+
+    from grc_agent.web import demo_tenant
+
+    load_dotenv()
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        # No key: the analyst gives simulated answers instead of failing mid-demo.
+        os.environ.setdefault("GRC_AI_MODE", "demo")
+    if args.live_seconds is not None:
+        os.environ["GRC_DEMO_LIVE_SECONDS"] = str(args.live_seconds)
+    data_dir = Path(args.dir)
+    fresh = args.reset or not demo_tenant.is_demo(data_dir)
+    if fresh:
+        print(f"Creating the demo tenant in {data_dir.resolve()} ...")
+    demo_tenant.seed(data_dir, reset=args.reset)
+    print(
+        f"Demo tenant ready. Sign in as {demo_tenant.DEMO_USER} / {demo_tenant.DEMO_PASSWORD}"
+        " (sample data, separate from your main workspace)."
+    )
+    if args.seed_only:
+        return 0
+    return _serve(data_dir, "127.0.0.1", args.port, False, args.open)
 
 
 def _port_in_use(host: str, port: int) -> bool:

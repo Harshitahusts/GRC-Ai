@@ -23,6 +23,7 @@
   <div class="login-card card">
     <h1>Sign in</h1>
     <p class="muted">Welcome back. Sign in to your workspace.</p>
+    {% if demo_tenant %}<div class="flash flash-info demo-login" role="note"><strong>Demo tenant</strong> with sample data. Sign in as <code>{{ demo_login[0] }}</code> / <code>{{ demo_login[1] }}</code>.</div>{% endif %}
 
     <div class="sso">
       <button type="button" data-soon="sso-google"><span class="sso-mark sso-g" aria-hidden="true">G</span>Continue with Google<span class="soon-tag">Soon</span></button>

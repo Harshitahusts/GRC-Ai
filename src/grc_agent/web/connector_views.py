@@ -20,7 +20,7 @@ from itsdangerous import BadSignature, URLSafeTimedSerializer
 from grc_agent.connectors import ConnectorError, by_category, cloud, github_app
 from grc_agent.connectors.secrets import mask
 from grc_agent.kpis.citations import normalize_citation
-from grc_agent.web import db
+from grc_agent.web import db, demo_tenant
 
 log = logging.getLogger(__name__)
 
@@ -188,6 +188,22 @@ def register(app: FastAPI) -> None:
         """Collect evidence (or send a test message) and record the outcome."""
         c = _connector(request, row["connector"])
         config = json.loads(row["config_json"])
+        if request.app.state.demo_tenant:  # sample workspace: never call a real API
+            message = demo_tenant.resync(conn, row)
+            conn.execute(
+                "UPDATE connections SET status = 'ok', message = ?, last_synced_at = ? "
+                "WHERE id = ?",
+                (message, db.now(), row["id"]),
+            )
+            db.audit(
+                conn,
+                user,
+                "connector_synced",
+                row["engagement_id"],
+                {"connector": c.id, "status": "ok"},
+            )
+            flash(request, f"{c.name}: {message}")
+            return
         try:
             secrets = request.app.state.secret_box.open(row["secrets_enc"])
             if c.kind == "notify":

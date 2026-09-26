@@ -8,12 +8,14 @@ to resolve, the assessment is stale, or any document is unreviewed.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import secrets
 import sqlite3
 import time
 from collections.abc import Iterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -56,6 +58,7 @@ from grc_agent.web import (
     dataflow_views,
     datamanager,
     db,
+    demo_tenant,
     notification_views,
     notify,
     risk_views,
@@ -101,7 +104,13 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
     with db.connect(db_path) as conn:
         db.seed_content(conn, seed_items())
 
-    app = FastAPI(title="GRC agent", docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(
+        title="GRC agent",
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
+        lifespan=_demo_lifespan(data_dir, db_path),
+    )
     app.state.db_path = db_path
     app.state.login_failures = {}
     app.state.agents = {}
@@ -121,6 +130,7 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
     app.state.connectors = dict(CONNECTORS)
     app.state.secret_box = SecretBox.for_data_dir(data_dir)
     app.state.data_dir = data_dir
+    app.state.demo_tenant = demo_tenant.is_demo(data_dir)
     app.state.secret_key = _secret_key(data_dir)
     app.add_middleware(
         SessionMiddleware,
@@ -137,6 +147,24 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
     dataflow_views.register(app)
     risk_views.register(app)
     return app
+
+
+def _demo_lifespan(data_dir: Path, db_path: Path):
+    """In the demo tenant only, colleagues "act" every so often so the demo looks live."""
+    live = float(os.getenv("GRC_DEMO_LIVE_SECONDS", demo_tenant.LIVE_SECONDS))
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        task = None
+        if demo_tenant.is_demo(data_dir) and live > 0:
+            task = asyncio.create_task(demo_tenant.live_loop(db_path, live))
+        try:
+            yield
+        finally:
+            if task:
+                task.cancel()
+
+    return lifespan
 
 
 templates = Jinja2Templates(directory=HERE / "templates")
@@ -196,6 +224,10 @@ def render(request: Request, name: str, status_code: int = 200, **context: Any) 
         choices=CHOICES,
         outcome_labels=OUTCOME_LABELS,
         planned=PLANNED,
+        demo_tenant=request.app.state.demo_tenant,
+        demo_login=(demo_tenant.DEMO_USER, demo_tenant.DEMO_PASSWORD)
+        if request.app.state.demo_tenant
+        else None,
     )
     return templates.TemplateResponse(request, name, context, status_code=status_code)
 
