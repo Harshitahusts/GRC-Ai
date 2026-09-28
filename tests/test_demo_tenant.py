@@ -117,3 +117,17 @@ def test_resync_flips_a_check():
     message = demo_tenant.resync(conn, {"id": 1}, AlwaysFlip())
     assert "root mfa now passing" in message
     assert conn.execute("SELECT status FROM evidence").fetchone()[0] == "pass"
+
+
+def test_lan_flag_listens_on_all_interfaces(monkeypatch, tmp_path):
+    from grc_agent.web import cli
+
+    seen = {}
+    monkeypatch.setattr(cli, "_serve", lambda d, host, port, r, o: seen.update(host=host) or 0)
+    monkeypatch.setattr(demo_tenant, "seed", lambda d, reset=False: d)
+    cli.main(["demo", "--dir", str(tmp_path / "d"), "--lan"])
+    assert seen["host"] == "0.0.0.0"
+    cli.main(["demo", "--dir", str(tmp_path / "d")])
+    assert seen["host"] == "127.0.0.1"  # local only unless asked
+    ip = cli.lan_ip()
+    assert ip is None or not ip.startswith("127.")
