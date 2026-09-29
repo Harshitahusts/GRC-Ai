@@ -414,6 +414,8 @@ def seed(data_dir: Path, reset: bool = False) -> Path:
         for i, c in enumerate(CLIENTS):
             clock.at(now - timedelta(days=c["days_ago"], hours=3))
             _seed_client(app, clients, clock, c, i)
+        clock.at(now - timedelta(days=5))
+        _seed_ops(app, clients, clock, now)
         clock.at(now - timedelta(minutes=30))
     finally:
         db.now = real_now
@@ -615,6 +617,286 @@ def _seed_scan(app, lead, other, clock: _Clock, eid: int, source: str, sample: s
                     "owner": "Dr. Kavya Rao",
                 },
             )
+
+
+def _seed_ops(app, clients: dict, clock: _Clock, now: datetime) -> None:
+    """Privacy operations and compliance work for three clients, through the real routes."""
+    me, priya, arjun = clients[DEMO_USER], clients[COLLEAGUES[0]], clients[COLLEAGUES[1]]
+    with db.connect(app.state.db_path) as conn:
+        ids = {r["client"]: r["id"] for r in conn.execute("SELECT id, client FROM engagements")}
+    day = lambda n: (now + timedelta(days=n)).date().isoformat()  # noqa: E731
+    at = lambda h: (now + timedelta(hours=h)).isoformat(timespec="minutes")  # noqa: E731
+
+    def add(client, eid, key, data, status_steps=(), edits=None):
+        r = _post(client, f"/engagements/{eid}/r/{key}", data)
+        rid = int(r.url.path.rsplit("/", 1)[1])
+        if edits:
+            _post(client, f"/engagements/{eid}/r/{key}/{rid}/edit", {**data, **edits})
+        for st in status_steps:
+            clock.tick(20)
+            _post(client, f"/engagements/{eid}/r/{key}/{rid}/status", {"status": st})
+        clock.tick(15)
+        return rid
+
+    # Arogya Health Clinics: a breach on the clock, requests, vendors, a DPIA.
+    aro = ids["Arogya Health Clinics"]
+    breach = {
+        "title": "Lab reports emailed to the wrong patient group",
+        "aware_at": at(-30),
+        "breach_type": "disclosure",
+        "affected_count": "84",
+        "data_affected": "Names, phone numbers, lab results",
+        "containment": "Recall email sent; mailing list fixed; staff briefed.",
+        "owner": "Dr. Kavya Rao",
+    }
+    add(
+        priya,
+        aro,
+        "breaches",
+        breach,
+        ("investigating", "board_intimated"),
+        {"board_intimated_at": at(-26)},
+    )
+    add(
+        arjun,
+        aro,
+        "requests",
+        {
+            "summary": "Patient asks for a copy of what the clinic holds",
+            "request_type": "access",
+            "received_on": day(-40),
+            "response_days": "30",
+            "identity": "verified",
+            "channel": "email",
+            "owner": "arjun.mehta",
+        },
+        ("identity_verification", "assigned", "in_progress"),
+    )
+    add(
+        priya,
+        aro,
+        "requests",
+        {
+            "summary": "Correct a misspelt name on prescriptions",
+            "request_type": "correction",
+            "received_on": day(-12),
+            "response_days": "30",
+            "identity": "verified",
+            "channel": "web_form",
+            "owner": "priya.sharma",
+            "resolution": "Name corrected in Practo and the billing system; patient told by SMS.",
+        },
+        ("assigned", "in_progress", "resolved", "closed"),
+    )
+    add(
+        arjun,
+        aro,
+        "vendors",
+        {
+            "name": "Practo",
+            "service": "Appointments and patient records",
+            "location": "india",
+            "contract": "signed",
+            "risk": "medium",
+            "questionnaire": "reviewed",
+            "data_shared": "Patient names, phones, visit notes",
+            "next_review": day(60),
+        },
+        ("active",),
+    )
+    add(
+        arjun,
+        aro,
+        "vendors",
+        {
+            "name": "Cloud backup (eu-west-1)",
+            "service": "Nightly backups",
+            "location": "outside",
+            "countries": "Ireland",
+            "contract": "negotiating",
+            "risk": "high",
+            "next_review": day(-3),
+        },
+    )
+    add(
+        priya,
+        aro,
+        "dpias",
+        {
+            "activity": "Sharing lab reports over WhatsApp Business",
+            "description": "Reports are sent as PDFs to the number the patient registered.",
+            "necessity": "Patients asked for faster delivery than email.",
+            "risks": "Wrong number; shared phones; forwarding.",
+            "mitigations": "OTP check before first send; password-protected PDFs.",
+            "residual_risk": "medium",
+            "reviewer": "Dr. Kavya Rao",
+            "review_by": day(90),
+        },
+        ("in_review", "approved"),
+    )
+    for i, (ref, purpose) in enumerate(
+        [
+            ("PT-1042", "Appointment reminders"),
+            ("PT-1043", "Health camp updates"),
+            ("PT-1050", "Appointment reminders"),
+        ]
+    ):
+        rid = add(
+            me,
+            aro,
+            "consent",
+            {
+                "principal_ref": ref,
+                "purpose": purpose,
+                "notice_version": "v2.1",
+                "source": "app",
+                "granted_at": at(-24 * (20 - i)),
+            },
+            ("granted",),
+        )
+        if i == 1:
+            _post(
+                me,
+                f"/engagements/{aro}/r/consent/{rid}/edit",
+                {
+                    "principal_ref": ref,
+                    "purpose": purpose,
+                    "notice_version": "v2.1",
+                    "source": "app",
+                    "granted_at": at(-24 * (20 - i)),
+                    "withdrawn_at": at(-48),
+                },
+            )
+            _post(me, f"/engagements/{aro}/r/consent/{rid}/status", {"status": "withdrawn"})
+
+    # Bazaarkart: tasks from the gaps, a courier without a contract.
+    baz = ids["Bazaarkart Retail Pvt Ltd"]
+    add(
+        me,
+        baz,
+        "tasks",
+        {
+            "title": "Turn on MFA for every GitHub admin",
+            "priority": "urgent",
+            "obligation_id": "OBL-004",
+            "owner": "priya.sharma",
+            "due": day(-2),
+        },
+    )
+    add(
+        priya,
+        baz,
+        "tasks",
+        {
+            "title": "Publish the privacy notice in Hindi and English",
+            "priority": "high",
+            "obligation_id": "OBL-001",
+            "owner": "arjun.mehta",
+            "due": day(10),
+        },
+        ("in_progress",),
+    )
+    add(
+        arjun,
+        baz,
+        "tasks",
+        {
+            "title": "Set a retention period for order history",
+            "priority": "medium",
+            "obligation_id": "OBL-006",
+            "owner": "demo",
+            "due": day(21),
+        },
+    )
+    add(
+        arjun,
+        baz,
+        "vendors",
+        {
+            "name": "Delhivery",
+            "service": "Courier",
+            "data_shared": "Names, addresses, phone numbers",
+            "location": "india",
+            "contract": "none",
+            "risk": "medium",
+        },
+    )
+    add(
+        priya,
+        baz,
+        "requests",
+        {
+            "summary": "Stop marketing SMS and delete my account",
+            "request_type": "erasure",
+            "received_on": day(-5),
+            "identity": "pending",
+            "channel": "app",
+        },
+    )
+
+    # Kaveri Finserv: policies and controls ready for delivery.
+    kav = ids["Kaveri Finserv Ltd"]
+    add(
+        me,
+        kav,
+        "policies",
+        {
+            "title": "Privacy notice",
+            "kind": "notice",
+            "version": "3.0",
+            "approved_by": "Board of Directors",
+            "approved_on": day(-20),
+            "next_review": day(345),
+            "link": "https://example.in/privacy",
+        },
+        ("pending_approval", "published"),
+    )
+    add(
+        me,
+        kav,
+        "policies",
+        {
+            "title": "Breach response plan",
+            "kind": "breach",
+            "version": "1.2",
+            "next_review": day(-10),
+        },
+        ("pending_approval",),
+    )
+    for oid, status, notes in [
+        ("OBL-001", "implemented", "Notice v3.0 live in English and Hindi."),
+        ("OBL-004", "in_progress", "MFA done; encryption at rest pending for S3."),
+        ("OBL-005", "needs_review", "Breach plan drafted; awaiting board approval."),
+    ]:
+        clock.tick(10)
+        _post(
+            me,
+            f"/engagements/{kav}/controls/{oid}",
+            {"status": status, "notes": notes, "owner": "priya.sharma"},
+        )
+    clock.tick(10)
+    _post(
+        me,
+        f"/engagements/{kav}/controls/OBL-011",
+        {"status": "not_applicable", "na_reason": "Lending only to adults; KYC confirms age 18+."},
+    )
+    token = _csrf(me)
+    me.post(
+        f"/engagements/{kav}/evidence",
+        data={
+            "csrf": token,
+            "title": "Board approval of the privacy notice",
+            "category": "Policy or procedure",
+            "obligation_id": "OBL-001",
+        },
+        files={
+            "file": (
+                "board-approval.pdf",
+                b"%PDF-1.4\n% demo sample, not a real document\n",
+                "application/pdf",
+            )
+        },
+    )
 
 
 def _risk(key, treatment, status, owner, clock: _Clock, due_in_days: int, notes: str = "") -> dict:

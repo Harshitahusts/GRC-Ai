@@ -297,7 +297,36 @@ sequenceDiagram
 The uploaded file is never written to disk and no value is stored, only field names,
 kinds, match ratios and masked shapes such as `Xxxxx Xxxxxx`.
 
-## 12. Planned buttons
+## 12. Registers (tasks, consent, requests, breaches, vendors, DPIAs, policies)
+
+```mermaid
+sequenceDiagram
+  actor U as Consultant
+  participant S as FastAPI (register_views)
+  participant R as registers.py spec
+  participant D as SQLite
+  U->>S: POST /engagements/{id}/r/{register} (form)
+  S->>R: clean(): required fields, dates, numbers, choices
+  alt invalid
+    S-->>U: 400, form shown again with the errors
+  else ok
+    S->>R: due_for(): e.g. awareness + 72 h, or received + days (max 90)
+    S->>D: INSERT records, record_events (created), audit, notification
+    S-->>U: 303 to the record page
+  end
+  U->>S: POST .../{rid}/status (to)
+  S->>R: status_problems(): fields this status needs, extra rules
+  alt missing facts
+    S-->>U: 303 + flash naming what to fill in
+  else ok
+    S->>D: UPDATE status, record_events (status), audit, notification
+  end
+  U->>S: POST /engagements/{id}/evidence (file, record)
+  S->>S: check extension, size and first bytes, random stored name
+  S->>D: INSERT evidence_files (sha256, version), history comment, audit
+```
+
+## 13. Planned buttons
 
 ```mermaid
 flowchart LR

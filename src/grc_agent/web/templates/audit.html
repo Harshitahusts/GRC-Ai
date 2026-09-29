@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Audit log{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Audit log</h1>
+    <p class="muted">Every change anyone made, and when. It can't be edited from the app.</p>
+  </div>
+</div>
+<section class="card">
+  <form method="get" class="register-filter">
+    <select name="client" aria-label="Client"><option value="">All clients</option>{% for c in clients %}<option value="{{ c.id }}" {% if client == c.id|string %}selected{% endif %}>{{ c.client }}</option>{% endfor %}</select>
+    <select name="who" aria-label="Person"><option value="">Everyone</option>{% for u in users %}<option {% if who == u %}selected{% endif %}>{{ u }}</option>{% endfor %}</select>
+    <select name="action" aria-label="Action"><option value="">All actions</option>{% for a in actions %}<option {% if action == a %}selected{% endif %}>{{ a }}</option>{% endfor %}</select>
+    <button type="submit" class="button small">Filter</button>
+    <span class="muted small">{{ "{:,}".format(total) }} entries</span>
+  </form>
+  <table class="table">
+    <thead><tr><th>When (UTC)</th><th>Who</th><th>Action</th><th class="hide-sm">Client</th><th class="hide-sm">Detail</th></tr></thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td class="nowrap small">{{ r.at[:19].replace("T", " ") }}</td>
+        <td class="small">{{ r.username }}</td>
+        <td><code>{{ r.action }}</code></td>
+        <td class="hide-sm small">{{ r.client or "–" }}</td>
+        <td class="hide-sm small muted audit-detail">{{ r.detail[:200] }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="muted">Nothing recorded yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if pages > 1 %}
+  <nav class="pager" aria-label="Pages">
+    {% set qs = "client=%s&who=%s&action=%s" % (client, who|urlencode, action|urlencode) %}
+    {% if page > 1 %}<a class="button small" href="?{{ qs }}&page={{ page - 1 }}">Newer</a>{% endif %}
+    <span class="small muted">Page {{ page }} of {{ pages }}</span>
+    {% if page < pages %}<a class="button small" href="?{{ qs }}&page={{ page + 1 }}">Older</a>{% endif %}
+  </nav>
+  {% endif %}
+</section>
+{% endblock %}

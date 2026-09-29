@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% from "_macros.html" import engagement_header, page_intro, icon, meter %}
+{% block title %}Controls · {{ eng.client }}{% endblock %}
+{% block content %}
+{{ engagement_header(eng, s, tab) }}
+{% set locked = eng.delivered_at is not none %}
+{% set assess_label = {"gap": "Gap", "open_item": "Open item", "compliant": "Met", "not_applicable": "N/A"} %}
+
+{{ page_intro("Controls", "For each DPDPA obligation, record where the client really is: not started, in progress, needs review, implemented, or not applicable. Implemented needs evidence or a description; not applicable needs a reason and an admin.") }}
+
+<section class="tiles dash-tiles" aria-label="Controls at a glance">
+  <div class="tile"><p class="tile-label">Implemented</p><p class="tile-value">{{ cs.implemented }}<small class="muted">/{{ cs.applicable }}</small></p>{{ meter(cs.implemented, cs.applicable or 1, "Implemented controls") }}</div>
+  <div class="tile {{ 'is-warn' if cs.in_progress }}"><p class="tile-label">In progress</p><p class="tile-value">{{ cs.in_progress }}</p><p class="muted small">incl. needs review</p></div>
+  <div class="tile {{ 'is-bad' if cs.not_started }}"><p class="tile-label">Not started</p><p class="tile-value">{{ cs.not_started }}</p><p class="muted small">applicable obligations</p></div>
+  <div class="tile"><p class="tile-label">Not applicable</p><p class="tile-value">{{ cs.na }}</p><p class="muted small">each with a reason</p></div>
+</section>
+
+<section class="card">
+  <p class="small muted">This is the client's own implementation status. It is separate from the assessment's findings and is <strong>not a certification of compliance</strong>.</p>
+  <ul class="control-list">
+    {% for c in items %}
+    <li id="{{ c.o.id }}" class="control-row">
+      <div class="control-main">
+        <p class="control-title"><a href="/provision?ref={{ c.o.source|urlencode }}"><strong>{{ c.o.source }}</strong></a> <span class="badge {{ c.badge }}">{{ c.label }}</span> <span class="badge sev-{{ c.o.severity }}">{{ c.o.severity|capitalize }}</span></p>
+        <p>{{ c.o.obligation }}</p>
+        <p class="small muted">
+          {% if c.assessment %}Assessment: {{ assess_label.get(c.assessment, c.assessment) }} · {% endif %}
+          <a href="/engagements/{{ eng.id }}/evidence?obligation={{ c.o.id }}">{{ c.files }} file{{ '' if c.files == 1 else 's' }}</a>{% if c.checks %} + {{ c.checks }} passing connector check{{ '' if c.checks == 1 else 's' }}{% endif %}
+          · <a href="/engagements/{{ eng.id }}/r/tasks?q={{ c.o.id }}">{{ c.open_tasks }} open task{{ '' if c.open_tasks == 1 else 's' }}</a>
+          {% if c.owner %}· Owner {{ c.owner }}{% endif %}
+          {% if c.review_date %}· Review {{ c.review_date }}{% endif %}
+        </p>
+        {% if c.na_reason %}<p class="small">Not applicable because: “{{ c.na_reason }}” <span class="muted">({{ c.reviewed_by }})</span></p>{% endif %}
+        {% if c.notes %}<p class="small plain-text">{{ c.notes }}</p>{% endif %}
+      </div>
+      {% if not locked %}
+      <details class="control-edit">
+        <summary class="button small">Update</summary>
+        <form method="post" action="/engagements/{{ eng.id }}/controls/{{ c.o.id }}" class="inv-form">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <fieldset>
+            <label>Status
+              <select name="status">{% for k, label in statuses.items() %}{% if k != "not_applicable" or is_admin or c.status == k %}<option value="{{ k }}" {% if k == c.status %}selected{% endif %}>{{ label }}</option>{% endif %}{% endfor %}</select></label>
+            <label>How it's done / notes <textarea name="notes" rows="2" maxlength="1000">{{ c.notes }}</textarea></label>
+            <label>Owner <input name="owner" value="{{ c.owner }}" maxlength="80" list="people-c"></label>
+            <label>Review date <input name="review_date" type="date" value="{{ c.review_date }}"></label>
+            {% if is_admin %}<label>If not applicable, why <input name="na_reason" value="{{ c.na_reason }}" maxlength="500"></label>{% endif %}
+            <p><button type="submit" class="button small primary">Save</button>
+            <a class="button small" href="/engagements/{{ eng.id }}/r/tasks/new?obligation={{ c.o.id }}&title={{ ('Implement ' ~ c.o.source)|urlencode }}&details={{ c.o.remediation|urlencode }}&priority={{ 'urgent' if c.o.severity == 'critical' else 'high' if c.o.severity == 'high' else 'medium' }}&source={{ ('Controls: ' ~ c.o.source)|urlencode }}">{{ icon("i-plus") }} Task</a></p>
+          </fieldset>
+        </form>
+      </details>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  <datalist id="people-c">{% for p in people %}<option value="{{ p }}">{% endfor %}</datalist>
+</section>
+{% endblock %}

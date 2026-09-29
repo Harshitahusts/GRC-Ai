@@ -7,6 +7,12 @@
 {% set locked = eng.delivered_at is not none %}
 {% set conf_label = {"high": "High confidence", "medium": "Medium confidence", "low": "Low confidence"} %}
 
+{% if scans and not ds.pending and ds.incomplete %}
+<div class="next-prompt" role="status">
+  <p><strong>All findings reviewed.</strong> Next: {{ ds.incomplete }} inventory record{{ '' if ds.incomplete == 1 else 's' }} still need a purpose, legal basis, retention period or owner.</p>
+  <a class="button small primary" href="/engagements/{{ eng.id }}/inventory">Open the inventory {{ icon("i-arrow") }}</a>
+</div>
+{% endif %}
 <section class="tiles dash-tiles" aria-label="Personal data at a glance">
   <div class="tile {{ 'is-warn' if ds.pending }}"><p class="tile-label">To review</p><p class="tile-value">{{ ds.pending }}</p><p class="muted small">findings awaiting a decision</p></div>
   <div class="tile"><p class="tile-label">In the inventory</p><p class="tile-value">{{ ds.inventory }}</p><p class="muted small"><a href="/engagements/{{ eng.id }}/inventory">{{ ds.complete }} fully documented</a></p></div>
@@ -111,8 +117,10 @@
     {% else %}<p>No findings here.</p>{% endif %}
   </div>
   {% else %}
+  {% for source, group in findings|groupby("source_name") %}
+  <h3 class="find-group">{{ source }} · {{ group|length }} field{{ '' if group|length == 1 else 's' }}</h3>
   <ul class="findings-list">
-    {% for f in findings %}
+    {% for f in group %}
     <li id="f{{ f.id }}" class="finding find-{{ f.risk }}">
       <div class="finding-main">
         <p class="finding-title"><code>{{ f.column_name }}</code> <span class="muted small">in {{ f.source_name }}</span></p>
@@ -145,6 +153,7 @@
     </li>
     {% endfor %}
   </ul>
+  {% endfor %}
   {% endif %}
 </section>
 {% endblock %}

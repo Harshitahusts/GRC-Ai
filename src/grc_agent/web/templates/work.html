@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block title %}Work queue{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Work queue</h1>
+    <p class="muted">Everything open across your clients, most urgent first: breaches on the clock, overdue requests and tasks, reviews coming up.</p>
+  </div>
+  <nav class="chips" aria-label="Whose work">
+    <a class="chip" href="/work" aria-pressed="{{ 'false' if mine else 'true' }}">Everyone</a>
+    <a class="chip" href="/work?mine=1" aria-pressed="{{ 'true' if mine else 'false' }}">Assigned to me</a>
+  </nav>
+</div>
+
+{% set overdue = items|selectattr("overdue")|list %}
+<section class="tiles dash-tiles" aria-label="Queue at a glance">
+  <div class="tile {{ 'is-bad' if overdue }}"><p class="tile-label">Overdue</p><p class="tile-value">{{ overdue|length }}</p><p class="muted small">past their date</p></div>
+  <div class="tile {{ 'is-bad' if items|selectattr('register', 'equalto', 'breaches')|list }}"><p class="tile-label">Open breaches</p><p class="tile-value">{{ items|selectattr("register", "equalto", "breaches")|list|length }}</p><p class="muted small">72-hour Board report</p></div>
+  <div class="tile"><p class="tile-label">Open requests</p><p class="tile-value">{{ items|selectattr("register", "equalto", "requests")|list|length }}</p><p class="muted small">from Data Principals</p></div>
+  <div class="tile"><p class="tile-label">Open tasks</p><p class="tile-value">{{ items|selectattr("register", "equalto", "tasks")|list|length }}</p><p class="muted small">remediation</p></div>
+</section>
+
+<section class="card">
+  {% if not items %}
+  <div class="empty">{{ icon("i-check") }}<p><strong>Nothing open{% if mine %} for you{% endif %}.</strong> New tasks, requests and breaches will show here.</p></div>
+  {% else %}
+  <table class="table">
+    <thead><tr><th>What</th><th>Client</th><th>Status</th><th class="hide-sm">Owner</th><th>Due</th></tr></thead>
+    <tbody>
+      {% for i in items %}
+      <tr class="{{ 'is-overdue' if i.overdue }}">
+        <td><span class="tag">{{ i.spec.title }}</span> <a class="strong-link" href="/engagements/{{ i.engagement_id }}/r/{{ i.register }}/{{ i.id }}">{{ i.ref }}</a> {{ i.title }}</td>
+        <td class="small">{{ i.client }}</td>
+        <td><span class="badge {{ i.status_badge }}">{{ i.status_label }}</span></td>
+        <td class="hide-sm small">{{ i.owner or "–" }}</td>
+        <td class="nowrap small">{% if i.due %}{{ i.due.replace("T", " ") }}{% if i.overdue %}<br><strong class="overdue">Overdue</strong>{% endif %}{% else %}–{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+
+{% if personal %}
+<section class="card">
+  <div class="card-head"><h2>Personal data to review</h2></div>
+  <ul class="plain">
+    {% for p in personal %}
+    <li class="file-row"><span><strong>{{ p.client }}</strong> · {{ p.pending }} finding{{ '' if p.pending == 1 else 's' }} to review · {{ p.incomplete }} inventory record{{ '' if p.incomplete == 1 else 's' }} missing details</span><a class="button small" href="/engagements/{{ p.id }}/discovery">Open</a></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endblock %}

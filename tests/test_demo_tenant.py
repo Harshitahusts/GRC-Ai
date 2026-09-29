@@ -68,7 +68,10 @@ def test_demo_banner_login_hint_and_dashboard(demo_dir, demo):
     login = TestClient(create_app(demo_dir)).get("/login").text
     assert demo_tenant.DEMO_PASSWORD in login
     page = demo.get("/").text
-    assert "Demo tenant." in page and "Pinecrest Learning Pvt Ltd" in page
+    assert "Pinecrest Learning Pvt Ltd" in page
+    # The demo-tenant notice is shown on the GRC Analyst page only.
+    assert "Demo tenant." not in page
+    assert "Demo tenant." in demo.get("/assistant").text
     assert "Ready to deliver" in page and "Top risks" in page
 
 
@@ -146,3 +149,15 @@ def test_demo_has_personal_data_to_show(demo_dir, demo):
     assert documented >= 2 and pending >= 1
     home = demo.get("/").text
     assert "Personal data mapped" in home and "to review" in home
+
+
+def test_demo_has_privacy_operations_and_controls(demo_dir, demo):
+    with db.connect(demo_dir / "grc.db") as conn:
+        regs = dict(conn.execute("SELECT register, COUNT(*) FROM records GROUP BY register"))
+        controls = conn.execute("SELECT COUNT(*) FROM controls").fetchone()[0]
+        files = conn.execute("SELECT COUNT(*) FROM evidence_files").fetchone()[0]
+    for key in ("breaches", "requests", "consent", "vendors", "dpias", "policies", "tasks"):
+        assert regs.get(key), key
+    assert controls >= 4 and files == 1
+    work = demo.get("/work").text
+    assert "Lab reports emailed to the wrong patient group" in work and "Overdue" in work

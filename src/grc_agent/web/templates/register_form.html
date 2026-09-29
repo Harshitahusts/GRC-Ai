@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% from "_macros.html" import engagement_header, icon %}
+{% block title %}{{ ("Edit " ~ item.ref) if item else ("New " ~ spec.singular) }} · {{ eng.client }}{% endblock %}
+{% block content %}
+{{ engagement_header(eng, s, tab) }}
+
+<p class="crumb"><a href="/engagements/{{ eng.id }}/r/{{ spec.key }}">{{ spec.title }}</a> / {{ item.ref if item else "New" }}</p>
+<section class="card form-card">
+  <h2>{{ ("Edit " ~ item.ref) if item else ("New " ~ spec.singular) }}</h2>
+  <p class="muted small">{{ spec.intro }}</p>
+  {% if errors %}
+  <div class="flash flash-error" role="alert"><strong>Please fix:</strong><ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>
+  {% endif %}
+  {% if source %}<p class="flash flash-info small">Created from: {{ source }}</p>{% endif %}
+  {% include "_register_fields.html" %}
+</section>
+{% endblock %}

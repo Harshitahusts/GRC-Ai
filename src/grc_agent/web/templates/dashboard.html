@@ -86,6 +86,12 @@
     <p class="tile-value">{{ personal.inventory }}</p>
     <p class="muted small">{% if personal.pending %}<strong>{{ personal.pending }} to review</strong>{% elif personal.inventory %}{{ personal.complete }} documented{% else %}Scan a client export{% endif %}</p>
   </a>
+  {% set late = work|selectattr("overdue")|list|length %}
+  <a class="tile tile-link {{ 'is-bad' if late }}" href="/work">
+    <p class="tile-label">Open work</p>
+    <p class="tile-value">{{ work|length }}</p>
+    <p class="muted small">{% if late %}<strong class="overdue">{{ late }} overdue</strong>{% else %}tasks, requests, breaches{% endif %}</p>
+  </a>
   <div class="tile {{ 'is-warn' if leaves_india }}">
     <p class="tile-label">Data leaves India</p>
     <p class="tile-value">{{ leaves_india }}</p>
@@ -201,7 +207,7 @@
     {% for a in activity %}
     <li>
       <span class="dot" aria-hidden="true"></span>
-      <span><strong>{{ a.username }}</strong> {{ a.action.replace("_", " ") }}{% if a.engagement_id %} · <a href="/engagements/{{ a.engagement_id }}">{{ a.client }}</a>{% endif %}</span>
+      <span><strong>{{ a.username }}</strong> {{ a|activity }}{% if a.engagement_id %} · <a href="/engagements/{{ a.engagement_id }}">{{ a.client }}</a>{% endif %}</span>
       <time class="muted small" datetime="{{ a.at }}">{{ a.at[:16].replace("T", " ") }} UTC</time>
     </li>
     {% endfor %}

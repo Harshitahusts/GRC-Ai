@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block title %}Team{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Team &amp; roles</h1>
+    <p class="muted">Who can sign in, and what they can do. Every account sees every client in this workspace.</p>
+  </div>
+</div>
+<div class="grid-2 wide-left">
+  <section class="card">
+    <table class="table">
+      <thead><tr><th>Account</th><th>Role</th><th class="hide-sm">Since</th></tr></thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td><strong>{{ r.username }}</strong>{% if r.username == user %} <span class="tag">you</span>{% endif %}</td>
+          <td>
+            {% if is_admin %}
+            <form method="post" action="/team/{{ r.username|urlencode }}/role" class="inline-role">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <select name="role" aria-label="Role for {{ r.username }}" onchange="this.form.submit()">{% for k in roles %}<option value="{{ k }}" {% if k == r.role %}selected{% endif %}>{{ k|capitalize }}</option>{% endfor %}</select>
+              <noscript><button type="submit" class="button small">Save</button></noscript>
+            </form>
+            {% else %}{{ r.role|capitalize }}{% endif %}
+          </td>
+          <td class="hide-sm small muted">{{ r.created_at[:10] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <ul class="plain small">{% for k, d in roles.items() %}<li>{{ d }}</li>{% endfor %}</ul>
+  </section>
+  {% if is_admin %}
+  <section class="card">
+    <h3>Add a person</h3>
+    <form method="post" action="/team" class="stack">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label>Username <input name="username" required maxlength="40" pattern="[A-Za-z0-9._\-]{2,40}" autocomplete="off"></label>
+      <label>Starting password <input name="password" type="password" required minlength="10" autocomplete="new-password"></label>
+      <label>Role <select name="role">{% for k in roles %}<option value="{{ k }}" {% if k == "member" %}selected{% endif %}>{{ k|capitalize }}</option>{% endfor %}</select></label>
+      <p class="small muted">They can change it with <code>grc-web passwd NAME</code> on the server.</p>
+      <p><button type="submit" class="primary">{{ icon("i-plus") }} Add</button></p>
+    </form>
+  </section>
+  {% else %}
+  <section class="card"><p class="muted">Only an admin can add people or change roles.</p></section>
+  {% endif %}
+</div>
+{% endblock %}

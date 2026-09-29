@@ -1,0 +1,53 @@
+{# The create/edit form for any register. Needs: spec, eng, values, owner, due, obligation_id, obligations, people, item (or none), source. #}
+<form method="post" action="/engagements/{{ eng.id }}/r/{{ spec.key }}{{ ('/%d/edit' % item.id) if item else '' }}" class="register-form">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  {% if source %}<input type="hidden" name="source" value="{{ source }}">{% endif %}
+  <div class="form-grid">
+    {% for f in spec.fields %}
+    {% set v = values.get(f.name, "") %}
+    <div class="{{ 'span-2' if f.kind == 'textarea' else '' }}">
+      <label for="f-{{ f.name }}">{{ f.label }}{% if f.required %} <span class="req" aria-hidden="true">*</span>{% endif %}</label>
+      {% if f.kind == "textarea" %}
+      <textarea id="f-{{ f.name }}" name="{{ f.name }}" rows="3" maxlength="{{ f.maxlen }}" {% if f.required %}required{% endif %}>{{ v }}</textarea>
+      {% elif f.kind == "select" %}
+      <select id="f-{{ f.name }}" name="{{ f.name }}" {% if f.required %}required{% endif %}>
+        {% for k, label in f.choices %}<option value="{{ k }}" {% if k == v %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+      {% elif f.kind == "date" %}
+      <input id="f-{{ f.name }}" name="{{ f.name }}" type="date" value="{{ v }}" {% if f.required %}required{% endif %}>
+      {% elif f.kind == "datetime" %}
+      <input id="f-{{ f.name }}" name="{{ f.name }}" type="datetime-local" value="{{ v }}" {% if f.required %}required{% endif %}>
+      {% elif f.kind == "number" %}
+      <input id="f-{{ f.name }}" name="{{ f.name }}" type="number" min="0" step="1" value="{{ v }}" {% if f.required %}required{% endif %}>
+      {% else %}
+      <input id="f-{{ f.name }}" name="{{ f.name }}" value="{{ v }}" maxlength="{{ f.maxlen }}" {% if f.required %}required{% endif %}>
+      {% endif %}
+      {% if f.help %}<p class="hint small muted">{{ f.help }}</p>{% endif %}
+    </div>
+    {% endfor %}
+    <div>
+      <label for="f-owner">Owner</label>
+      <input id="f-owner" name="owner" value="{{ owner }}" maxlength="80" list="people" placeholder="Who is responsible">
+      <datalist id="people">{% for p in people %}<option value="{{ p }}">{% endfor %}</datalist>
+    </div>
+    {% if not spec.due_from %}
+    <div>
+      <label for="f-due">{{ spec.due_label }}</label>
+      <input id="f-due" name="due" type="date" value="{{ due }}">
+    </div>
+    {% endif %}
+    <div class="span-2">
+      <label for="f-obligation">DPDPA obligation it relates to</label>
+      <select id="f-obligation" name="obligation_id">
+        <option value="">None</option>
+        {% for o in obligations %}<option value="{{ o.id }}" {% if o.id == obligation_id %}selected{% endif %}>{{ o.source }}: {{ o.obligation[:90] }}</option>{% endfor %}
+      </select>
+    </div>
+  </div>
+  {% if spec.due_from %}<p class="small muted">{{ spec.due_label }} is worked out for you{% if spec.key == "breaches" %}: 72 hours after you became aware (Rule 7(2)(b)){% elif spec.key == "requests" %}: the received date plus the days to respond (at most 90, Rule 14(3)){% endif %}.</p>{% endif %}
+  {% if spec.note %}<p class="small note-privacy">{{ icon("i-shield") }} {{ spec.note }}</p>{% endif %}
+  <p class="form-actions">
+    <button type="submit" class="primary">{{ "Save changes" if item else "Create " ~ spec.singular }}</button>
+    <a class="button" href="/engagements/{{ eng.id }}/r/{{ spec.key }}{{ ('/%d' % item.id) if item else '' }}">Cancel</a>
+  </p>
+</form>

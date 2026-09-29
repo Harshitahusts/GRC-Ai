@@ -22,6 +22,8 @@ CATEGORIES = {
     "delivery": "Delivery",
     "connectors": "Connectors",
     "discovery": "Data discovery",
+    "privacy": "Privacy operations",
+    "compliance": "Compliance",
     "security": "Security",
     "content": "Docs & blog",
 }
@@ -151,6 +153,43 @@ def _rule(
             "serious",
             f"{client}: scan of {d.get('source', 'a file')} failed",
             (f"{base}/discovery"),
+        )
+    if action == "record_created":
+        reg, ref, title = d.get("register"), d.get("ref", ""), d.get("title", "")
+        if reg == "breaches":
+            return (
+                "privacy",
+                "critical",
+                f"{client}: breach logged ({ref}). The Board's report is due in 72 hours.",
+                f"{base}/r/breaches",
+            )
+        if reg == "requests":
+            return (
+                "privacy",
+                "warning",
+                f"{client}: new request {ref}: {title}",
+                f"{base}/r/requests",
+            )
+        if reg == "tasks":
+            return "compliance", "info", f"{client}: task {ref}: {title}", f"{base}/r/tasks"
+        return None
+    if action == "record_status":
+        reg, ref = d.get("register"), d.get("ref", "")
+        if reg in ("breaches", "requests") or d.get("closed"):
+            level = "good" if d.get("closed") else "info"
+            return (
+                "privacy" if reg in ("breaches", "requests", "consent") else "compliance",
+                level,
+                f"{client}: {ref} is now {d.get('label', d.get('to', ''))}",
+                f"{base}/r/{reg}",
+            )
+        return None
+    if action == "control_updated" and d.get("status") == "not_applicable":
+        return (
+            "compliance",
+            "warning",
+            f"{client}: {d.get('source', '')} marked not applicable",
+            f"{base}/controls",
         )
     if action == "github_app_created":
         return (
