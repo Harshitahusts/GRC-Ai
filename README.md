@@ -142,6 +142,12 @@ Windows, tick "Add python.exe to PATH"). Then, from the project folder:
 | macOS / Linux | `./start.sh` |
 | Windows | double-click `start.bat`, or run `.\start.bat` in PowerShell (`start.bat` in Command Prompt) |
 
+Something not starting on Windows? Run `check-setup.bat`. It lists the Pythons (and Node,
+if installed) on the machine, shows which Python `start.bat` will use and whether `.venv`
+still works, and changes nothing. If Python was upgraded or reinstalled, `start.bat`
+rebuilds `.venv` on its own; your data in `.\var` is kept. The app needs only Python.
+Node.js is optional and can be installed alongside it.
+
 The first run sets up a `.venv`, installs the app, creates a `.env` from `.env.example`,
 asks you to create your login, then opens http://127.0.0.1:8000 in your browser. Later
 runs start in a few seconds. Press Ctrl+C to stop it. Add `--port 9000` to use another port.
