@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% from "_macros.html" import engagement_header, personal_tabs, icon %}
+{% block title %}Personal data · {{ eng.client }}{% endblock %}
+{% block content %}
+{{ engagement_header(eng, s, tab) }}
+{{ personal_tabs(eng, subtab, ds) }}
+{% set locked = eng.delivered_at is not none %}
+{% set conf_label = {"high": "High confidence", "medium": "Medium confidence", "low": "Low confidence"} %}
+
+<section class="tiles dash-tiles" aria-label="Personal data at a glance">
+  <div class="tile {{ 'is-warn' if ds.pending }}"><p class="tile-label">To review</p><p class="tile-value">{{ ds.pending }}</p><p class="muted small">findings awaiting a decision</p></div>
+  <div class="tile"><p class="tile-label">In the inventory</p><p class="tile-value">{{ ds.inventory }}</p><p class="muted small"><a href="/engagements/{{ eng.id }}/inventory">{{ ds.complete }} fully documented</a></p></div>
+  <div class="tile {{ 'is-bad' if ds.high_risk }}"><p class="tile-label">High-risk fields</p><p class="tile-value">{{ ds.high_risk }}</p><p class="muted small">confirmed IDs, financial, health, biometric</p></div>
+  <div class="tile {{ 'is-bad' if ds.children }}"><p class="tile-label">Children's data</p><p class="tile-value">{{ ds.children }}</p><p class="muted small">field{{ '' if ds.children == 1 else 's' }} with under-18s, incl. unreviewed · Section 9</p></div>
+</section>
+
+<div class="grid-2 wide-left">
+  <section class="card" aria-labelledby="scan-h">
+    <div class="card-head"><h2 id="scan-h">Scan a data source</h2></div>
+    {% if locked %}
+    <p class="muted">This engagement is delivered, so no new scans can be added.</p>
+    {% else %}
+    <form method="post" action="/engagements/{{ eng.id }}/discovery/scan" enctype="multipart/form-data" class="stack">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <div>
+        <label for="source_name">System or export name</label>
+        <input id="source_name" name="source_name" maxlength="80" placeholder="e.g. Shopify customers export">
+        <p class="hint small muted">Rescanning the same name replaces the findings still waiting for review.</p>
+      </div>
+      <div>
+        <label for="file">CSV or JSON file <span class="muted small">(up to {{ max_mb }} MB)</span></label>
+        <input id="file" name="file" type="file" accept=".csv,.json,.jsonl,text/csv,application/json" required>
+      </div>
+      <p><button type="submit" class="primary">{{ icon("i-search") }} Scan for personal data</button></p>
+    </form>
+    {% endif %}
+    <p class="small muted">Synthetic samples to try: {% for name, (_, label) in sample_files.items() %}<a href="/discovery/samples/{{ name }}">{{ icon("i-download") }} {{ label }}</a>{{ " · " if not loop.last }}{% endfor %}</p>
+    <div class="scan-privacy small">
+      {{ icon("i-shield") }}
+      <p>The file is read in memory on this server and <strong>never stored</strong>. Up to 200 records are sampled per field. Findings keep only a masked shape of values, like <code>Xxxxx Xxxxxx</code> or <code>+99 99999 99999</code>. Nothing is sent to Claude or any outside service. Use synthetic or sampled data where you can.</p>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="engine-h">
+    <div class="card-head"><h2 id="engine-h">Scanner</h2><span class="badge {{ 'badge-pass' if engine.name == 'presidio' else '' }}">{{ "Presidio" if engine.name == "presidio" else "Built-in rules" }}</span></div>
+    <p class="small">{{ engine.description }}</p>
+    <ul class="plain small checks">
+      <li>{{ icon("i-check") }} Aadhaar (checksum), PAN, GSTIN (checksum), passport, voter ID, driving licence</li>
+      <li>{{ icon("i-check") }} Emails, Indian mobile numbers, UPI IDs, card numbers (checksum), IP addresses</li>
+      <li>{{ icon("i-check") }} Field names: date of birth, health, biometric, salary, address, device IDs…</li>
+      <li>{{ icon("i-check") }} Dates of birth and ages under 18, flagged as children's data</li>
+      <li>{% if engine.name == "presidio" %}{{ icon("i-check") }}{% else %}{{ icon("i-x") }}{% endif %} Names and places inside free text {% if engine.name != "presidio" %}<span class="muted">(needs Presidio)</span>{% endif %}</li>
+    </ul>
+    {% if engine.name != "presidio" %}
+    <p class="small muted">To add name and address recognition, install Presidio on the server:<br><code>pip install -e ".[scanner]"</code> then <code>python -m spacy download en_core_web_sm</code>{% if presidio_installed %}. Presidio is installed but no spaCy English model was found{% endif %}.</p>
+    {% endif %}
+    <p class="small muted">A finding means a field <em>looks like</em> personal data. It isn't a legal conclusion. A person confirms each one.</p>
+  </section>
+</div>
+
+{% if scans %}
+<section class="card" aria-labelledby="hist-h">
+  <div class="card-head"><h2 id="hist-h">Scan history</h2><span class="muted small">last {{ scans|length }}</span></div>
+  <table class="table">
+    <thead><tr><th>Source</th><th>Status</th><th class="num">Records</th><th class="num">Fields</th><th class="num">Personal</th><th class="hide-sm">Scanner</th><th class="hide-sm">Started</th></tr></thead>
+    <tbody>
+      {% for j in scans %}
+      <tr id="scan-{{ j.id }}">
+        <td><strong>{{ j.source_name }}</strong><br><span class="muted small">{{ j.filename }}</span></td>
+        <td>
+          {% if j.status == "done" %}<span class="badge badge-pass">Done</span>
+          {% elif j.status == "failed" %}<span class="badge badge-fail">Failed</span><br><span class="small muted">{{ j.error }}</span>
+          {% else %}<span class="badge badge-warn">{{ "Queued" if j.status == "queued" else "Scanning" }} {{ j.progress }}%</span>
+          <span class="meter" role="progressbar" aria-valuenow="{{ j.progress }}" aria-valuemin="0" aria-valuemax="100" aria-label="Scan progress"><span style="width: {{ j.progress }}%"></span></span>{% endif %}
+        </td>
+        <td class="num">{{ "{:,}".format(j.rows) }}</td>
+        <td class="num">{{ j.columns }}</td>
+        <td class="num">{{ j.personal_fields if j.status == "done" else "–" }}</td>
+        <td class="hide-sm small">{{ "Presidio" if j.engine == "presidio" else "Built-in" if j.engine else "–" }}</td>
+        <td class="hide-sm small muted nowrap">{{ j.created_at[:16].replace("T", " ") }}<br>{{ j.created_by }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+<section class="card" aria-labelledby="find-h">
+  <div class="card-head">
+    <h2 id="find-h">Findings</h2>
+    <div class="head-actions">
+      {% if counts.get("pending") and not locked %}
+      <form method="post" action="/engagements/{{ eng.id }}/discovery/confirm-high">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button type="submit" class="button small">{{ icon("i-check") }} Confirm all high-confidence</button>
+      </form>
+      {% endif %}
+      <a class="button small" href="/engagements/{{ eng.id }}/discovery/findings.csv">{{ icon("i-download") }} Export CSV</a>
+    </div>
+  </div>
+  <nav class="chips" aria-label="Filter findings">
+    {% for key, label in [("pending", "To review"), ("confirmed", "Confirmed"), ("rejected", "Not personal data"), ("superseded", "Replaced by a rescan"), ("all", "All")] %}
+    <a class="chip" href="?show={{ key }}" aria-pressed="{{ 'true' if show == key else 'false' }}">{{ label }}{% if key != "all" %} · {{ counts.get(key, 0) }}{% endif %}</a>
+    {% endfor %}
+  </nav>
+
+  {% if not findings %}
+  <div class="empty">
+    {% if not scans %}<p><strong>No scans yet.</strong> Upload a customer, employee or patient export above to find the fields that hold personal data. No export to hand? Try a synthetic sample: {% for name, (_, label) in sample_files.items() %}<a href="/discovery/samples/{{ name }}">{{ label }}</a>{{ " or " if not loop.last }}{% endfor %}.</p>
+    {% elif show == "pending" %}<p><strong>Nothing left to review.</strong> Confirmed fields are in the <a href="/engagements/{{ eng.id }}/inventory">data inventory</a>.</p>
+    {% else %}<p>No findings here.</p>{% endif %}
+  </div>
+  {% else %}
+  <ul class="findings-list">
+    {% for f in findings %}
+    <li id="f{{ f.id }}" class="finding find-{{ f.risk }}">
+      <div class="finding-main">
+        <p class="finding-title"><code>{{ f.column_name }}</code> <span class="muted small">in {{ f.source_name }}</span></p>
+        <p>
+          <strong>{{ f.label }}</strong>
+          <span class="badge risk-{{ f.risk }}">{{ f.risk|capitalize }} risk</span>
+          <span class="badge badge-none">{{ f.category }}</span>
+          <span class="tag conf-{{ f.confidence }}">{{ conf_label[f.confidence] }}</span>
+        </p>
+        <p class="small muted">
+          {% if f.match_ratio %}{{ "%d" % (f.match_ratio * 100) }}% of {{ f.sampled }} sampled values matched{% else %}Found by the field name{% if f.sampled %} ({{ f.sampled }} values sampled){% endif %}{% endif %}
+          {% if f.entities|length > 1 %}· also seen: {% for label, r in f.entities[1:] %}{{ label }} {{ "%d" % (r * 100) }}%{{ ", " if not loop.last }}{% endfor %}{% endif %}
+          {% if f.shapes %}· looks like {% for sh in f.shapes %}<code>{{ sh }}</code>{{ " " if not loop.last }}{% endfor %}{% endif %}
+        </p>
+        {% if f.minors %}<p class="small flag-children">{{ icon("i-alert") }} {{ f.minors }} sampled value{{ '' if f.minors == 1 else 's' }} belong to someone under 18. Children's data needs verifiable parental consent (Section 9(1)).</p>{% endif %}
+        {% if f.status != "pending" %}<p class="small muted">{{ {"confirmed": "Confirmed", "rejected": "Not personal data", "superseded": "Replaced by a newer scan"}[f.status] }}{% if f.reviewed_by %} by {{ f.reviewed_by }}{% endif %}{% if f.note %}: “{{ f.note }}”{% endif %}</p>{% endif %}
+      </div>
+      {% if not locked and f.status != "superseded" %}
+      <form method="post" action="/engagements/{{ eng.id }}/discovery/findings/{{ f.id }}" class="finding-actions">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        {% if f.status == "pending" %}
+        <input name="note" maxlength="300" placeholder="Note (needed to reject)" aria-label="Note for {{ f.column_name }}">
+        <button type="submit" name="action" value="confirm" class="button small primary">{{ icon("i-check") }} Personal data</button>
+        <button type="submit" name="action" value="reject" class="button small">{{ icon("i-x") }} Not personal</button>
+        {% else %}
+        <button type="submit" name="action" value="reopen" class="button small">{{ icon("i-refresh") }} Review again</button>
+        {% endif %}
+      </form>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+{% endblock %}
+{% block scripts %}
+{% if running %}
+<script>
+  // While a scan runs, poll its status and reload once it finishes.
+  (function () {
+    const ids = {{ scans|selectattr("status", "in", ["queued", "running"])|map(attribute="id")|list|tojson }};
+    async function tick() {
+      for (const id of ids) {
+        const r = await fetch(`/engagements/{{ eng.id }}/discovery/scans/${id}.json`, { cache: "no-store" });
+        if (!r.ok) continue;
+        const j = await r.json();
+        if (j.status === "done" || j.status === "failed") { location.reload(); return; }
+        const cell = document.querySelector(`#scan-${id} .meter > span`);
+        if (cell) cell.style.width = `${j.progress}%`;
+      }
+      setTimeout(tick, 1500);
+    }
+    setTimeout(tick, 1000);
+  })();
+</script>
+{% endif %}
+{% endblock %}

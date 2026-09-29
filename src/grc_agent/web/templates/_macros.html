@@ -34,7 +34,9 @@
     <span class="step-dot">{% if done %}<svg class="icon" aria-hidden="true"><use href="#i-check"/></svg><span class="sr-only">Done:</span>{% else %}{{ loop.index }}{% endif %}</span>
     <span class="step-text"><strong>{{ label }}</strong><small>{% if note %}{{ note }}{% elif done %}Done{% else %}To do{% endif %}</small></span></a>
   {% endfor %}
-  <a href="/engagements/{{ eng.id }}/risks" class="step-side" {% if tab == "risks" %}aria-current="page"{% endif %}>
+  <a href="/engagements/{{ eng.id }}/discovery" class="step-side" {% if tab == "personal" %}aria-current="page"{% endif %}>
+    <span class="step-dot"><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg></span><span class="step-text"><strong>Personal data</strong><small>Discovery</small></span></a>
+  <a href="/engagements/{{ eng.id }}/risks" class="step-side step-side-2" {% if tab == "risks" %}aria-current="page"{% endif %}>
     <span class="step-dot"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg></span><span class="step-text"><strong>Risks</strong><small>Register</small></span></a>
   <a href="/engagements/{{ eng.id }}/dataflow" class="step-side step-side-2" {% if tab == "dataflow" %}aria-current="page"{% endif %}>
     <span class="step-dot"><svg class="icon" aria-hidden="true"><use href="#i-flow"/></svg></span><span class="step-text"><strong>Data flow</strong><small>Live map</small></span></a>
@@ -45,6 +47,13 @@
 {% if s.stale %}
 <div class="flash flash-warn">Intake answers changed after the assessment. Re-run the assessment on the Findings tab before delivery.</div>
 {% endif %}
+{%- endmacro %}
+
+{% macro personal_tabs(eng, subtab, ds) -%}
+<nav class="tabs" aria-label="Personal data">
+  <a href="/engagements/{{ eng.id }}/discovery" {% if subtab == "discovery" %}aria-current="page"{% endif %}>Discovery{% if ds.pending %} <span class="badge badge-warn">{{ ds.pending }} to review</span>{% endif %}</a>
+  <a href="/engagements/{{ eng.id }}/inventory" {% if subtab == "inventory" %}aria-current="page"{% endif %}>Data inventory <span class="badge">{{ ds.inventory }}</span></a>
+</nav>
 {%- endmacro %}
 
 {% macro icon(name) -%}

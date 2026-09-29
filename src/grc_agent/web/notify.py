@@ -21,6 +21,7 @@ CATEGORIES = {
     "documents": "Documents",
     "delivery": "Delivery",
     "connectors": "Connectors",
+    "discovery": "Data discovery",
     "security": "Security",
     "content": "Docs & blog",
 }
@@ -132,6 +133,25 @@ def _rule(
             return "assessment", "warning", f"{client}: risk accepted: {title}", f"{base}/risks"
         verb = "closed" if d.get("status") == "closed" else "updated"
         return "assessment", "info", f"{client}: risk {verb}: {title}", f"{base}/risks"
+    if action == "scan_completed":
+        n, src = d.get("fields", 0), d.get("source", "a file")
+        link = f"{base}/discovery"
+        if d.get("children"):
+            return (
+                "discovery",
+                "warning",
+                f"{client}: {src} looks like it holds children's data. Section 9 applies.",
+                link,
+            )
+        level = "warning" if d.get("high_risk") else "good"
+        return "discovery", level, f"{client}: scan of {src} found {n} personal data field(s)", link
+    if action == "scan_failed":
+        return (
+            "discovery",
+            "serious",
+            f"{client}: scan of {d.get('source', 'a file')} failed",
+            (f"{base}/discovery"),
+        )
     if action == "github_app_created":
         return (
             "connectors",

@@ -59,6 +59,7 @@ from grc_agent.web import (
     datamanager,
     db,
     demo_tenant,
+    discovery_views,
     notification_views,
     notify,
     risk_views,
@@ -146,6 +147,7 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
     notification_views.register(app)
     dataflow_views.register(app)
     risk_views.register(app)
+    discovery_views.register(app)
     return app
 
 
@@ -439,7 +441,7 @@ def _routes(app: FastAPI) -> None:
             delivered=sum(1 for s in agent if s["delivered"]),
             avg_readiness=round(sum(scores) / len(scores)) if scores else None,
             pipeline=_pipeline(agent),
-            attention=_attention(agent, connections),
+            attention=_attention(agent, connections, discovery_views.by_engagement(conn)),
             risk_queue=analyst.queue(conn, request.app),
             leaves_india=sum(
                 1
@@ -450,6 +452,8 @@ def _routes(app: FastAPI) -> None:
             connections_ok=sum(1 for c in connections if c["status"] == "ok"),
             connections_total=len(connections),
             store=datamanager.report(conn, request.app.state.db_path, check_integrity=False),
+            personal=discovery_views.summary(conn),
+            personal_by_client=discovery_views.by_engagement(conn),
         )
 
     # ---- data manager (read-only storage monitor)
@@ -1432,7 +1436,9 @@ def _pipeline(summaries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [{"stage": k, "count": v, "pct": round(100 * v / top)} for k, v in counts.items()]
 
 
-def _attention(summaries: list[dict[str, Any]], connections: list) -> list[dict[str, Any]]:
+def _attention(
+    summaries: list[dict[str, Any]], connections: list, personal: list[dict[str, Any]] = ()
+) -> list[dict[str, Any]]:
     """What needs someone's action next, most urgent first."""
     items = []
     for s in summaries:
@@ -1495,6 +1501,17 @@ def _attention(summaries: list[dict[str, Any]], connections: list) -> list[dict[
                     "client": c["client"],
                     "href": f"/engagements/{c['engagement_id']}/connectors",
                     "text": f"{name} connector failed: {c['message'] or 'check it'}",
+                }
+            )
+    for p in personal:
+        if p["pending"]:
+            n = p["pending"]
+            items.append(
+                {
+                    "level": "warning",
+                    "client": p["client"],
+                    "href": f"/engagements/{p['id']}/discovery",
+                    "text": f"{n} personal data finding{'s' if n != 1 else ''} to review.",
                 }
             )
     order = {"critical": 0, "serious": 1, "warning": 2, "good": 3}

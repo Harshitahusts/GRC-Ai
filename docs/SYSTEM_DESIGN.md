@@ -261,7 +261,43 @@ sequenceDiagram
   Note over U: Back up, Export, Purge, Set retention and Compact<br/>are planned buttons ("coming soon" toast)
 ```
 
-## 11. Planned buttons
+## 11. Personal data discovery
+
+```mermaid
+sequenceDiagram
+  actor U as Consultant
+  participant S as FastAPI
+  participant P as Parser (in memory)
+  participant W as Background scan
+  participant E as Detectors + Presidio
+  participant D as SQLite
+  U->>S: POST /engagements/{id}/discovery/scan (CSV or JSON)
+  S->>P: read_table: validate type and size, sample 200 rows per field
+  alt bad file
+    S-->>U: 303 + flash "Couldn't scan ...", nothing stored
+  else ok
+    S->>D: INSERT scan_jobs (queued), audit scan_started
+    S-->>U: 303 back to Discovery, page polls the job every 1.5 s
+    S->>W: run_scan(table) after the response
+    W->>D: status running, engine name
+    loop each field
+      W->>E: detect(value) for sampled values, plus the column name hint
+      E-->>W: kinds found and their share, masked value shapes, under-18s
+      W->>D: progress %
+    end
+    W->>D: INSERT scan_findings (metadata only), pending findings of an older scan superseded
+    W->>D: audit scan_completed, notification (warning if children's data)
+  end
+  U->>S: POST .../findings/{fid} confirm, reject (reason) or reopen
+  S->>D: finding status, INSERT data_inventory on confirm, audit
+  U->>S: POST /engagements/{id}/inventory/{iid} (purpose, basis, retention, owner...)
+  S->>D: UPDATE data_inventory, gaps recomputed, dashboard counts update
+```
+
+The uploaded file is never written to disk and no value is stored, only field names,
+kinds, match ratios and masked shapes such as `Xxxxx Xxxxxx`.
+
+## 12. Planned buttons
 
 ```mermaid
 flowchart LR

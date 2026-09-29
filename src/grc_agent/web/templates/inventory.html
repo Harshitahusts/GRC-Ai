@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% from "_macros.html" import engagement_header, personal_tabs, icon, meter %}
+{% block title %}Data inventory · {{ eng.client }}{% endblock %}
+{% block content %}
+{{ engagement_header(eng, s, tab) }}
+{{ personal_tabs(eng, subtab, ds) }}
+{% set locked = eng.delivered_at is not none %}
+
+<section class="tiles dash-tiles" aria-label="Inventory at a glance">
+  <div class="tile"><p class="tile-label">Fields with personal data</p><p class="tile-value">{{ ds.inventory }}</p><p class="muted small">across {{ items|map(attribute="source_name")|unique|list|length }} source{{ '' if items|map(attribute="source_name")|unique|list|length == 1 else 's' }}</p></div>
+  <div class="tile {{ 'is-warn' if ds.incomplete }}"><p class="tile-label">Documented</p><p class="tile-value">{{ ds.complete }}<small class="muted">/{{ ds.inventory }}</small></p>{{ meter(ds.complete, ds.inventory or 1, "Documented records") }}</div>
+  <div class="tile {{ 'is-bad' if ds.high_risk }}"><p class="tile-label">High-risk fields</p><p class="tile-value">{{ ds.high_risk }}</p><p class="muted small">need stronger safeguards (Section 8(5))</p></div>
+  <div class="tile {{ 'is-bad' if ds.children }}"><p class="tile-label">Children's data</p><p class="tile-value">{{ ds.children }}</p><p class="muted small">verifiable parental consent (Section 9(1))</p></div>
+</section>
+
+<section class="card">
+  <div class="card-head">
+    <h2>Records of personal data</h2>
+    <div class="head-actions">
+      <a class="button small" href="/engagements/{{ eng.id }}/discovery">{{ icon("i-search") }} Scan a source</a>
+      <a class="button small" href="/engagements/{{ eng.id }}/inventory.csv">{{ icon("i-download") }} Export CSV</a>
+    </div>
+  </div>
+  <p class="small muted">Each record is one field that holds personal data. A record is documented once it has a purpose, whose data it is, a legal basis, a retention period and an owner. Those answers feed the notice (Section 5), erasure (Section 8(7)) and breach planning (Section 8(6)).</p>
+
+  {% if not items %}
+  <div class="empty"><p><strong>The inventory is empty.</strong> <a href="/engagements/{{ eng.id }}/discovery">Scan a data source</a> and confirm its findings, or add a field by hand below.</p></div>
+  {% else %}
+  {% set cats = items|map(attribute="category")|unique|sort %}
+  <div class="table-filter" data-filter-table="inventory">
+    <input type="search" placeholder="Filter fields…" aria-label="Filter inventory">
+    <div class="chips" role="group" aria-label="Category">
+      <button type="button" class="chip" data-cat="" aria-pressed="true">All</button>
+      {% for c in cats %}<button type="button" class="chip" data-cat="{{ c }}" aria-pressed="false">{{ c }}</button>{% endfor %}
+    </div>
+    <span class="muted small" data-count>{{ items|length }} shown</span>
+  </div>
+  <table class="table inventory-table" id="inventory">
+    <thead><tr><th>Field</th><th>Data</th><th class="hide-sm">Purpose</th><th class="hide-sm">Basis · retention</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for i in items %}
+      <tr id="i{{ i.id }}" data-cat="{{ i.category }}">
+        <td><code>{{ i.field }}</code><br><span class="muted small">{{ i.source_name }}</span></td>
+        <td>{{ i.label }}<br>
+          <span class="badge risk-{{ i.risk }}">{{ i.risk|capitalize }}</span>
+          {% if i.children %}<span class="badge badge-fail">Children</span>{% endif %}
+        </td>
+        <td class="hide-sm small">{{ i.purpose or "–" }}{% if i.principals %}<br><span class="muted">{{ i.principals }}</span>{% endif %}</td>
+        <td class="hide-sm small">{{ legal_bases[i.legal_basis] if i.legal_basis else "–" }}<br><span class="muted">{{ i.retention or "no retention set" }}</span></td>
+        <td>
+          {% if i.gaps %}<span class="badge badge-warn" title="Missing: {{ i.gaps|join(', ') }}">{{ i.gaps|length }} missing</span>{% else %}<span class="badge badge-pass">Documented</span>{% endif %}
+          <details class="inv-edit">
+            <summary class="link small">{{ "Edit" if not locked else "Details" }}</summary>
+            <form method="post" action="/engagements/{{ eng.id }}/inventory/{{ i.id }}" class="inv-form">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <fieldset {% if locked %}disabled{% endif %}>
+              <label>Purpose of processing <input name="purpose" value="{{ i.purpose }}" maxlength="300" placeholder="e.g. Deliver orders and send invoices"></label>
+              <label>Whose data
+                <select name="principals"><option value="">Choose…</option>{% for p in principals %}<option {% if p == i.principals %}selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
+              <label>Legal basis
+                <select name="legal_basis">{% for k, label in legal_bases.items() %}<option value="{{ k }}" {% if k == i.legal_basis %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+              <label>Retention <input name="retention" value="{{ i.retention }}" maxlength="120" placeholder="e.g. 3 years after last order"></label>
+              <label>Stored in <input name="storage_location" value="{{ i.storage_location }}" maxlength="120" placeholder="e.g. AWS ap-south-1 (Mumbai)"></label>
+              <label>Shared with <input name="recipients" value="{{ i.recipients }}" maxlength="300" placeholder="e.g. Delhivery (courier), Razorpay"></label>
+              <label>Owner <input name="owner" value="{{ i.owner }}" maxlength="80" placeholder="Who answers for this data"></label>
+              {% if not locked %}<p><button type="submit" class="button small primary">Save</button></p>{% endif %}
+              </fieldset>
+            </form>
+            <p class="small muted">Obligations: {% for oid in i.obligations %}{% set o = obligations.get(oid) %}{% if o %}<a href="/provision?ref={{ o.source|urlencode }}" title="{{ o.obligation }}">{{ o.source }}</a>{{ ", " if not loop.last }}{% endif %}{% endfor %}</p>
+            {% if not locked %}
+            <form method="post" action="/engagements/{{ eng.id }}/inventory/{{ i.id }}/delete" onsubmit="return confirm('Remove {{ i.field }} from the inventory?')">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <button type="submit" class="link small danger">Remove from inventory</button>
+            </form>
+            {% endif %}
+          </details>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+
+{% if not locked %}
+<section class="card">
+  <div class="card-head"><h2>Add a field by hand</h2><span class="muted small">for systems you can't export, like paper forms or a vendor's portal</span></div>
+  <form method="post" action="/engagements/{{ eng.id }}/inventory" class="inline-form">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>System <input name="source_name" required maxlength="80" placeholder="e.g. Tally payroll"></label>
+    <label>Field <input name="field" required maxlength="120" placeholder="e.g. employee_pan"></label>
+    <label>Holds
+      <select name="kind" required><option value="">Choose…</option>{% for key, k in kinds.items()|sort(attribute="1.category") %}<option value="{{ key }}">{{ k.category }}: {{ k.label }}</option>{% endfor %}</select></label>
+    <button type="submit" class="button">{{ icon("i-plus") }} Add</button>
+  </form>
+</section>
+{% endif %}
+{% endblock %}
