@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% from "_macros.html" import engagement_header, page_intro, icon %}
+{% block title %}{{ spec.title }} · {{ eng.client }}{% endblock %}
+{% block content %}
+{{ engagement_header(eng, s, tab) }}
+{% set locked = eng.delivered_at is not none %}
+
+<div class="register-head">
+  {{ page_intro(spec.title, spec.intro, spec.provision) }}
+  <div class="head-actions">
+    <a class="button small" href="/engagements/{{ eng.id }}/r/{{ spec.key }}.csv">{{ icon("i-download") }} Export CSV</a>
+    {% if not locked %}<a class="button primary" href="/engagements/{{ eng.id }}/r/{{ spec.key }}/new">{{ icon("i-plus") }} New {{ spec.singular }}</a>{% endif %}
+  </div>
+</div>
+
+<section class="card">
+  <form method="get" class="register-filter">
+    <nav class="chips" aria-label="Show">
+      {% for key, label in [("open", "Open · %d" % c.open), ("overdue", "Overdue · %d" % c.overdue), ("all", "All · %d" % c.total)] %}
+      <a class="chip {{ 'chip-bad' if key == 'overdue' and c.overdue }}" href="?show={{ key }}{% if q %}&q={{ q|urlencode }}{% endif %}" aria-pressed="{{ 'true' if show == key else 'false' }}">{{ label }}</a>
+      {% endfor %}
+    </nav>
+    <input type="hidden" name="show" value="{{ show }}">
+    <input type="search" name="q" value="{{ q }}" placeholder="Search {{ spec.title|lower }}…" aria-label="Search">
+  </form>
+
+  {% if not items %}
+  <div class="empty">
+    {% if c.total == 0 %}
+    <p><strong>No {{ spec.title|lower }} yet.</strong></p>
+    <p class="muted small">{{ spec.intro }}</p>
+    {% if not locked %}<a class="button primary" href="/engagements/{{ eng.id }}/r/{{ spec.key }}/new">{{ icon("i-plus") }} Add the first {{ spec.singular }}</a>{% endif %}
+    {% else %}
+    <p>Nothing matches. <a href="?show=all">Show all {{ c.total }}</a>.</p>
+    {% endif %}
+  </div>
+  {% else %}
+  <table class="table register-table">
+    <thead><tr>
+      <th>Ref</th>
+      {% for f in spec.fields if f.in_list %}<th class="{{ 'hide-sm' if not loop.first }}">{{ f.label }}</th>{% endfor %}
+      <th>Status</th><th class="hide-sm">Owner</th><th>{{ spec.due_label }}</th>
+    </tr></thead>
+    <tbody>
+      {% for i in items %}
+      <tr class="{{ 'is-overdue' if i.overdue }}">
+        <td class="nowrap"><a class="strong-link" href="/engagements/{{ eng.id }}/r/{{ spec.key }}/{{ i.id }}">{{ i.ref }}</a></td>
+        {% for f in spec.fields if f.in_list %}
+        {% set v = i.data.get(f.name, "") %}
+        <td class="{{ 'hide-sm' if not loop.first }}">{% if loop.first %}<a href="/engagements/{{ eng.id }}/r/{{ spec.key }}/{{ i.id }}">{{ v or "–" }}</a>{% elif f.kind == "select" %}{{ (f.choices|selectattr(0, "equalto", v)|map(attribute=1)|first) or "–" }}{% else %}{{ v or "–" }}{% endif %}</td>
+        {% endfor %}
+        <td><span class="badge {{ i.status_badge }}">{{ i.status_label }}</span></td>
+        <td class="hide-sm small">{{ i.owner or "–" }}</td>
+        <td class="nowrap small">{% if i.due %}{{ i.due.replace("T", " ") }}{% if i.overdue %}<br><strong class="overdue">Overdue</strong>{% endif %}{% else %}–{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+{% endblock %}

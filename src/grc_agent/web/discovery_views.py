@@ -321,7 +321,7 @@ def register(app: FastAPI) -> None:
         rows = conn.execute(
             "SELECT * FROM scan_findings WHERE engagement_id = ? "
             + ("" if show == "all" else "AND status = ? ")
-            + "ORDER BY CASE risk WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, "
+            + "ORDER BY source_name, CASE risk WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, "
             "CASE confidence WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, id",
             (eid,) if show == "all" else (eid, show),
         ).fetchall()
@@ -461,7 +461,15 @@ def register(app: FastAPI) -> None:
                 "reopen": f"{label} is back in the review queue.",
             }[action],
         )
-        return redirect(f"/engagements/{eid}/discovery")
+        # Keep the reviewer's place: jump to the next finding still waiting in the same
+        # order the page lists them.
+        nxt = conn.execute(
+            "SELECT id FROM scan_findings WHERE engagement_id = ? AND status = 'pending' "
+            "ORDER BY source_name, CASE risk WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, "
+            "CASE confidence WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, id LIMIT 1",
+            (eid,),
+        ).fetchone()
+        return redirect(f"/engagements/{eid}/discovery" + (f"#f{nxt[0]}" if nxt else ""))
 
     @app.post("/engagements/{eid}/discovery/confirm-high")
     async def discovery_confirm_high(eid: int, request: Request, user: User, conn: Conn):

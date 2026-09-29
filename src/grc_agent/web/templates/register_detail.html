@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% from "_macros.html" import engagement_header, icon %}
+{% block title %}{{ item.ref }} · {{ spec.title }} · {{ eng.client }}{% endblock %}
+{% block content %}
+{{ engagement_header(eng, s, tab) }}
+{% set locked = eng.delivered_at is not none %}
+{% set ob = obligations|selectattr("id", "equalto", item.obligation_id)|first %}
+
+<p class="crumb"><a href="/engagements/{{ eng.id }}/r/{{ spec.key }}">{{ spec.title }}</a> / {{ item.ref }}</p>
+<div class="record-head">
+  <div>
+    <h2>{{ item.title }}</h2>
+    <p class="muted small">
+      <span class="badge {{ item.status_badge }}">{{ item.status_label }}</span>
+      {% if item.owner %}· Owner <strong>{{ item.owner }}</strong>{% else %}· <span class="overdue">No owner</span>{% endif %}
+      {% if item.due %}· {{ spec.due_label }} <strong class="{{ 'overdue' if item.overdue }}">{{ item.due.replace("T", " ") }}{{ " (overdue)" if item.overdue }}</strong>{% endif %}
+      {% if ob %}· <a href="/provision?ref={{ ob.source|urlencode }}" title="{{ ob.obligation }}">{{ ob.source }}</a>{% endif %}
+    </p>
+  </div>
+</div>
+
+{# The status workflow: every step is a button; a step that needs more information says what. #}
+{% if not locked %}
+<section class="card workflow" aria-labelledby="wf-h">
+  <h3 id="wf-h" class="small-caps">Move to</h3>
+  <form method="post" action="/engagements/{{ eng.id }}/r/{{ spec.key }}/{{ item.id }}/status" class="workflow-form">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <ol class="workflow-steps">
+      {% for st in spec.statuses %}
+      <li class="{{ 'current' if st.key == item.status }}">
+        {% if st.key == item.status %}
+        <span class="step-now">{{ icon("i-check") }} {{ st.label }}</span>
+        {% else %}
+        <button type="submit" name="status" value="{{ st.key }}" class="button small {{ 'is-blocked' if blocked[st.key] }}" {% if blocked[st.key] %}title="{{ blocked[st.key]|join(' ') }}"{% endif %}>{{ st.label }}</button>
+        {% if blocked[st.key] %}<span class="step-needs">{{ blocked[st.key]|join(' ') }}</span>{% endif %}
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+    <input name="note" maxlength="500" placeholder="Optional note for the history" aria-label="Note for the status change">
+  </form>
+</section>
+{% endif %}
+
+<div class="grid-2 wide-left">
+  <section class="card">
+    <div class="card-head"><h3>Details</h3>{% if not locked %}<button type="button" class="button small" onclick="document.getElementById('edit-dialog').showModal()">{{ icon("i-pen") }} Edit</button>{% endif %}</div>
+    <dl class="details">
+      {% for f in spec.fields %}
+      {% set v = item.data.get(f.name, "") %}
+      <dt>{{ f.label }}</dt>
+      <dd class="{{ 'plain-text' if f.kind == 'textarea' }}">{% if not v %}<span class="muted">–</span>{% elif f.kind == "select" %}{{ f.choices|selectattr(0, "equalto", v)|map(attribute=1)|first }}{% elif f.kind == "datetime" %}{{ v.replace("T", " ") }}{% else %}{{ v }}{% endif %}</dd>
+      {% endfor %}
+    </dl>
+  </section>
+
+  <div class="stack">
+    <section class="card">
+      <div class="card-head"><h3>Evidence</h3><span class="muted small">{{ files|length }} file{{ '' if files|length == 1 else 's' }}</span></div>
+      {% if files %}
+      <ul class="plain small">
+        {% for f in files %}<li class="file-row"><a href="/engagements/{{ eng.id }}/evidence/{{ f.id }}/download">{{ icon("i-download") }} {{ f.title }}</a><span class="muted">v{{ f.version }} · {{ f.uploaded_at[:10] }}</span></li>{% endfor %}
+      </ul>
+      {% else %}<p class="muted small">No files yet. Attach proof of what was done.</p>{% endif %}
+      {% if not locked %}
+      <form method="post" action="/engagements/{{ eng.id }}/evidence" enctype="multipart/form-data" class="attach-form">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="record_id" value="{{ item.id }}">
+        <input type="hidden" name="back" value="/engagements/{{ eng.id }}/r/{{ spec.key }}/{{ item.id }}">
+        <input name="title" maxlength="160" placeholder="What it shows" aria-label="Evidence title">
+        <input type="file" name="file" required aria-label="Evidence file">
+        <button type="submit" class="button small">{{ icon("i-plus") }} Attach</button>
+      </form>
+      {% endif %}
+    </section>
+
+    <section class="card" id="history">
+      <div class="card-head"><h3>History</h3></div>
+      {% if not locked %}
+      <form method="post" action="/engagements/{{ eng.id }}/r/{{ spec.key }}/{{ item.id }}/comment" class="comment-form">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <textarea name="text" rows="2" maxlength="2000" placeholder="Add a comment" aria-label="Comment" required></textarea>
+        <button type="submit" class="button small">Comment</button>
+      </form>
+      {% endif %}
+      <ol class="timeline">
+        {% for e in history %}
+        <li>
+          <span class="muted small">{{ e.at[:16].replace("T", " ") }} · {{ e.username }}</span>
+          {% if e.kind == "created" %}<p>Created</p>
+          {% elif e.kind == "status" %}<p>Moved to <strong>{{ spec.status(e.detail.to).label if e.detail.to in spec.status_keys else e.detail.to }}</strong>{% if e.detail.note %}: “{{ e.detail.note }}”{% endif %}</p>
+          {% elif e.kind == "edited" %}<p>Changed {{ e.detail.fields|join(", ") }}</p>
+          {% else %}<p class="plain-text">{{ e.detail.text }}</p>{% endif %}
+        </li>
+        {% endfor %}
+      </ol>
+    </section>
+  </div>
+</div>
+
+{% if not locked %}
+<dialog id="edit-dialog" class="edit-dialog" aria-labelledby="edit-h">
+  <div class="dialog-head"><h2 id="edit-h">Edit {{ item.ref }}</h2><button type="button" class="button small" onclick="this.closest('dialog').close()" aria-label="Close">{{ icon("i-x") }}</button></div>
+  {% with values=item.data, owner=item.owner, due=item.due, obligation_id=item.obligation_id, source="" %}
+  {% include "_register_fields.html" %}
+  {% endwith %}
+</dialog>
+{% endif %}
+{% endblock %}

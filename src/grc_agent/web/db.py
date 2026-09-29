@@ -217,6 +217,70 @@ CREATE TABLE IF NOT EXISTS data_inventory (
     updated_at TEXT NOT NULL,
     UNIQUE (engagement_id, source_name, field)
 );
+-- Registers (tasks, consent, requests, breaches, vendors, DPIAs, policies): one row per
+-- record, fields a register defines in data_json. Every change is kept in record_events.
+CREATE TABLE IF NOT EXISTS records (
+    id INTEGER PRIMARY KEY,
+    engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+    register TEXT NOT NULL,
+    ref TEXT NOT NULL,
+    title TEXT NOT NULL,
+    status TEXT NOT NULL,
+    owner TEXT NOT NULL DEFAULT '',
+    due TEXT NOT NULL DEFAULT '',
+    obligation_id TEXT NOT NULL DEFAULT '',
+    data_json TEXT NOT NULL DEFAULT '{}',
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_by TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE (engagement_id, register, ref)
+);
+CREATE INDEX IF NOT EXISTS records_by_register ON records (engagement_id, register, status);
+CREATE TABLE IF NOT EXISTS record_events (
+    id INTEGER PRIMARY KEY,
+    record_id INTEGER NOT NULL REFERENCES records(id) ON DELETE CASCADE,
+    engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+    at TEXT NOT NULL,
+    username TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('created', 'status', 'edited', 'comment')),
+    detail_json TEXT NOT NULL DEFAULT '{}'
+);
+-- Compliance controls: the client's own status for each obligation in the register.
+CREATE TABLE IF NOT EXISTS controls (
+    engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+    obligation_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'not_started' CHECK (status IN
+        ('not_started', 'in_progress', 'needs_review', 'implemented', 'not_applicable')),
+    owner TEXT NOT NULL DEFAULT '',
+    notes TEXT NOT NULL DEFAULT '',
+    na_reason TEXT NOT NULL DEFAULT '',
+    reviewed_by TEXT NOT NULL DEFAULT '',
+    review_date TEXT NOT NULL DEFAULT '',
+    updated_by TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (engagement_id, obligation_id)
+);
+-- Uploaded evidence files. The file lives in <data dir>/evidence/, never in the web root.
+CREATE TABLE IF NOT EXISTS evidence_files (
+    id INTEGER PRIMARY KEY,
+    engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+    title TEXT NOT NULL,
+    category TEXT NOT NULL,
+    obligation_id TEXT NOT NULL DEFAULT '',
+    record_id INTEGER REFERENCES records(id) ON DELETE SET NULL,
+    filename TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    sha256 TEXT NOT NULL,
+    stored_name TEXT NOT NULL UNIQUE,
+    version INTEGER NOT NULL DEFAULT 1,
+    replaces_id INTEGER REFERENCES evidence_files(id),
+    status TEXT NOT NULL DEFAULT 'current' CHECK (status IN ('current', 'superseded')),
+    review_date TEXT NOT NULL DEFAULT '',
+    uploaded_by TEXT NOT NULL,
+    uploaded_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS audit_log (
     id INTEGER PRIMARY KEY,
     at TEXT NOT NULL,
@@ -244,6 +308,8 @@ def connect(path: str | Path) -> sqlite3.Connection:
 # Columns added after the first release. init_db adds any that are missing, so an
 # existing local database upgrades in place.
 MIGRATIONS = {
+    # admin: everything incl. team; member: all client work; viewer: read-only.
+    "users": {"role": "TEXT NOT NULL DEFAULT 'admin'"},
     "findings": {
         "citations_json": "TEXT",
         "unresolved_json": "TEXT",

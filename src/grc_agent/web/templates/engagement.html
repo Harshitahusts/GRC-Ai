@@ -57,7 +57,7 @@
   {% if activity %}
   <ol class="timeline">
     {% for a in activity %}
-    <li><span class="dot" aria-hidden="true"></span><span><strong>{{ a.username }}</strong> {{ a.action.replace("_", " ") }}</span><time class="muted small" datetime="{{ a.at }}">{{ a.at[:16].replace("T", " ") }} UTC</time></li>
+    <li><span class="dot" aria-hidden="true"></span><span><strong>{{ a.username }}</strong> {{ a|activity }}</span><time class="muted small" datetime="{{ a.at }}">{{ a.at[:16].replace("T", " ") }} UTC</time></li>
     {% endfor %}
   </ol>
   {% else %}<p class="muted">Nothing yet.</p>{% endif %}

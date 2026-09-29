@@ -905,3 +905,86 @@ ul.checks .icon { flex: none; margin-top: .15rem; }
   .finding { flex-direction: column; }
   .finding-actions { justify-content: flex-start; flex-basis: auto; width: 100%; }
 }
+
+/* ---- Client workspace navigation: three plain-language groups */
+.modules { display: flex; flex-wrap: wrap; gap: .5rem 1.25rem; margin: -.4rem 0 1.25rem; padding: .6rem .8rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.module-group { display: flex; align-items: center; flex-wrap: wrap; gap: .15rem; }
+.module-label { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-right: .35rem; }
+.modules a { display: inline-flex; align-items: center; gap: .3rem; padding: .28rem .55rem; border-radius: 99px; color: var(--text-2); text-decoration: none; font-size: .88rem; font-weight: 550; }
+.modules a:hover { background: var(--none-bg); color: var(--text); }
+.modules a[aria-current] { background: var(--accent); color: var(--accent-text); }
+.mcount { font-size: .7rem; font-weight: 700; min-width: 1.2rem; padding: 0 .35rem; border-radius: 99px; background: var(--info-bg); color: var(--info); text-align: center; }
+.mcount.late { background: var(--fail-bg); color: var(--fail); }
+.modules a[aria-current] .mcount { background: rgba(255,255,255,.25); color: inherit; }
+@media (max-width: 700px) {
+  .modules { flex-direction: column; align-items: stretch; min-width: 0; }
+  .module-group { overflow-x: auto; flex-wrap: nowrap; max-width: 100%; min-width: 0; scrollbar-width: none; }
+  .modules a { white-space: nowrap; }
+  .module-label { min-width: 5.5rem; white-space: normal; }
+}
+.timeline li { display: block; }
+
+/* ---- Page intros and registers */
+.page-intro h2 { margin: 0 0 .2rem; }
+.page-intro p { margin: 0 0 1rem; color: var(--text-2); max-width: 75ch; }
+.register-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
+.register-filter { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; margin-bottom: .75rem; }
+.register-filter input[type=search] { flex: 1 1 200px; margin: 0; }
+.register-filter select { width: auto; margin: 0; }
+.chip-bad[aria-pressed="false"] { color: var(--fail); }
+tr.is-overdue td:first-child { box-shadow: inset 3px 0 0 var(--fail); }
+tr.is-closed td { opacity: .55; }
+.form-card { max-width: 900px; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 1.25rem; }
+.form-grid .span-2 { grid-column: 1 / -1; }
+.form-grid label { margin-bottom: .3rem; }
+.form-grid > div { margin-bottom: .85rem; }
+.form-grid input, .form-grid select, .form-grid textarea { margin: 0; }
+@media (max-width: 700px) { .form-grid { grid-template-columns: 1fr; } }
+.req { color: var(--fail); }
+.form-actions { display: flex; gap: .5rem; margin-top: .5rem; }
+.note-privacy { display: flex; gap: .4rem; align-items: flex-start; color: var(--info); }
+.record-head h2 { margin: 0 0 .3rem; }
+.small-caps { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 .5rem; }
+.workflow { padding-bottom: .6rem; }
+.workflow-steps { list-style: none; display: flex; flex-wrap: wrap; gap: .4rem; padding: 0; margin: 0 0 .6rem; }
+.workflow-steps li { display: flex; flex-direction: column; gap: .2rem; max-width: 220px; }
+.step-now { display: inline-flex; align-items: center; gap: .3rem; padding: .3rem .7rem; border-radius: 99px; background: var(--accent); color: var(--accent-text); font-weight: 650; font-size: .85rem; }
+.button.is-blocked { opacity: .6; border-style: dashed; }
+.step-needs { font-size: .72rem; color: var(--muted); line-height: 1.3; }
+.workflow-form > input { margin: 0; }
+dl.details { display: grid; grid-template-columns: minmax(120px, 34%) 1fr; gap: .45rem 1rem; margin: 0; }
+dl.details dt { color: var(--muted); font-size: .85rem; }
+dl.details dd { margin: 0; overflow-wrap: anywhere; }
+.timeline { list-style: none; padding: 0; margin: .75rem 0 0; }
+.timeline li { border-left: 2px solid var(--border); padding: 0 0 .7rem .8rem; }
+.timeline li p { margin: .15rem 0 0; }
+.comment-form { display: flex; gap: .5rem; align-items: flex-end; }
+.comment-form textarea { margin: 0; }
+.attach-form { display: grid; gap: .4rem; margin-top: .6rem; }
+.attach-form input { margin: 0; }
+.edit-dialog { width: min(900px, 94vw); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; background: var(--surface); color: var(--text); }
+.edit-dialog::backdrop { background: rgba(10, 12, 16, .45); }
+.dialog-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: .75rem; }
+.dialog-head h2 { margin: 0; }
+.control-list { list-style: none; padding: 0; margin: 0; }
+.control-row { display: flex; gap: 1rem; justify-content: space-between; align-items: flex-start; padding: .9rem 0; border-bottom: 1px solid var(--border); }
+.control-row:last-child { border-bottom: 0; }
+.control-row p { margin: .15rem 0; }
+.control-main { flex: 1; min-width: 0; }
+.control-edit { flex: 0 0 auto; }
+.control-edit[open] { flex-basis: 340px; }
+.control-edit summary { list-style: none; cursor: pointer; }
+.inline-menu summary { cursor: pointer; }
+.inline-menu[open] { display: grid; gap: .4rem; }
+.inline-role select { width: auto; margin: 0; }
+.pager { display: flex; gap: .75rem; align-items: center; justify-content: center; margin-top: 1rem; }
+.audit-detail { max-width: 420px; overflow-wrap: anywhere; }
+@media (max-width: 700px) { .control-row { flex-direction: column; } }
+.row-actions { margin: .3rem 0 0; }
+.inv-form-wide fieldset { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.inv-form-wide fieldset > p { grid-column: 1 / -1; }
+@media (max-width: 700px) { .inv-form-wide fieldset { grid-template-columns: 1fr; } }
+.find-group { margin: 1rem 0 .25rem; font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.next-prompt { display: flex; gap: .75rem; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: .8rem 1rem; border-radius: var(--radius-sm); background: var(--pass-bg); color: var(--pass); margin-bottom: 1rem; }
+.next-prompt p { margin: 0; }

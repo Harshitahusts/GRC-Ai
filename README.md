@@ -80,6 +80,33 @@ python -m spacy download en_core_web_sm    # or en_core_web_lg, more accurate
 Synthetic sample files to try are linked on the Discovery tab
 (`src/grc_agent/discovery/samples/`). Set `GRC_SCANNER=builtin` to skip Presidio.
 
+### Privacy operations, compliance and risk
+
+Each engagement groups its work in three rows under the workflow steps:
+
+- **Privacy operations:** Personal data (discovery and inventory), **Consent** records,
+  **Requests** from Data Principals (access, correction, erasure, grievance, nomination;
+  response clock up to 90 days, Rule 14(3)), and **Breaches** (the Board's detailed report
+  is due 72 hours after awareness, Rule 7(2)(b)).
+- **Compliance:** **Controls** (the client's own status for every obligation; "not
+  applicable" needs a reason and an admin, "implemented" needs evidence or a description),
+  **Tasks**, the **Evidence** library, and **Policies** (version, approver, review date).
+- **Risk:** the risk register, **Vendors & processors** (contract, data location, review),
+  **DPIA**, the data-flow map and connectors.
+
+Every register record has an owner, a due date, a status workflow that won't move on
+without the facts it needs, a full history with comments, and evidence attachments.
+"Create task" links on findings, risks, controls and inventory gaps turn a gap into
+assigned work. The **Work queue** lists everything open across clients, most urgent
+first; the **Audit log** shows every change; **Team & roles** sets who is an admin,
+member or read-only viewer.
+
+Evidence files (PDF, images, Word, Excel, CSV, text, JSON, up to 10 MB) are checked
+against their extension, stored under a random name in `var/evidence/`, and only
+downloadable by signed-in users. Back that folder up with the rest of `var/`.
+
+The demo notices (demo mode and demo tenant) appear on the GRC Analyst page only.
+
 ### GRC Analyst
 
 The **GRC Analyst** page is an AI analyst that works from the workspace's live data. Pick
@@ -315,6 +342,8 @@ src/grc_agent/
   documents.py      draft documents (gap report, RoPA, notice, playbook, DPA)
   risk.py           DPDPA risk register (threats, likelihood x impact, treatments)
   discovery/        personal data scanner: India detectors, Presidio engine, file parsing
+  web/registers.py  tasks, consent, requests, breaches, vendors, DPIAs, policies (one engine)
+docs/RESEARCH.md    what we took from Probo, Openlane and CISO Assistant
 tests/              unit tests (use a fake client; no API key needed)
 docs/kpis.md        KPI definitions and dictionary
 examples/kpis/      fictional engagement records and a sample corpus index
@@ -337,6 +366,7 @@ Set in `.env` or the environment:
 | `GRC_SCANNER` | auto | `builtin` skips Presidio even when it is installed |
 | `GRC_SCAN_MAX_MB` | `5` | Largest file the discovery scan accepts |
 | `GRC_SCAN_SAMPLE_ROWS` | `200` | Records sampled per field |
+| `GRC_EVIDENCE_MAX_MB` | `10` | Largest evidence file accepted |
 
 The agent uses adaptive thinking, prompt caching, and server-side refusal fallbacks
 (`fallbacks: "default"`).

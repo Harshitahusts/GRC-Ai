@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% from "_macros.html" import engagement_header, page_intro, icon %}
+{% block title %}Evidence · {{ eng.client }}{% endblock %}
+{% block content %}
+{{ engagement_header(eng, s, tab) }}
+{% set locked = eng.delivered_at is not none %}
+{% set ob_by_id = {} %}{% for o in obligations %}{% set _ = ob_by_id.update({o.id: o}) %}{% endfor %}
+
+{{ page_intro("Evidence", "Files that prove a control works: policies, screenshots, contracts, training records, exports. Link each to the obligation it supports. Connector checks are collected automatically on the Connectors tab.") }}
+
+<div class="grid-2 wide-left">
+  <section class="card">
+    <div class="card-head">
+      <h3>Files{% if obligation %} for {{ ob_by_id[obligation].source if obligation in ob_by_id else obligation }}{% endif %}</h3>
+      <nav class="chips" aria-label="Show">
+        <a class="chip" href="?show=" aria-pressed="{{ 'false' if show == 'all' else 'true' }}">Current</a>
+        <a class="chip" href="?show=all" aria-pressed="{{ 'true' if show == 'all' else 'false' }}">Incl. old versions</a>
+        {% if obligation %}<a class="chip" href="?">Clear filter</a>{% endif %}
+      </nav>
+    </div>
+    {% if not items %}
+    <div class="empty"><p><strong>No evidence yet.</strong> Upload a file on the right, or attach one to a task, request or breach.</p></div>
+    {% else %}
+    <table class="table">
+      <thead><tr><th>File</th><th class="hide-sm">Supports</th><th class="hide-sm">Uploaded</th><th></th></tr></thead>
+      <tbody>
+        {% for f in items %}
+        <tr class="{{ 'is-closed' if f.status == 'superseded' }}">
+          <td><a class="strong-link" href="/engagements/{{ eng.id }}/evidence/{{ f.id }}/download">{{ f.title }}</a>
+            <br><span class="muted small">{{ f.filename }} · {{ human_size(f.size_bytes) }} · v{{ f.version }}{% if f.status == "superseded" %} · replaced{% endif %}</span></td>
+          <td class="hide-sm small">{{ f.category }}{% if f.obligation_id in ob_by_id %}<br><a href="?obligation={{ f.obligation_id }}">{{ ob_by_id[f.obligation_id].source }}</a>{% endif %}{% if f.record_ref %}<br><a href="/engagements/{{ eng.id }}/r/{{ f.record_register }}/{{ f.record_id }}">{{ f.record_ref }}</a>{% endif %}</td>
+          <td class="hide-sm small muted nowrap">{{ f.uploaded_at[:10] }}<br>{{ f.uploaded_by }}{% if f.review_date %}<br>review {{ f.review_date }}{% endif %}</td>
+          <td class="nowrap">
+            {% if not locked and f.status == "current" %}
+            <details class="inline-menu"><summary class="link small">More</summary>
+              <form method="post" action="/engagements/{{ eng.id }}/evidence" enctype="multipart/form-data" class="stack small">
+                <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="replaces_id" value="{{ f.id }}">
+                <input type="hidden" name="title" value="{{ f.title }}"><input type="hidden" name="category" value="{{ f.category }}">
+                <input type="hidden" name="obligation_id" value="{{ f.obligation_id }}">
+                <input type="file" name="file" required aria-label="New version of {{ f.title }}">
+                <button type="submit" class="button small">Upload new version</button>
+              </form>
+              <form method="post" action="/engagements/{{ eng.id }}/evidence/{{ f.id }}/delete" onsubmit="return confirm('Delete {{ f.title }}? This can\'t be undone.')">
+                <input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="link small danger">Delete</button>
+              </form>
+            </details>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </section>
+
+  {% if not locked %}
+  <section class="card">
+    <h3>Upload evidence</h3>
+    <form method="post" action="/engagements/{{ eng.id }}/evidence" enctype="multipart/form-data" class="stack">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label>What it shows <input name="title" maxlength="160" placeholder="e.g. Signed DPA with Razorpay"></label>
+      <label>Kind <select name="category">{% for c in categories %}<option>{{ c }}</option>{% endfor %}</select></label>
+      <label>Supports obligation
+        <select name="obligation_id"><option value="">None</option>{% for o in obligations %}<option value="{{ o.id }}" {% if o.id == obligation %}selected{% endif %}>{{ o.source }}: {{ o.obligation[:60] }}</option>{% endfor %}</select></label>
+      <label>Review again by <input name="review_date" type="date"></label>
+      <label>File <input type="file" name="file" required></label>
+      <p class="small muted">{{ types }} · up to {{ max_mb }} MB. Stored privately on this server; only signed-in users can download it.</p>
+      <p><button type="submit" class="primary">{{ icon("i-plus") }} Upload</button></p>
+    </form>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

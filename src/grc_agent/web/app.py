@@ -62,6 +62,8 @@ from grc_agent.web import (
     discovery_views,
     notification_views,
     notify,
+    ops_views,
+    register_views,
     risk_views,
 )
 from grc_agent.web.planned import PLANNED
@@ -148,6 +150,8 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
     dataflow_views.register(app)
     risk_views.register(app)
     discovery_views.register(app)
+    register_views.register(app)
+    ops_views.register(app)
     return app
 
 
@@ -172,6 +176,35 @@ def _demo_lifespan(data_dir: Path, db_path: Path):
 templates = Jinja2Templates(directory=HERE / "templates")
 
 
+def describe_action(row: Any) -> str:
+    """A plain-English phrase for an audit entry, e.g. "moved REQ-001 to Closed"."""
+    action = row["action"]
+    try:
+        d = json.loads(row["detail"]) if row["detail"].startswith("{") else {}
+    except (ValueError, AttributeError):
+        d = {}
+    ref, title = d.get("ref", ""), d.get("title", "")
+    phrases = {
+        "record_created": f"added {ref}" + (f" “{title}”" if title else ""),
+        "record_status": f"moved {ref} to {d.get('label', d.get('to', ''))}",
+        "record_updated": f"edited {ref}",
+        "record_comment": f"commented on {ref}",
+        "control_updated": f"set {d.get('source', '')} to {d.get('label', '')}",
+        "evidence_uploaded": f"uploaded evidence “{d.get('title', '')}”",
+        "evidence_replaced": f"uploaded a new version of “{d.get('title', '')}”",
+        "evidence_deleted": f"deleted evidence “{d.get('title', '')}”",
+        "evidence_downloaded": f"downloaded “{d.get('title', '')}”",
+        "scan_completed": f"scanned {d.get('source', 'a file')}",
+        "finding_confirmed": f"confirmed {d.get('field', '')} as personal data",
+        "finding_rejected": f"marked {d.get('field', '')} as not personal data",
+        "inventory_updated": f"documented {d.get('field', '')} in the inventory",
+    }
+    return phrases.get(action) or action.replace("_", " ")
+
+
+templates.env.filters["activity"] = describe_action
+
+
 # ---------------------------------------------------------------- helpers
 
 
@@ -191,10 +224,27 @@ def current_user(request: Request) -> str:
     return user
 
 
+# Paths a read-only (viewer) account may still post to.
+VIEWER_POSTS = ("/login", "/logout", "/notifications")
+
+
+def user_role(request: Request, username: str | None = None) -> str:
+    username = username or request.session.get("user")
+    if not username:
+        return ""
+    with db.connect(request.app.state.db_path) as c:
+        row = c.execute("SELECT role FROM users WHERE username = ?", (username,)).fetchone()
+    return row["role"] if row else ""
+
+
 async def form_with_csrf(request: Request) -> dict[str, Any]:
     form = await request.form()
     if not csrf_matches(request.session.get("csrf"), form.get("csrf")):
         raise HTTPException(status_code=403, detail="Form expired. Go back, reload and try again.")
+    if user_role(request) == "viewer" and not request.url.path.startswith(VIEWER_POSTS):
+        raise HTTPException(
+            status_code=403, detail="Your account is read-only. Ask an admin for access."
+        )
     return {k: form.getlist(k) if len(form.getlist(k)) > 1 else form[k] for k in form}
 
 
@@ -441,7 +491,13 @@ def _routes(app: FastAPI) -> None:
             delivered=sum(1 for s in agent if s["delivered"]),
             avg_readiness=round(sum(scores) / len(scores)) if scores else None,
             pipeline=_pipeline(agent),
-            attention=_attention(agent, connections, discovery_views.by_engagement(conn)),
+            attention=_attention(
+                agent,
+                connections,
+                discovery_views.by_engagement(conn),
+                register_views.queue(conn, limit=200),
+            ),
+            work=register_views.queue(conn, limit=200),
             risk_queue=analyst.queue(conn, request.app),
             leaves_india=sum(
                 1
@@ -1420,6 +1476,11 @@ def _summary(conn: sqlite3.Connection, eng: sqlite3.Row) -> dict[str, Any]:
         "unresolved": sum(not f["citation_resolves"] for f in findings),
         "documents": len(docs),
         "reviewed": sum(1 for d in docs if d["reviewed_at"]),
+        "open": register_views.counts(conn, eng["id"]),
+        "personal_pending": conn.execute(
+            "SELECT COUNT(*) FROM scan_findings WHERE engagement_id = ? AND status = 'pending'",
+            (eng["id"],),
+        ).fetchone()[0],
     }
 
 
@@ -1437,7 +1498,10 @@ def _pipeline(summaries: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _attention(
-    summaries: list[dict[str, Any]], connections: list, personal: list[dict[str, Any]] = ()
+    summaries: list[dict[str, Any]],
+    connections: list,
+    personal: list[dict[str, Any]] = (),
+    work: list[dict[str, Any]] = (),
 ) -> list[dict[str, Any]]:
     """What needs someone's action next, most urgent first."""
     items = []
@@ -1501,6 +1565,27 @@ def _attention(
                     "client": c["client"],
                     "href": f"/engagements/{c['engagement_id']}/connectors",
                     "text": f"{name} connector failed: {c['message'] or 'check it'}",
+                }
+            )
+    for w in work:
+        link = f"/engagements/{w['engagement_id']}/r/{w['register']}/{w['id']}"
+        if w["register"] == "breaches":
+            items.append(
+                {
+                    "level": "critical",
+                    "client": w["client"],
+                    "href": link,
+                    "text": f"Breach {w['ref']}: {w['title']}. Board report "
+                    + ("overdue." if w["overdue"] else f"due {w['due'].replace('T', ' ')}."),
+                }
+            )
+        elif w["overdue"]:
+            items.append(
+                {
+                    "level": "serious",
+                    "client": w["client"],
+                    "href": link,
+                    "text": f"Overdue {w['spec'].singular} {w['ref']}: {w['title']}",
                 }
             )
     for p in personal:

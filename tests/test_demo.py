@@ -104,8 +104,10 @@ def demo_app(tmp_path, monkeypatch):
 
 
 def test_web_banner_assistant_and_delivery_block(demo_app):
-    page = demo_app.get("/").text
-    assert "Demo mode: AI answers and drafted findings are simulated" in page
+    # The demo-mode notice lives on the GRC Analyst page only, not across the app.
+    banner = "Demo mode: AI answers and drafted findings are simulated"
+    assert banner not in demo_app.get("/").text
+    assert banner in demo_app.get("/assistant").text
 
     page = post(demo_app, "/assistant", {"question": "What does DPDPA require for consent?"}).text
     assert "OBL-002" in page and "Tools used: search_obligations" in page

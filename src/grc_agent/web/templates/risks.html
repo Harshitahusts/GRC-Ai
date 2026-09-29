@@ -66,7 +66,7 @@
         <strong>{{ r.title }}</strong>
         <p class="small"><span class="muted">Threat:</span> {{ r.threat }}</p>
         <p class="small"><span class="muted">Vulnerability:</span> {{ r.vulnerability }}</p>
-        <p class="small muted">{{ r.provision }} · {{ "Finding" if r.source == "finding" else "Connector check" }} · <a href="{{ r.link }}">open</a>{% if r.edited %} · edited{% endif %}</p>
+        <p class="small muted">{{ r.provision }} · {{ "Finding" if r.source == "finding" else "Connector check" }} · <a href="{{ r.link }}">open</a>{% if r.edited %} · edited{% endif %}{% if not locked and r.status != "closed" %} · <a href="/engagements/{{ eng.id }}/r/tasks/new?title={{ ('Treat risk: ' ~ r.title)[:160]|urlencode }}&details={{ (r.action or r.vulnerability)|urlencode }}&priority={{ 'urgent' if r.level == 'critical' else 'high' if r.level == 'high' else 'medium' }}&owner={{ r.owner|urlencode }}&due={{ r.due }}&source={{ ('Risk register: ' ~ r.title)[:190]|urlencode }}">Create task</a>{% endif %}</p>
       </td>
       <td class="num">{{ r.likelihood }}</td>
       <td class="num">{{ r.impact }}</td>

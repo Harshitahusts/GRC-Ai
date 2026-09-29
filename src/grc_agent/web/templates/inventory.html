@@ -49,9 +49,14 @@
         <td class="hide-sm small">{{ legal_bases[i.legal_basis] if i.legal_basis else "–" }}<br><span class="muted">{{ i.retention or "no retention set" }}</span></td>
         <td>
           {% if i.gaps %}<span class="badge badge-warn" title="Missing: {{ i.gaps|join(', ') }}">{{ i.gaps|length }} missing</span>{% else %}<span class="badge badge-pass">Documented</span>{% endif %}
-          <details class="inv-edit">
-            <summary class="link small">{{ "Edit" if not locked else "Details" }}</summary>
-            <form method="post" action="/engagements/{{ eng.id }}/inventory/{{ i.id }}" class="inv-form">
+          <p class="row-actions">
+            <button type="button" class="link small" onclick="document.getElementById('inv-{{ i.id }}').showModal()">{{ "Edit" if not locked else "Details" }}</button>
+            {% if i.gaps and not locked %}· <a class="small" href="/engagements/{{ eng.id }}/r/tasks/new?title={{ ('Document ' ~ i.source_name ~ ' · ' ~ i.field)|urlencode }}&details={{ ('Record the ' ~ i.gaps|join(', ') ~ ' for this field in the data inventory.')|urlencode }}&priority={{ 'high' if i.risk == 'high' else 'medium' }}&obligation={{ 'OBL-011' if i.children else 'OBL-001' }}&source={{ ('Data inventory: ' ~ i.source_name ~ ' · ' ~ i.field)|urlencode }}">Create task</a>{% endif %}
+          </p>
+          <dialog id="inv-{{ i.id }}" class="edit-dialog" aria-labelledby="inv-h-{{ i.id }}">
+            <div class="dialog-head"><h2 id="inv-h-{{ i.id }}"><code>{{ i.field }}</code> <span class="muted small">in {{ i.source_name }}</span></h2><button type="button" class="button small" onclick="this.closest('dialog').close()" aria-label="Close">{{ icon("i-x") }}</button></div>
+            <p class="small muted">{{ i.label }} · {{ i.category }} · {{ i.risk|capitalize }} risk{% if i.gaps %} · <strong>Missing: {{ i.gaps|join(", ") }}</strong>{% endif %}</p>
+            <form method="post" action="/engagements/{{ eng.id }}/inventory/{{ i.id }}" class="inv-form inv-form-wide">
               <input type="hidden" name="csrf" value="{{ csrf }}">
               <fieldset {% if locked %}disabled{% endif %}>
               <label>Purpose of processing <input name="purpose" value="{{ i.purpose }}" maxlength="300" placeholder="e.g. Deliver orders and send invoices"></label>
@@ -73,7 +78,7 @@
               <button type="submit" class="link small danger">Remove from inventory</button>
             </form>
             {% endif %}
-          </details>
+          </dialog>
         </td>
       </tr>
       {% endfor %}
