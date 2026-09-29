@@ -15,6 +15,20 @@ if errorlevel 1 (
   exit /b 1
 )
 
+rem A .venv made with a Python that has since been removed or upgraded can't run.
+rem Rebuild it; your workspace in .\var is not touched.
+if exist .venv\Scripts\python.exe (
+  .venv\Scripts\python.exe -c "import sys" >nul 2>&1
+  if errorlevel 1 (
+    echo The Python that .venv was built with is gone. Rebuilding .venv ...
+    rmdir /s /q .venv
+    if exist .venv (
+      echo Couldn't remove .venv. Close any window running the app, then try again.
+      goto :error
+    )
+  )
+)
+
 if not exist .venv\Scripts\python.exe (
   echo Creating virtual environment in .venv ...
   %PY% -m venv .venv || goto :error

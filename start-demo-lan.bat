@@ -11,6 +11,12 @@ if not exist .venv\Scripts\python.exe (
   pause
   exit /b 1
 )
+.venv\Scripts\python.exe -c "import sys" >nul 2>&1
+if errorlevel 1 (
+  echo The Python that .venv was built with is gone. Run start.bat to rebuild it.
+  pause
+  exit /b 1
+)
 if not exist .env copy .env.example .env >nul
 
 .venv\Scripts\python.exe -m grc_agent.web.cli demo --lan --open %*
