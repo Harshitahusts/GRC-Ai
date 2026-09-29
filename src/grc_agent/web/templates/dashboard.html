@@ -81,6 +81,11 @@
     <p class="tile-value">{{ crit_high }}</p>
     <p class="muted small">{{ live_risks|length }} open{% if overdue %} · <strong class="overdue">{{ overdue }} overdue</strong>{% endif %}</p>
   </div>
+  <a class="tile tile-link {{ 'is-warn' if personal.pending }}" href="{{ '/engagements/%d/discovery' % personal_by_client[0].id if personal_by_client else '/engagements' }}">
+    <p class="tile-label">Personal data mapped</p>
+    <p class="tile-value">{{ personal.inventory }}</p>
+    <p class="muted small">{% if personal.pending %}<strong>{{ personal.pending }} to review</strong>{% elif personal.inventory %}{{ personal.complete }} documented{% else %}Scan a client export{% endif %}</p>
+  </a>
   <div class="tile {{ 'is-warn' if leaves_india }}">
     <p class="tile-label">Data leaves India</p>
     <p class="tile-value">{{ leaves_india }}</p>

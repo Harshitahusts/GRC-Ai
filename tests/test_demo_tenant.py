@@ -131,3 +131,18 @@ def test_lan_flag_listens_on_all_interfaces(monkeypatch, tmp_path):
     assert seen["host"] == "127.0.0.1"  # local only unless asked
     ip = cli.lan_ip()
     assert ip is None or not ip.startswith("127.")
+
+
+def test_demo_has_personal_data_to_show(demo_dir, demo):
+    with db.connect(demo_dir / "grc.db") as conn:
+        scans = conn.execute("SELECT status FROM scan_jobs").fetchall()
+        documented = conn.execute(
+            "SELECT COUNT(*) FROM data_inventory WHERE purpose != '' AND owner != ''"
+        ).fetchone()[0]
+        pending = conn.execute(
+            "SELECT COUNT(*) FROM scan_findings WHERE status = 'pending'"
+        ).fetchone()[0]
+    assert [s["status"] for s in scans] == ["done", "done"]
+    assert documented >= 2 and pending >= 1
+    home = demo.get("/").text
+    assert "Personal data mapped" in home and "to review" in home

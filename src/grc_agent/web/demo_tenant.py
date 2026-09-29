@@ -122,6 +122,7 @@ CLIENTS = [
         "extra": {"Q-PARENTAL": "not_sure", "Q-TRANSFER": "no"},
         "no": ["Q-SECURITY", "Q-ERASURE"],
         "unsure": ["Q-BREACH"],
+        "scan": ("Practo patient export", "clinic_patients_sample.json", "documented"),
         "aws": {"ap-south-1": ["arogya-records"], "eu-west-1": ["arogya-backups"]},
         "aws_fail": ["root_mfa", "password_policy"],
         "github": None,
@@ -146,6 +147,7 @@ CLIENTS = [
         "extra": {"Q-TRANSFER": "not_sure"},
         "no": ["Q-CONSENT", "Q-WITHDRAW", "Q-VENDOR-CONTRACT"],
         "unsure": ["Q-ERASURE"],
+        "scan": ("Shopify customer export", "customers_sample.csv", "to_review"),
         "aws": None,
         "aws_fail": [],
         "github": {"account": "bazaarkart", "fail": ["branch_protection", "secret_scanning"]},
@@ -493,6 +495,9 @@ def _seed_client(app, clients: dict, clock: _Clock, c: dict, i: int) -> None:
             db.audit(conn, lead_name, "dataflow_node_added", eid, {"name": name})
             clock.tick(10)
 
+    if c.get("scan"):
+        _seed_scan(app, lead, other, clock, eid, *c["scan"])
+
     if stage < ORDER.index("assessed"):
         return
     clock.tick(60 * 26)
@@ -554,6 +559,62 @@ def _seed_client(app, clients: dict, clock: _Clock, c: dict, i: int) -> None:
         return
     clock.tick(60 * 24)
     _post(me, f"/engagements/{eid}/deliver")
+
+
+# Inventory answers for the documented demo scan, by field.
+_DOCUMENTED = {
+    "patient_name": ("Book appointments and keep treatment records", "Patients", "consent"),
+    "contact.phone": ("Appointment reminders over SMS and WhatsApp", "Patients", "consent"),
+    "diagnosis": ("Treatment and insurance claims", "Patients", "consent"),
+}
+
+
+def _seed_scan(app, lead, other, clock: _Clock, eid: int, source: str, sample: str, how: str):
+    """Scan a synthetic sample file through the real upload route, then review it."""
+    from grc_agent.web.discovery_views import SAMPLE_FILES, sample_bytes
+
+    clock.tick(60 * 2)
+    r = lead.post(
+        f"/engagements/{eid}/discovery/scan",
+        data={"csrf": _csrf(lead), "source_name": source},
+        files={"file": (sample, sample_bytes(sample), SAMPLE_FILES[sample][0])},
+    )
+    assert r.status_code < 400, f"demo scan failed: {r.status_code}"
+    clock.tick(35)
+    _post(other, f"/engagements/{eid}/discovery/confirm-high")
+    if how != "documented":
+        return
+    clock.tick(60)
+    with db.connect(app.state.db_path) as conn:
+        pending = conn.execute(
+            "SELECT id, column_name FROM scan_findings WHERE engagement_id = ? "
+            "AND status = 'pending'",
+            (eid,),
+        ).fetchall()
+    for f in pending:
+        clock.tick(3)
+        _post(other, f"/engagements/{eid}/discovery/findings/{f['id']}", {"action": "confirm"})
+    with db.connect(app.state.db_path) as conn:
+        items = conn.execute(
+            "SELECT id, field FROM data_inventory WHERE engagement_id = ?", (eid,)
+        ).fetchall()
+    for item in items:
+        if item["field"] in _DOCUMENTED:
+            purpose, principals, basis = _DOCUMENTED[item["field"]]
+            clock.tick(6)
+            _post(
+                lead,
+                f"/engagements/{eid}/inventory/{item['id']}",
+                {
+                    "purpose": purpose,
+                    "principals": principals,
+                    "legal_basis": basis,
+                    "retention": "7 years after the last visit",
+                    "storage_location": "AWS ap-south-1 (Mumbai)",
+                    "recipients": "Insurance TPA",
+                    "owner": "Dr. Kavya Rao",
+                },
+            )
 
 
 def _risk(key, treatment, status, owner, clock: _Clock, due_in_days: int, notes: str = "") -> dict:

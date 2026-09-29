@@ -81,6 +81,27 @@ CATALOG: dict[str, dict] = {
         "retain_days": None,
         "retention": "Contract term + 3 years",
     },
+    "scan_jobs": {
+        "purpose": "Personal data scans of uploaded files (the files are not kept)",
+        "category": "Discovery",
+        "personal": False,
+        "retain_days": 365,
+        "retention": "1 year, then re-scan",
+    },
+    "scan_findings": {
+        "purpose": "Fields found to hold personal data (masked value shapes, no values)",
+        "category": "Discovery",
+        "personal": False,
+        "retain_days": None,
+        "retention": "Contract term + 3 years",
+    },
+    "data_inventory": {
+        "purpose": "Client's inventory of personal data fields, purposes and retention",
+        "category": "Client data",
+        "personal": False,
+        "retain_days": None,
+        "retention": "Contract term + 3 years",
+    },
     "content": {
         "purpose": "Docs and blog posts",
         "category": "Content",

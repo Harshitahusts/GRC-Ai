@@ -150,6 +150,73 @@ CREATE TABLE IF NOT EXISTS risk_edits (
     updated_at TEXT NOT NULL,
     PRIMARY KEY (engagement_id, risk_key)
 );
+-- Personal data discovery. A scan reads an uploaded file in memory; the file itself is
+-- never stored. Findings keep only metadata and masked value shapes.
+CREATE TABLE IF NOT EXISTS scan_jobs (
+    id INTEGER PRIMARY KEY,
+    engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+    source_name TEXT NOT NULL,
+    filename TEXT NOT NULL,
+    file_kind TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    rows INTEGER NOT NULL DEFAULT 0,
+    columns INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'queued'
+        CHECK (status IN ('queued', 'running', 'done', 'failed')),
+    progress INTEGER NOT NULL DEFAULT 0,
+    engine TEXT NOT NULL DEFAULT '',
+    error TEXT NOT NULL DEFAULT '',
+    personal_fields INTEGER NOT NULL DEFAULT 0,
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    started_at TEXT,
+    finished_at TEXT
+);
+CREATE TABLE IF NOT EXISTS scan_findings (
+    id INTEGER PRIMARY KEY,
+    scan_id INTEGER NOT NULL REFERENCES scan_jobs(id),
+    engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+    source_name TEXT NOT NULL,
+    column_name TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    category TEXT NOT NULL,
+    risk TEXT NOT NULL,
+    confidence TEXT NOT NULL,
+    match_ratio REAL NOT NULL,
+    sampled INTEGER NOT NULL,
+    entities_json TEXT NOT NULL DEFAULT '{}',
+    shapes_json TEXT NOT NULL DEFAULT '[]',
+    minors INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'confirmed', 'rejected', 'superseded')),
+    note TEXT NOT NULL DEFAULT '',
+    reviewed_by TEXT,
+    reviewed_at TEXT
+);
+-- The client's inventory of personal data: one row per field that holds it.
+CREATE TABLE IF NOT EXISTS data_inventory (
+    id INTEGER PRIMARY KEY,
+    engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+    finding_id INTEGER REFERENCES scan_findings(id),
+    source_name TEXT NOT NULL,
+    field TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    category TEXT NOT NULL,
+    risk TEXT NOT NULL,
+    children INTEGER NOT NULL DEFAULT 0,
+    purpose TEXT NOT NULL DEFAULT '',
+    principals TEXT NOT NULL DEFAULT '',
+    legal_basis TEXT NOT NULL DEFAULT '',
+    retention TEXT NOT NULL DEFAULT '',
+    storage_location TEXT NOT NULL DEFAULT '',
+    recipients TEXT NOT NULL DEFAULT '',
+    owner TEXT NOT NULL DEFAULT '',
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_by TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE (engagement_id, source_name, field)
+);
 CREATE TABLE IF NOT EXISTS audit_log (
     id INTEGER PRIMARY KEY,
     at TEXT NOT NULL,

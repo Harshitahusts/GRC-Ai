@@ -368,7 +368,9 @@ a.connector:hover, a.connector:focus-visible { border-color: var(--accent); box-
   border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); text-decoration: none; box-shadow: var(--shadow); }
 .stepper a:hover { border-color: var(--border-strong); color: var(--text); }
 .stepper a[aria-current] { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
-.stepper .step-side { margin-left: auto; flex: 0 1 auto; }
+.stepper .step-side { margin-left: auto; flex: 0 1 auto; min-width: 0; }
+.stepper .step-side .step-text small { display: none; }
+@media (min-width: 701px) { .stepper { flex-wrap: wrap; overflow: visible; } }
 .stepper .step-side + .step-side { margin-left: 0; }
 .step-dot { display: grid; place-items: center; width: 30px; height: 30px; flex: none; border-radius: 50%; font-weight: 700; font-size: .85rem;
   background: var(--none-bg); color: var(--text-2); }
@@ -726,7 +728,7 @@ fieldset:disabled .choice span { cursor: not-allowed; opacity: .7; }
 .queue-text a:hover { color: var(--accent); text-decoration: underline; }
 .queue-text small { color: var(--muted); font-size: .78rem; }
 @media (max-width: 960px) { .chat-side-stack { display: none; } }
-.dash-tiles { grid-template-columns: repeat(5, 1fr); }
+.dash-tiles { grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); }
 @media (max-width: 1100px) { .dash-tiles { grid-template-columns: repeat(2, 1fr); } }
 .snapshot { display: grid; grid-template-columns: repeat(3, 1fr); gap: .6rem; margin-bottom: .9rem; }
 .snapshot p { margin: 0; display: flex; flex-direction: column; padding: .6rem .7rem; border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--border); }
@@ -866,3 +868,40 @@ code.wrap { word-break: break-all; }
 .tenant-banner .icon { color: var(--accent); margin-top: .2rem; flex: none; }
 .demo-login { margin: 1rem 0 0; font-size: .88rem; }
 @media (max-width: 700px) { .tenant-banner { padding: .5rem 1rem; } }
+
+/* ---- Personal data: discovery and inventory */
+.badge-warn { background: var(--warn-bg); color: var(--warn); }
+.tabs .badge { font-size: .7rem; }
+.scan-privacy { display: flex; gap: .6rem; align-items: flex-start; margin-top: 1rem; padding: .7rem .8rem; border-radius: var(--radius-sm); background: var(--info-bg); color: var(--info); }
+.scan-privacy p { margin: 0; }
+.scan-privacy .icon { flex: none; margin-top: .15rem; }
+ul.checks li { display: flex; gap: .45rem; align-items: flex-start; padding: .3rem 0; }
+ul.checks .icon { flex: none; margin-top: .15rem; }
+.findings-list { list-style: none; margin: 0; padding: 0; }
+.finding { display: flex; gap: 1rem; justify-content: space-between; align-items: flex-start; padding: .85rem 0 .85rem .8rem; border-bottom: 1px solid var(--border); border-left: 3px solid var(--border); }
+.finding:last-child { border-bottom: 0; }
+.finding.find-high { border-left-color: var(--fail); }
+.finding.find-medium { border-left-color: var(--warn); }
+.finding.find-low { border-left-color: var(--pass); }
+.finding p { margin: .15rem 0; }
+.finding-title code { font-size: .95rem; font-weight: 650; }
+.finding-main { min-width: 0; flex: 1; }
+.finding-main code { overflow-wrap: anywhere; }
+.finding-actions { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; justify-content: flex-end; flex: 0 1 360px; }
+.finding-actions input { flex: 1 1 150px; min-width: 0; }
+.flag-children { display: flex; gap: .4rem; align-items: flex-start; color: var(--fail); font-weight: 550; }
+.flag-children .icon { flex: none; margin-top: .15rem; }
+.tag.conf-high { color: var(--pass); border-color: currentColor; }
+.tag.conf-low { border-style: dashed; }
+.findings-list + p, .chips + .findings-list, .chips + .empty { margin-top: .75rem; }
+.inv-edit { margin-top: .35rem; }
+.inv-edit[open] { min-width: min(320px, 80vw); }
+.inv-form fieldset { border: 0; padding: 0; margin: .5rem 0; display: grid; gap: .5rem; }
+.inv-form label { display: grid; gap: .2rem; font-size: .82rem; font-weight: 600; }
+.inline-form { display: flex; flex-wrap: wrap; gap: .75rem; align-items: flex-end; }
+.inline-form label { display: grid; gap: .25rem; font-size: .85rem; font-weight: 600; flex: 1 1 180px; }
+.link.danger { color: var(--fail); }
+@media (max-width: 700px) {
+  .finding { flex-direction: column; }
+  .finding-actions { justify-content: flex-start; flex-basis: auto; width: 100%; }
+}

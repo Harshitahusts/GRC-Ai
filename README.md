@@ -48,6 +48,38 @@ a gap is likely (4), an open item possible (3), and impact follows the obligatio
 severity. Change the scores, and record the treatment (mitigate, accept with a reason,
 transfer, avoid), owner, due date and status. A 5x5 matrix shows where the open risks sit.
 
+### Personal data discovery and inventory
+
+Each engagement has a **Personal data** step. Upload a CSV or JSON export (up to 5 MB)
+of customers, employees or patients, and a background scan reports which fields look
+like personal data: Aadhaar (Verhoeff checksum), PAN, GSTIN (checksum), passport, voter
+ID, driving licence, emails, Indian mobiles, UPI IDs, card numbers (Luhn), IP addresses,
+plus fields known by their name (date of birth, health, biometric, salary, address).
+Dates of birth and ages under 18 are flagged as children's data (Section 9).
+
+A person confirms or rejects each finding (rejecting needs a reason). Confirmed fields
+become records in the **Data inventory**, where you record the purpose, whose data it
+is, the legal basis (consent or a legitimate use), retention, storage, recipients and
+owner. Each record lists the obligations it touches, and the dashboard counts findings
+waiting for review.
+
+Privacy by design: the file is parsed in memory and never written to disk, at most 200
+records are sampled per field, and only a masked *shape* of values (`Xxxxx Xxxxxx`,
+`+99 99999 99999`) is stored. Nothing is sent to Claude. A finding means a field looks
+like personal data; it is not a legal conclusion.
+
+The built-in rules need nothing extra. For names and places inside free text, install
+[Microsoft Presidio](https://github.com/microsoft/presidio) (MIT) and a spaCy model; the
+scanner then uses both:
+
+```
+pip install -e ".[scanner]"
+python -m spacy download en_core_web_sm    # or en_core_web_lg, more accurate
+```
+
+Synthetic sample files to try are linked on the Discovery tab
+(`src/grc_agent/discovery/samples/`). Set `GRC_SCANNER=builtin` to skip Presidio.
+
 ### GRC Analyst
 
 The **GRC Analyst** page is an AI analyst that works from the workspace's live data. Pick
@@ -276,6 +308,7 @@ src/grc_agent/
   assessment.py     rule-based gap assessment and readiness score
   documents.py      draft documents (gap report, RoPA, notice, playbook, DPA)
   risk.py           DPDPA risk register (threats, likelihood x impact, treatments)
+  discovery/        personal data scanner: India detectors, Presidio engine, file parsing
 tests/              unit tests (use a fake client; no API key needed)
 docs/kpis.md        KPI definitions and dictionary
 examples/kpis/      fictional engagement records and a sample corpus index
@@ -295,6 +328,9 @@ Set in `.env` or the environment:
 | `GRC_AI_MODE` | `api` | `demo` runs the offline stand-in for Claude, for testing without a key |
 | `GRC_AWS_PROFILE` | none | AWS profile with the firm's credentials (for assuming clients' roles) |
 | `GRC_PUBLIC_URL` | this server | Homepage shown on the GitHub App |
+| `GRC_SCANNER` | auto | `builtin` skips Presidio even when it is installed |
+| `GRC_SCAN_MAX_MB` | `5` | Largest file the discovery scan accepts |
+| `GRC_SCAN_SAMPLE_ROWS` | `200` | Records sampled per field |
 
 The agent uses adaptive thinking, prompt caching, and server-side refusal fallbacks
 (`fallbacks: "default"`).

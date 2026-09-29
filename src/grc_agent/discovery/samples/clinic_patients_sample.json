@@ -1,0 +1,354 @@
+{
+ "patients": [
+  {
+   "patient_id": "PT-500",
+   "patient_name": "Tenzin Nair",
+   "contact": {
+    "phone": "9773281671",
+    "email": "tenzin0@example.com"
+   },
+   "age": 34,
+   "gender": "M",
+   "blood_group": "O+",
+   "diagnosis": "Hypertension",
+   "visit_date": "2026-07-22",
+   "ward": "Paediatrics"
+  },
+  {
+   "patient_id": "PT-501",
+   "patient_name": "Sanjay Singh",
+   "contact": {
+    "phone": "9640713189",
+    "email": "sanjay1@example.com"
+   },
+   "age": 71,
+   "gender": "F",
+   "blood_group": "A+",
+   "diagnosis": "Type 2 diabetes",
+   "visit_date": "2026-08-24",
+   "ward": "OPD-1"
+  },
+  {
+   "patient_id": "PT-502",
+   "patient_name": "Tenzin Gupta",
+   "contact": {
+    "phone": "9764190121",
+    "email": "tenzin2@example.com"
+   },
+   "age": 71,
+   "gender": "F",
+   "blood_group": "AB-",
+   "diagnosis": "Migraine",
+   "visit_date": "2026-02-12",
+   "ward": "OPD-1"
+  },
+  {
+   "patient_id": "PT-503",
+   "patient_name": "Sanjay Patel",
+   "contact": {
+    "phone": "9492272589",
+    "email": "sanjay3@example.com"
+   },
+   "age": 9,
+   "gender": "M",
+   "blood_group": "A+",
+   "diagnosis": "Type 2 diabetes",
+   "visit_date": "2026-03-12",
+   "ward": "Paediatrics"
+  },
+  {
+   "patient_id": "PT-504",
+   "patient_name": "Neha Gupta",
+   "contact": {
+    "phone": "9873516597",
+    "email": "neha4@example.com"
+   },
+   "age": 9,
+   "gender": "F",
+   "blood_group": "AB-",
+   "diagnosis": "Hypertension",
+   "visit_date": "2026-01-12",
+   "ward": "Paediatrics"
+  },
+  {
+   "patient_id": "PT-505",
+   "patient_name": "Ananya Khan",
+   "contact": {
+    "phone": "9241323188",
+    "email": "ananya5@example.com"
+   },
+   "age": 71,
+   "gender": "M",
+   "blood_group": "B+",
+   "diagnosis": "Hypertension",
+   "visit_date": "2026-02-21",
+   "ward": "Paediatrics"
+  },
+  {
+   "patient_id": "PT-506",
+   "patient_name": "Arjun Reddy",
+   "contact": {
+    "phone": "9447719486",
+    "email": "arjun6@example.com"
+   },
+   "age": 34,
+   "gender": "M",
+   "blood_group": "B+",
+   "diagnosis": "Asthma",
+   "visit_date": "2026-08-16",
+   "ward": "Paediatrics"
+  },
+  {
+   "patient_id": "PT-507",
+   "patient_name": "Arjun Bose",
+   "contact": {
+    "phone": "9643320849",
+    "email": "arjun7@example.com"
+   },
+   "age": 23,
+   "gender": "M",
+   "blood_group": "O+",
+   "diagnosis": "Type 2 diabetes",
+   "visit_date": "2026-04-15",
+   "ward": "OPD-2"
+  },
+  {
+   "patient_id": "PT-508",
+   "patient_name": "Meera Kulkarni",
+   "contact": {
+    "phone": "9398713012",
+    "email": "meera8@example.com"
+   },
+   "age": 47,
+   "gender": "M",
+   "blood_group": "B+",
+   "diagnosis": "Asthma",
+   "visit_date": "2026-02-26",
+   "ward": "OPD-1"
+  },
+  {
+   "patient_id": "PT-509",
+   "patient_name": "Sanjay Chatterjee",
+   "contact": {
+    "phone": "9586446482",
+    "email": "sanjay9@example.com"
+   },
+   "age": 9,
+   "gender": "M",
+   "blood_group": "AB-",
+   "diagnosis": "Asthma",
+   "visit_date": "2026-05-22",
+   "ward": "OPD-2"
+  },
+  {
+   "patient_id": "PT-510",
+   "patient_name": "Rahul Reddy",
+   "contact": {
+    "phone": "9486816983",
+    "email": "rahul10@example.com"
+   },
+   "age": 47,
+   "gender": "F",
+   "blood_group": "AB-",
+   "diagnosis": "Hypertension",
+   "visit_date": "2026-03-11",
+   "ward": "OPD-2"
+  },
+  {
+   "patient_id": "PT-511",
+   "patient_name": "Joseph Das",
+   "contact": {
+    "phone": "9432937745",
+    "email": "joseph11@example.com"
+   },
+   "age": 47,
+   "gender": "F",
+   "blood_group": "A+",
+   "diagnosis": "Hypertension",
+   "visit_date": "2026-03-19",
+   "ward": "Paediatrics"
+  },
+  {
+   "patient_id": "PT-512",
+   "patient_name": "Lakshmi Patel",
+   "contact": {
+    "phone": "9650483794",
+    "email": "lakshmi12@example.com"
+   },
+   "age": 47,
+   "gender": "F",
+   "blood_group": "B+",
+   "diagnosis": "Migraine",
+   "visit_date": "2026-04-11",
+   "ward": "OPD-1"
+  },
+  {
+   "patient_id": "PT-513",
+   "patient_name": "Priya Sharma",
+   "contact": {
+    "phone": "9708941712",
+    "email": "priya13@example.com"
+   },
+   "age": 47,
+   "gender": "M",
+   "blood_group": "A+",
+   "diagnosis": "Asthma",
+   "visit_date": "2026-04-23",
+   "ward": "Paediatrics"
+  },
+  {
+   "patient_id": "PT-514",
+   "patient_name": "Diya Bose",
+   "contact": {
+    "phone": "9243587961",
+    "email": "diya14@example.com"
+   },
+   "age": 23,
+   "gender": "M",
+   "blood_group": "AB-",
+   "diagnosis": "Hypertension",
+   "visit_date": "2026-03-10",
+   "ward": "OPD-1"
+  },
+  {
+   "patient_id": "PT-515",
+   "patient_name": "Vikram Singh",
+   "contact": {
+    "phone": "9202869486",
+    "email": "vikram15@example.com"
+   },
+   "age": 9,
+   "gender": "F",
+   "blood_group": "O+",
+   "diagnosis": "Migraine",
+   "visit_date": "2026-05-10",
+   "ward": "OPD-1"
+  },
+  {
+   "patient_id": "PT-516",
+   "patient_name": "Kavya Rao",
+   "contact": {
+    "phone": "9476166874",
+    "email": "kavya16@example.com"
+   },
+   "age": 71,
+   "gender": "M",
+   "blood_group": "B+",
+   "diagnosis": "Hypertension",
+   "visit_date": "2026-01-11",
+   "ward": "OPD-1"
+  },
+  {
+   "patient_id": "PT-517",
+   "patient_name": "Kavya Sharma",
+   "contact": {
+    "phone": "9535927078",
+    "email": "kavya17@example.com"
+   },
+   "age": 15,
+   "gender": "F",
+   "blood_group": "B+",
+   "diagnosis": "Type 2 diabetes",
+   "visit_date": "2026-02-10",
+   "ward": "Paediatrics"
+  },
+  {
+   "patient_id": "PT-518",
+   "patient_name": "Kavya Kulkarni",
+   "contact": {
+    "phone": "9311804350",
+    "email": "kavya18@example.com"
+   },
+   "age": 15,
+   "gender": "M",
+   "blood_group": "B+",
+   "diagnosis": "Migraine",
+   "visit_date": "2026-03-26",
+   "ward": "OPD-2"
+  },
+  {
+   "patient_id": "PT-519",
+   "patient_name": "Rohan Das",
+   "contact": {
+    "phone": "9772123530",
+    "email": "rohan19@example.com"
+   },
+   "age": 4,
+   "gender": "M",
+   "blood_group": "A+",
+   "diagnosis": "Migraine",
+   "visit_date": "2026-07-24",
+   "ward": "OPD-1"
+  },
+  {
+   "patient_id": "PT-520",
+   "patient_name": "Tenzin Reddy",
+   "contact": {
+    "phone": "9342610256",
+    "email": "tenzin20@example.com"
+   },
+   "age": 9,
+   "gender": "M",
+   "blood_group": "B+",
+   "diagnosis": "Type 2 diabetes",
+   "visit_date": "2026-02-20",
+   "ward": "Paediatrics"
+  },
+  {
+   "patient_id": "PT-521",
+   "patient_name": "Arjun Fernandes",
+   "contact": {
+    "phone": "9156406757",
+    "email": "arjun21@example.com"
+   },
+   "age": 34,
+   "gender": "M",
+   "blood_group": "O+",
+   "diagnosis": "Asthma",
+   "visit_date": "2026-04-12",
+   "ward": "Paediatrics"
+  },
+  {
+   "patient_id": "PT-522",
+   "patient_name": "Aarav Reddy",
+   "contact": {
+    "phone": "9379568704",
+    "email": "aarav22@example.com"
+   },
+   "age": 23,
+   "gender": "F",
+   "blood_group": "B+",
+   "diagnosis": "Asthma",
+   "visit_date": "2026-04-22",
+   "ward": "OPD-2"
+  },
+  {
+   "patient_id": "PT-523",
+   "patient_name": "Sneha Khan",
+   "contact": {
+    "phone": "9507430190",
+    "email": "sneha23@example.com"
+   },
+   "age": 71,
+   "gender": "M",
+   "blood_group": "A+",
+   "diagnosis": "Type 2 diabetes",
+   "visit_date": "2026-07-17",
+   "ward": "Paediatrics"
+  },
+  {
+   "patient_id": "PT-524",
+   "patient_name": "Diya Gupta",
+   "contact": {
+    "phone": "9327596873",
+    "email": "diya24@example.com"
+   },
+   "age": 62,
+   "gender": "F",
+   "blood_group": "B+",
+   "diagnosis": "Hypertension",
+   "visit_date": "2026-01-10",
+   "ward": "OPD-1"
+  }
+ ]
+}
