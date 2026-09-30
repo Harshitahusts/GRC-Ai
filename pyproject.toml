@@ -29,6 +29,9 @@ dev = ["pytest>=8", "ruff>=0.6", "httpx>=0.27"]
 # Optional: Microsoft Presidio for name and address detection in data discovery.
 # Also needs a spaCy model: python -m spacy download en_core_web_sm
 scanner = ["presidio-analyzer>=2.2"]
+# Optional: store everything in PostgreSQL instead of the local SQLite file.
+# Set GRC_DATABASE_URL=postgresql://user:password@host:5432/dbname
+postgres = ["psycopg[binary]>=3.2"]
 
 [project.scripts]
 grc-agent = "grc_agent.cli:main"

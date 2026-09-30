@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from grc_agent.web import pg
+
 # What each table is for. `personal` means it holds personal data about
 # people (users, client contacts, intake answers), which DPDPA cares about.
 # `retain_days` is a suggested retention period, not an enforced one.
@@ -192,12 +194,36 @@ class Watch:
     detail: str
 
 
+def _is_pg(conn) -> bool:
+    return isinstance(conn, pg.Connection)
+
+
 def _tables(conn: sqlite3.Connection) -> list[str]:
-    rows = conn.execute(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' "
-        "ORDER BY name"
-    ).fetchall()
+    if _is_pg(conn):
+        rows = conn.execute(
+            "SELECT table_name FROM information_schema.tables "
+            "WHERE table_schema = current_schema() AND table_type = 'BASE TABLE' "
+            "ORDER BY table_name"
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' "
+            "ORDER BY name"
+        ).fetchall()
     return [r[0] for r in rows]
+
+
+def _columns(conn, table: str) -> set[str]:
+    if _is_pg(conn):
+        return {
+            r[0]
+            for r in conn.execute(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema = current_schema() AND table_name = ?",
+                (table,),
+            )
+        }
+    return {r[1] for r in conn.execute(f"PRAGMA table_info({_quote(table)})")}
 
 
 def _quote(name: str) -> str:
@@ -209,7 +235,7 @@ def table_stats(conn: sqlite3.Connection, today: datetime | None = None) -> list
     stats = []
     for name in _tables(conn):
         q = _quote(name)
-        columns = {r[1] for r in conn.execute(f"PRAGMA table_info({q})")}
+        columns = _columns(conn, name)
         date_col = next((c for c in _DATE_COLUMNS if c in columns), None)
         info = CATALOG.get(name, {})
         rows = conn.execute(f"SELECT COUNT(*) FROM {q}").fetchone()[0]
@@ -259,28 +285,41 @@ def human_size(n: int) -> str:
 
 def report(
     conn: sqlite3.Connection,
-    db_path: Path,
+    db_path: Path | str,
     today: datetime | None = None,
     check_integrity: bool = True,
+    data_dir: Path | None = None,
 ) -> dict:
     """Everything the Data manager page shows. Read-only.
 
-    The integrity check reads the whole file, so the dashboard skips it.
+    The integrity check reads the whole file, so the dashboard skips it. On PostgreSQL
+    the server looks after integrity and free space, so those checks don't apply.
     """
-    db_path = Path(db_path)
     tables = table_stats(conn, today)
-    page_count = conn.execute("PRAGMA page_count").fetchone()[0]
-    free_pages = conn.execute("PRAGMA freelist_count").fetchone()[0]
-    integrity = (
-        conn.execute("PRAGMA quick_check").fetchone()[0] if check_integrity else "not checked"
-    )
-    journal = conn.execute("PRAGMA journal_mode").fetchone()[0]
-    db_bytes = _size(db_path)
-    wal_bytes = _size(db_path.with_name(db_path.name + "-wal"))
+    if _is_pg(conn):
+        page_count = free_pages = 0
+        integrity = "ok" if check_integrity else "not checked"
+        journal = "PostgreSQL"
+        db_bytes = conn.execute("SELECT pg_database_size(current_database())").fetchone()[0]
+        wal_bytes = 0
+        folder = Path(data_dir) if data_dir else None
+        where = pg.safe_label(str(db_path))
+    else:
+        db_path = Path(db_path)
+        page_count = conn.execute("PRAGMA page_count").fetchone()[0]
+        free_pages = conn.execute("PRAGMA freelist_count").fetchone()[0]
+        integrity = (
+            conn.execute("PRAGMA quick_check").fetchone()[0] if check_integrity else "not checked"
+        )
+        journal = conn.execute("PRAGMA journal_mode").fetchone()[0]
+        db_bytes = _size(db_path)
+        wal_bytes = _size(db_path.with_name(db_path.name + "-wal"))
+        folder = db_path.parent
+        where = str(db_path)
     files = sorted(
         (
             {"name": p.name, "bytes": _size(p), "size": human_size(_size(p))}
-            for p in db_path.parent.iterdir()
+            for p in (folder.iterdir() if folder and folder.is_dir() else [])
             if p.is_file()
         ),
         key=lambda f: -f["bytes"],
@@ -315,13 +354,17 @@ def report(
         Watch(
             "warning",
             "No backups yet",
-            "Scheduled backups are planned. Copy the data folder by hand until then.",
+            "Use your PostgreSQL provider's backups (or pg_dump), and back up the data "
+            "folder for the key and evidence files."
+            if _is_pg(conn)
+            else "Scheduled backups are planned. Copy the data folder by hand until then.",
         )
     )
 
     personal = [t for t in tables if t.personal]
     return {
-        "db_path": str(db_path),
+        "db_path": where,
+        "engine": "PostgreSQL" if _is_pg(conn) else "SQLite",
         "db_size": human_size(db_bytes),
         "wal_size": human_size(wal_bytes),
         "total_size": human_size(db_bytes + wal_bytes),

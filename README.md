@@ -192,6 +192,28 @@ Remove the line once you have a key. Add more accounts with `.venv/bin/grc-web a
 Data (SQLite database and session secret) lives in `./var/`. It's git-ignored, so back up
 that folder. To update, run `git pull` and then start the app again.
 
+### Database: SQLite or PostgreSQL
+
+By default everything (logins, client data, the audit log) lives in one SQLite file,
+`var/grc.db`: nothing to install, one machine. For a shared server, use PostgreSQL:
+
+1. Create an empty database (Docker, or a managed one such as RDS, Supabase or Neon).
+2. Add it to `.env`:
+   `GRC_DATABASE_URL=postgresql://grc:YOUR-PASSWORD@localhost:5432/grc`
+3. Start the app as usual. `start.bat` / `start.sh` install PostgreSQL support; otherwise
+   `pip install -e ".[postgres]"`. The tables are created on first start.
+4. Already have data in SQLite? Copy it across once:
+   `grc-web migrate-to-postgres` (the target must be empty; the SQLite file is kept as a
+   backup). Ids are preserved, so every link between records survives.
+
+The demo tenant uses its own schema (`grc_demo`) in the same database, so sample data
+never mixes with real clients. The session secret, the encryption key for connector
+secrets and uploaded evidence files stay in the data folder, so back that up as well as
+the database. The Data manager page shows which database is in use (never its password).
+
+With Docker: `docker compose -f compose.yaml -f compose.postgres.yaml up -d --build`
+runs the app with a bundled PostgreSQL (set `POSTGRES_PASSWORD` in `.env` first).
+
 To keep it running in the background and restart it after a reboot, use Docker:
 
 ```bash
@@ -367,6 +389,8 @@ Set in `.env` or the environment:
 | `GRC_SCAN_MAX_MB` | `5` | Largest file the discovery scan accepts |
 | `GRC_SCAN_SAMPLE_ROWS` | `200` | Records sampled per field |
 | `GRC_EVIDENCE_MAX_MB` | `10` | Largest evidence file accepted |
+| `GRC_DATABASE_URL` | none (SQLite) | `postgresql://…` to store everything in PostgreSQL |
+| `GRC_DATABASE_SCHEMA` | `public` | PostgreSQL schema for this workspace |
 
 The agent uses adaptive thinking, prompt caching, and server-side refusal fallbacks
 (`fallbacks: "default"`).

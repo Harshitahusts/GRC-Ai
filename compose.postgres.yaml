@@ -1,0 +1,31 @@
+# Run the app with PostgreSQL holding logins, client data and logs:
+#
+#   docker compose -f compose.yaml -f compose.postgres.yaml up -d --build
+#
+# Set a strong POSTGRES_PASSWORD in .env first. Evidence files, the session secret and
+# the encryption key for connector secrets stay in the grc-data volume: back up both
+# volumes. To use a managed database instead (RDS, Supabase, Neon...), skip this file
+# and set GRC_DATABASE_URL in .env.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: grc
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: grc
+    volumes:
+      - grc-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grc"]
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
+  web:
+    environment:
+      GRC_DATABASE_URL: postgresql://grc:${POSTGRES_PASSWORD}@db:5432/grc
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  grc-pg:

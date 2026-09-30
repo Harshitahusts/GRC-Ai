@@ -102,7 +102,7 @@ def _secret_key(data_dir: Path) -> str:
 def create_app(data_dir: str | Path | None = None) -> FastAPI:
     data_dir = Path(data_dir or os.getenv("GRC_DATA_DIR", "var"))
     data_dir.mkdir(parents=True, exist_ok=True)
-    db_path = data_dir / "grc.db"
+    db_path = db.database_target(data_dir)
     db.init_db(db_path)
     with db.connect(db_path) as conn:
         db.seed_content(conn, seed_items())
@@ -233,7 +233,9 @@ def user_role(request: Request, username: str | None = None) -> str:
     if not username:
         return ""
     with db.connect(request.app.state.db_path) as c:
-        row = c.execute("SELECT role FROM users WHERE username = ?", (username,)).fetchone()
+        row = c.execute(
+            "SELECT role FROM users WHERE LOWER(username) = LOWER(?)", (username,)
+        ).fetchone()
     return row["role"] if row else ""
 
 
@@ -433,7 +435,9 @@ def _routes(app: FastAPI) -> None:
                 username=username,
             )
 
-        row = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+        row = conn.execute(
+            "SELECT * FROM users WHERE LOWER(username) = LOWER(?)", (username,)
+        ).fetchone()
         ok = verify_password(password, row["password_hash"] if row else DUMMY_HASH) and row
         if not ok:
             failures[key] = (count + 1, window_start)
@@ -507,7 +511,12 @@ def _routes(app: FastAPI) -> None:
             ),
             connections_ok=sum(1 for c in connections if c["status"] == "ok"),
             connections_total=len(connections),
-            store=datamanager.report(conn, request.app.state.db_path, check_integrity=False),
+            store=datamanager.report(
+                conn,
+                request.app.state.db_path,
+                check_integrity=False,
+                data_dir=request.app.state.data_dir,
+            ),
             personal=discovery_views.summary(conn),
             personal_by_client=discovery_views.by_engagement(conn),
         )
@@ -519,7 +528,9 @@ def _routes(app: FastAPI) -> None:
         return render(
             request,
             "data_manager.html",
-            store=datamanager.report(conn, request.app.state.db_path),
+            store=datamanager.report(
+                conn, request.app.state.db_path, data_dir=request.app.state.data_dir
+            ),
             planned_here={k: v for k, v in PLANNED.items() if v["area"] == "Data manager"},
         )
 

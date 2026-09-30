@@ -192,7 +192,9 @@ def summary(conn: sqlite3.Connection, eid: int | None = None) -> dict:
     inv = conn.execute(f"SELECT * FROM data_inventory {where}", args).fetchall()
     incomplete = sum(1 for r in inv if any(not r[k] for k in REQUIRED))
     scans = conn.execute(
-        f"SELECT COUNT(*), SUM(status IN ('queued', 'running')) FROM scan_jobs {where}", args
+        "SELECT COUNT(*), SUM(CASE WHEN status IN ('queued', 'running') THEN 1 ELSE 0 END) "
+        f"FROM scan_jobs {where}",
+        args,
     ).fetchone()
     # Children's data the reviewer hasn't decided on yet counts too: it is the most
     # urgent thing to look at.
@@ -246,7 +248,8 @@ def _add_to_inventory(conn: sqlite3.Connection, finding: sqlite3.Row, user: str)
         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT (engagement_id, source_name, field) "
         "DO UPDATE SET finding_id = excluded.finding_id, kind = excluded.kind, "
         "category = excluded.category, risk = excluded.risk, "
-        "children = MAX(children, excluded.children)",
+        "children = CASE WHEN excluded.children > data_inventory.children "
+        "THEN excluded.children ELSE data_inventory.children END",
         (
             finding["engagement_id"],
             finding["id"],

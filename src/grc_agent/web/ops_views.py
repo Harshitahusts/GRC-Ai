@@ -567,7 +567,7 @@ def register(app: FastAPI) -> None:
             return redirect("/team")
         if role not in ROLES:
             raise HTTPException(status_code=400, detail="Unknown role")
-        if conn.execute("SELECT 1 FROM users WHERE username = ?", (name,)).fetchone():
+        if conn.execute("SELECT 1 FROM users WHERE LOWER(username) = LOWER(?)", (name,)).fetchone():
             flash(request, f"{name} already has an account.", "error")
             return redirect("/team")
         conn.execute(
@@ -585,14 +585,16 @@ def register(app: FastAPI) -> None:
         role = str(form.get("role", ""))
         if role not in ROLES:
             raise HTTPException(status_code=400, detail="Unknown role")
-        row = conn.execute("SELECT role FROM users WHERE username = ?", (name,)).fetchone()
+        row = conn.execute(
+            "SELECT role FROM users WHERE LOWER(username) = LOWER(?)", (name,)
+        ).fetchone()
         if row is None:
             raise HTTPException(status_code=404, detail="No such user")
         admins = conn.execute("SELECT COUNT(*) FROM users WHERE role = 'admin'").fetchone()[0]
         if row["role"] == "admin" and role != "admin" and admins <= 1:
             flash(request, "Keep at least one admin.", "error")
             return redirect("/team")
-        conn.execute("UPDATE users SET role = ? WHERE username = ?", (role, name))
+        conn.execute("UPDATE users SET role = ? WHERE LOWER(username) = LOWER(?)", (role, name))
         db.audit(conn, user, "role_changed", None, {"username": name, "role": role})
         flash(request, f"{name} is now {role}.")
         return redirect("/team")

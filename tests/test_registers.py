@@ -1,20 +1,19 @@
 """Registers (tasks, consent, requests, breaches, vendors, DPIAs, policies), controls,
 evidence, the work queue, the audit log and team roles."""
 
-import sqlite3
 from html import escape
 from pathlib import Path
 
 import pytest
 from helpers import PASSWORD, create, csrf, login, post
 
+from grc_agent.web import db as webdb
 from grc_agent.web.registers import REGISTERS, clean, status_problems
 
 
 def db(app):
-    conn = sqlite3.connect(app.state.db_path)
-    conn.row_factory = sqlite3.Row
-    return conn
+    """The app's own database, SQLite or PostgreSQL."""
+    return webdb.connect(app.state.db_path)
 
 
 def new(client, eid, key, data, **kwargs):

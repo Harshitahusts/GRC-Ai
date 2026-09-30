@@ -66,6 +66,16 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("init", help="Create the first account if none exist.")
 
+    mig = sub.add_parser(
+        "migrate-to-postgres",
+        help="Copy this workspace's SQLite data into the database in GRC_DATABASE_URL.",
+    )
+    mig.add_argument(
+        "--url",
+        default=None,
+        help="PostgreSQL URL (default: GRC_DATABASE_URL). The database must be empty.",
+    )
+
     for name, text in (("adduser", "Create an account."), ("passwd", "Change a password.")):
         p = sub.add_parser(name, help=text)
         p.add_argument("username")
@@ -83,9 +93,32 @@ def main(argv: list[str] | None = None) -> int:
         return _demo(args)
     if args.command == "init":
         return _init(data_dir)
+    if args.command == "migrate-to-postgres":
+        return _migrate(data_dir, args.url)
     return _set_password(
         data_dir, args.username, args.password_stdin, create=args.command == "adduser"
     )
+
+
+def _migrate(data_dir: Path, url: str | None) -> int:
+    if url:
+        os.environ["GRC_DATABASE_URL"] = url
+    if not os.getenv("GRC_DATABASE_URL"):
+        print(
+            "error: set GRC_DATABASE_URL (or pass --url) to a PostgreSQL database.", file=sys.stderr
+        )
+        return 2
+    target = db.database_target(data_dir)
+    print(f"Copying {data_dir / 'grc.db'} to {db.label(target)} ...")
+    copied = db.copy_to_postgres(data_dir / "grc.db", target)
+    for table, n in copied.items():
+        if n:
+            print(f"  {table}: {n}")
+    print(
+        f"Done: {sum(copied.values())} rows. Keep GRC_DATABASE_URL in .env so the app uses "
+        "PostgreSQL from now on. The SQLite file is left as it was; keep it as a backup."
+    )
+    return 0
 
 
 def _serve(data_dir: Path, host: str, port: int, reload: bool, open_browser: bool) -> int:
@@ -107,7 +140,7 @@ def _serve(data_dir: Path, host: str, port: int, reload: bool, open_browser: boo
             file=sys.stderr,
         )
         return 1
-    print(f"GRC agent running at {url}  (data: {data_dir.resolve()})")
+    print(f"GRC agent running at {url}  (data: {db.label(db.database_target(data_dir))})")
     if host in ("0.0.0.0", "::"):
         ip = lan_ip()
         if ip:
@@ -141,6 +174,10 @@ def _demo(args) -> int:
     from grc_agent.web import demo_tenant
 
     load_dotenv()
+    if os.getenv("GRC_DATABASE_URL"):
+        # On PostgreSQL the demo gets its own schema, so its sample data never mixes
+        # with the real workspace in the same database.
+        os.environ["GRC_DATABASE_SCHEMA"] = os.getenv("GRC_DEMO_SCHEMA", "grc_demo")
     if not os.getenv("ANTHROPIC_API_KEY"):
         # No key: the analyst gives simulated answers instead of failing mid-demo.
         os.environ.setdefault("GRC_AI_MODE", "demo")
@@ -183,7 +220,7 @@ def _port_in_use(host: str, port: int) -> bool:
 
 
 def _init(data_dir: Path) -> int:
-    db_path = data_dir / "grc.db"
+    db_path = db.database_target(data_dir)
     db.init_db(db_path)
     with db.connect(db_path) as conn:
         count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
@@ -211,10 +248,12 @@ def _set_password(data_dir: Path, username: str, from_stdin: bool, create: bool)
         print(f"error: password must be at least {MIN_PASSWORD_LENGTH} characters", file=sys.stderr)
         return 2
 
-    db_path = data_dir / "grc.db"
+    db_path = db.database_target(data_dir)
     db.init_db(db_path)
     with db.connect(db_path) as conn:
-        exists = conn.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone()
+        exists = conn.execute(
+            "SELECT 1 FROM users WHERE LOWER(username) = LOWER(?)", (username,)
+        ).fetchone()
         if create and exists:
             print(f"error: user {username!r} already exists (use passwd)", file=sys.stderr)
             return 1
@@ -228,7 +267,7 @@ def _set_password(data_dir: Path, username: str, from_stdin: bool, create: bool)
             )
         else:
             conn.execute(
-                "UPDATE users SET password_hash = ? WHERE username = ?",
+                "UPDATE users SET password_hash = ? WHERE LOWER(username) = LOWER(?)",
                 (hash_password(password), username),
             )
         db.audit(conn, "cli", "user_created" if create else "password_changed", detail=username)

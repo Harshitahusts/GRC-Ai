@@ -1,11 +1,19 @@
-"""SQLite storage. One file, created on first run."""
+"""Storage: a SQLite file by default, or PostgreSQL when GRC_DATABASE_URL is set.
+
+The schema below is written for SQLite; pg.py adapts it (and the app's queries) for
+PostgreSQL, so every other module works the same on either database.
+"""
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
+
+from grc_agent.web import pg
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
@@ -296,9 +304,38 @@ def now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def database_target(data_dir: str | Path) -> str | Path:
+    """Where the workspace's data lives: GRC_DATABASE_URL (PostgreSQL) or <data_dir>/grc.db.
+
+    With PostgreSQL, GRC_DATABASE_SCHEMA picks a schema; "auto" derives one from the data
+    folder, so separate workspaces (and tests) sharing one server never see each other's data.
+    """
+    url = os.getenv("GRC_DATABASE_URL", "").strip()
+    if not url:
+        return Path(data_dir) / "grc.db"
+    if not pg.is_postgres(url):
+        raise SystemExit("GRC_DATABASE_URL must start with postgresql:// (or postgres://).")
+    schema = os.getenv("GRC_DATABASE_SCHEMA", "").strip()
+    if schema == "auto":
+        digest = hashlib.sha1(str(Path(data_dir).resolve()).encode()).hexdigest()[:16]
+        schema = f"ws_{digest}"
+    return pg.with_schema(url, schema) if schema else url
+
+
+def is_postgres(target: object) -> bool:
+    return pg.is_postgres(target)
+
+
+def label(target: str | Path) -> str:
+    """Where the data is, safe to show on screen (no password)."""
+    return pg.safe_label(target) if pg.is_postgres(target) else str(target)
+
+
 def connect(path: str | Path) -> sqlite3.Connection:
     # One connection per request. FastAPI may open it in a worker thread and use
     # it in the event loop thread, but never from two threads at once.
+    if pg.is_postgres(path):
+        return pg.Connection(path)  # type: ignore[return-value]
     conn = sqlite3.connect(path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
@@ -322,11 +359,39 @@ MIGRATIONS = {
 
 
 def init_db(path: str | Path) -> None:
+    if pg.is_postgres(path):
+        _init_postgres(path)
+        return
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     with connect(path) as conn:
         conn.executescript(SCHEMA)
         for table, columns in MIGRATIONS.items():
             existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+            for name, spec in columns.items():
+                if name not in existing:
+                    conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {spec}")
+
+
+def _init_postgres(url: str) -> None:
+    schema = pg.schema_of(url)
+    if schema != "public":
+        with pg.Connection(pg.without_schema(url)) as conn:
+            conn.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
+    with connect(url) as conn:
+        conn.executescript(pg.pg_schema(SCHEMA))
+        # SQLite compares usernames without case (COLLATE NOCASE); keep that rule.
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS users_username_ci ON users (LOWER(username))"
+        )
+        for table, columns in MIGRATIONS.items():
+            existing = {
+                r[0]
+                for r in conn.execute(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_schema = current_schema() AND table_name = ?",
+                    (table,),
+                )
+            }
             for name, spec in columns.items():
                 if name not in existing:
                     conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {spec}")
@@ -394,3 +459,76 @@ def audit(
     from grc_agent.web import notify  # here to avoid a circular import
 
     notify.from_audit(conn, username, action, engagement_id, data, detail)
+
+
+# Tables in an order that satisfies their foreign keys, for copying between databases.
+COPY_ORDER = (
+    "users",
+    "engagements",
+    "intake_answers",
+    "findings",
+    "documents",
+    "content",
+    "content_seeds",
+    "connections",
+    "evidence",
+    "notifications",
+    "notification_reads",
+    "dataflow_nodes",
+    "risk_edits",
+    "scan_jobs",
+    "scan_findings",
+    "data_inventory",
+    "records",
+    "record_events",
+    "controls",
+    "evidence_files",
+    "audit_log",
+)
+
+
+def copy_to_postgres(sqlite_path: str | Path, url: str) -> dict[str, int]:
+    """Copy every row of a SQLite workspace into an empty PostgreSQL database.
+
+    Ids are kept, so links between records survive, and each id sequence is moved past
+    the highest copied id. Refuses to write into a database that already has accounts.
+    """
+    source = Path(sqlite_path)
+    if not source.is_file():
+        raise SystemExit(f"No SQLite database at {source}.")
+    init_db(source)  # bring an older file up to the current schema first
+    init_db(url)
+    copied: dict[str, int] = {}
+    with connect(source) as src, connect(url) as dst:
+        if dst.execute("SELECT COUNT(*) FROM users").fetchone()[0]:
+            raise SystemExit(
+                "The PostgreSQL database already has accounts. Point GRC_DATABASE_URL at an "
+                "empty database (or schema) to migrate into."
+            )
+        for table in COPY_ORDER:
+            rows = src.execute(f"SELECT * FROM {table}").fetchall()
+            if rows:
+                cols = rows[0].keys()
+                sql = (
+                    f"INSERT INTO {table} ({', '.join(cols)}) "
+                    f"VALUES ({', '.join('?' for _ in cols)})"
+                )
+                for row in rows:
+                    dst.execute(sql, tuple(row))
+            copied[table] = len(rows)
+            if table in pg.ID_TABLES:
+                dst.execute(
+                    f"SELECT setval(pg_get_serial_sequence('{table}', 'id'), "
+                    f"COALESCE((SELECT MAX(id) FROM {table}), 1), "
+                    f"(SELECT MAX(id) FROM {table}) IS NOT NULL)"
+                )
+    return copied
+
+
+def reset_postgres_schema(url: str) -> None:
+    """Empty a workspace's own schema (used by the demo tenant's --reset)."""
+    schema = pg.schema_of(url)
+    if schema == "public":
+        raise SystemExit("Refusing to reset the public schema.")
+    with pg.Connection(pg.without_schema(url)) as conn:
+        conn.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
