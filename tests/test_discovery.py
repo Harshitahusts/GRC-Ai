@@ -1,6 +1,5 @@
 """Personal data discovery: detectors, file parsing, the scan job, review and inventory."""
 
-import sqlite3
 from datetime import date
 from pathlib import Path
 
@@ -10,6 +9,7 @@ from helpers import create, csrf, post
 from grc_agent.discovery import catalog, detectors, scanner
 from grc_agent.discovery.engine import BUILTIN, presidio_installed
 from grc_agent.discovery.scanner import ScanInputError, read_table, scan_table, shape
+from grc_agent.web import db as webdb
 
 SAMPLES = Path(__file__).resolve().parents[1] / "src" / "grc_agent" / "discovery" / "samples"
 CUSTOMERS = SAMPLES / "customers_sample.csv"
@@ -207,9 +207,8 @@ def upload(client, eid, path=CUSTOMERS, name="Shopify customers", **kwargs):
 
 
 def db(app):
-    conn = sqlite3.connect(app.state.db_path)
-    conn.row_factory = sqlite3.Row
-    return conn
+    """The app's own database, SQLite or PostgreSQL."""
+    return webdb.connect(app.state.db_path)
 
 
 def test_discovery_needs_login_and_an_agent_engagement(client, authed):
@@ -303,12 +302,25 @@ def test_raw_values_are_never_stored(app, authed):
     raw = CUSTOMERS.read_text().splitlines()[1].split(",")
     # Email, Aadhaar, PAN and UPI of the first customer.
     secrets = [raw[2], raw[5], raw[6], raw[10]]
-    blob = Path(app.state.db_path).read_bytes()
-    for wal in Path(app.state.db_path).parent.glob("*.db-wal"):
-        blob += wal.read_bytes()
+    # Every value in every table, whichever database holds them.
+    from grc_agent.web import datamanager
+
+    with db(app) as conn:
+        dump = " ".join(
+            str(v)
+            for t in datamanager._tables(conn)
+            for row in conn.execute(f"SELECT * FROM {t}").fetchall()
+            for v in row
+        )
     for value in secrets:
-        assert value.encode() not in blob, value
-    assert not list(Path(app.state.db_path).parent.glob("*.csv"))
+        assert value not in dump, value
+    if not webdb.is_postgres(app.state.db_path):
+        blob = Path(app.state.db_path).read_bytes()
+        for wal in Path(app.state.db_path).parent.glob("*.db-wal"):
+            blob += wal.read_bytes()
+        for value in secrets:
+            assert value.encode() not in blob, value
+    assert not list(Path(app.state.data_dir).glob("*.csv"))
 
 
 def test_reject_needs_a_reason_and_reopen_undoes_a_confirmation(app, authed):

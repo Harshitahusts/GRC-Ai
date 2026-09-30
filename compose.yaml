@@ -6,6 +6,9 @@ services:
       - "127.0.0.1:8000:8000"
     environment:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # Empty: data stays in the SQLite file in the grc-data volume.
+      # compose.postgres.yaml sets this to use the bundled PostgreSQL instead.
+      GRC_DATABASE_URL: ${GRC_DATABASE_URL:-}
     volumes:
       - grc-data:/data
     restart: unless-stopped

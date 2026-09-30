@@ -34,7 +34,7 @@ def demo(demo_dir, monkeypatch):
 
 def test_seed_covers_every_pipeline_stage(demo_dir):
     assert demo_tenant.is_demo(demo_dir)
-    with db.connect(demo_dir / "grc.db") as conn:
+    with db.connect(db.database_target(demo_dir)) as conn:
         stages = [_summary(conn, e)["stage"] for e in conn.execute("SELECT * FROM engagements")]
         evidence = conn.execute("SELECT COUNT(*) FROM evidence").fetchone()[0]
         oldest = conn.execute("SELECT MIN(at) FROM audit_log").fetchone()[0]
@@ -84,12 +84,12 @@ def test_connector_sync_is_simulated(demo):
 
 
 def test_live_step_makes_colleagues_act(demo_dir):
-    with db.connect(demo_dir / "grc.db") as conn:
+    with db.connect(db.database_target(demo_dir)) as conn:
         before = conn.execute("SELECT MAX(id) FROM audit_log").fetchone()[0]
     rng = random.Random(3)
-    done = [demo_tenant.live_step(demo_dir / "grc.db", rng) for _ in range(5)]
+    done = [demo_tenant.live_step(db.database_target(demo_dir), rng) for _ in range(5)]
     assert all(done)
-    with db.connect(demo_dir / "grc.db") as conn:
+    with db.connect(db.database_target(demo_dir)) as conn:
         rows = conn.execute("SELECT username FROM audit_log WHERE id > ?", (before,)).fetchall()
         unread = conn.execute(
             "SELECT COUNT(*) FROM notifications n WHERE n.id NOT IN "
@@ -137,7 +137,7 @@ def test_lan_flag_listens_on_all_interfaces(monkeypatch, tmp_path):
 
 
 def test_demo_has_personal_data_to_show(demo_dir, demo):
-    with db.connect(demo_dir / "grc.db") as conn:
+    with db.connect(db.database_target(demo_dir)) as conn:
         scans = conn.execute("SELECT status FROM scan_jobs").fetchall()
         documented = conn.execute(
             "SELECT COUNT(*) FROM data_inventory WHERE purpose != '' AND owner != ''"
@@ -152,7 +152,7 @@ def test_demo_has_personal_data_to_show(demo_dir, demo):
 
 
 def test_demo_has_privacy_operations_and_controls(demo_dir, demo):
-    with db.connect(demo_dir / "grc.db") as conn:
+    with db.connect(db.database_target(demo_dir)) as conn:
         regs = dict(conn.execute("SELECT register, COUNT(*) FROM records GROUP BY register"))
         controls = conn.execute("SELECT COUNT(*) FROM controls").fetchone()[0]
         files = conn.execute("SELECT COUNT(*) FROM evidence_files").fetchone()[0]

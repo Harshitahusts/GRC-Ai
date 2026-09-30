@@ -48,7 +48,7 @@ fc /b pyproject.toml .venv\installed-pyproject.toml >nul 2>&1
 if errorlevel 1 (
   echo Installing the app ^(first run takes a minute^) ...
   .venv\Scripts\python.exe -m pip install --quiet --upgrade pip || goto :error
-  .venv\Scripts\python.exe -m pip install --quiet -e . || goto :error
+  .venv\Scripts\python.exe -m pip install --quiet -e ".[postgres]" || goto :error
   copy /y pyproject.toml .venv\installed-pyproject.toml >nul
 )
 

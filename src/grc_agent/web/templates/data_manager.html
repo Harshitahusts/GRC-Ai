@@ -23,7 +23,7 @@
   <div class="tile">
     <p class="tile-label">Database size</p>
     <p class="tile-value">{{ store.total_size }}</p>
-    <p class="muted small">{{ store.free_pct }}% free space · {{ store.journal }} journal</p>
+    <p class="muted small">{% if store.engine == "PostgreSQL" %}whole PostgreSQL database{% else %}{{ store.free_pct }}% free space · {{ store.journal }} journal{% endif %}</p>
   </div>
   <div class="tile">
     <p class="tile-label">Records</p>
@@ -60,7 +60,11 @@
 
   <section class="card">
     <div class="card-head"><h2>Where it's stored</h2></div>
-    <p class="small muted">One SQLite file on this machine. Connector secrets are encrypted with the key in the same folder, so back both up together and keep them private.</p>
+    {% if store.engine == "PostgreSQL" %}
+    <p class="small muted">Logins, client data and logs are in PostgreSQL. The session secret, the encryption key for connector secrets, and uploaded evidence files stay in the data folder below: back that up too, and keep it private.</p>
+    {% else %}
+    <p class="small muted">One SQLite file on this machine. Connector secrets are encrypted with the key in the same folder, so back both up together and keep them private. For a shared server, set <code>GRC_DATABASE_URL</code> to use PostgreSQL.</p>
+    {% endif %}
     <p class="small"><code class="wrap">{{ store.db_path }}</code></p>
     <ul class="plain small">
       {% for f in store.files %}

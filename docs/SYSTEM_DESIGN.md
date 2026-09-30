@@ -20,7 +20,7 @@ flowchart LR
     R --> RK[Risk register builder]
     R --> DM[Data manager<br/>read-only]
   end
-  R <--> DB[(SQLite grc.db)]
+  R <--> DB[(SQLite grc.db or PostgreSQL)]
   AU --> DB
   NT --> DB
   DM --> DB

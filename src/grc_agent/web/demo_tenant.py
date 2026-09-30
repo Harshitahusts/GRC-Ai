@@ -392,6 +392,16 @@ def seed(data_dir: Path, reset: bool = False) -> Path:
             return data_dir
         shutil.rmtree(data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
+    target = db.database_target(data_dir)
+    if db.is_postgres(target):
+        from grc_agent.web import pg
+
+        if pg.schema_of(target) == "public":
+            raise SystemExit(
+                "The demo needs its own PostgreSQL schema. Start it with `grc-web demo`, "
+                "which uses the grc_demo schema, or set GRC_DATABASE_SCHEMA."
+            )
+        db.reset_postgres_schema(target)
     (data_dir / MARKER).write_text(
         json.dumps({"created_at": db.now(), "note": "Sample data for demos. Not real clients."})
     )

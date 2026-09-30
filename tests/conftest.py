@@ -1,6 +1,7 @@
 """Shared fixtures: a fresh app with one user, and clients logged in or not."""
 
 import io
+import os
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,6 +10,34 @@ from helpers import PASSWORD, login
 from grc_agent.connectors import ConnectorError
 from grc_agent.web import cli as web_cli
 from grc_agent.web.app import create_app
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _postgres_isolation():
+    """With GRC_DATABASE_URL set, the suite runs on PostgreSQL: every workspace (each
+    test's data folder) gets its own schema, dropped when the run ends."""
+    url = os.getenv("GRC_DATABASE_URL")
+    if not url:
+        yield
+        return
+    os.environ["GRC_DATABASE_SCHEMA"] = "auto"
+    yield
+    from grc_agent.web import pg
+
+    with pg.Connection(pg.without_schema(url)) as conn:
+        for (name,) in conn.execute(
+            "SELECT schema_name FROM information_schema.schemata WHERE schema_name LIKE 'ws_%'"
+        ).fetchall():
+            conn.execute(f'DROP SCHEMA "{name}" CASCADE')
+            conn.commit()  # one schema per transaction, or the lock table overflows
+
+
+@pytest.fixture(autouse=True)
+def _keep_database_schema(monkeypatch):
+    """`grc-web demo` switches GRC_DATABASE_SCHEMA for its process; tests call it
+    in-process, so put the suite's setting back after each test."""
+    if "GRC_DATABASE_SCHEMA" in os.environ:
+        monkeypatch.setenv("GRC_DATABASE_SCHEMA", os.environ["GRC_DATABASE_SCHEMA"])
 
 
 @pytest.fixture(autouse=True)

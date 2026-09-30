@@ -24,7 +24,7 @@ fi
 if ! cmp -s pyproject.toml .venv/.installed-pyproject.toml; then
   echo "Installing the app (first run takes a minute) ..."
   .venv/bin/python -m pip install --quiet --upgrade pip
-  .venv/bin/python -m pip install --quiet -e .
+  .venv/bin/python -m pip install --quiet -e ".[postgres]"
   cp pyproject.toml .venv/.installed-pyproject.toml
 fi
 

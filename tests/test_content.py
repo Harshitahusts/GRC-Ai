@@ -197,7 +197,7 @@ def test_robots_and_sitemap(client, monkeypatch):
 def test_seed_runs_once_and_never_overwrites_edits(authed, tmp_path):
     cid = content_id(authed, "dpdpa-overview")
     publish(authed, cid, title="My edited overview title for DPDPA", slug="my-overview")
-    again = create_app(authed.app.state.db_path.parent)  # restart
+    again = create_app(authed.app.state.data_dir)  # restart
     fresh = TestClient(again)
     login(fresh)
     listing = fresh.get("/content").text
