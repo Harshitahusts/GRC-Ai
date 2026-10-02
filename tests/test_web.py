@@ -6,8 +6,6 @@ import pytest
 from docx import Document
 from helpers import ALL_YES, PASSWORD, create, login, post
 
-from grc_agent.kpis import build_scorecard
-from grc_agent.kpis.models import parse_engagement
 from grc_agent.web import cli as web_cli
 from grc_agent.web.security import hash_password, verify_password
 
@@ -102,16 +100,13 @@ def test_full_engagement_to_north_star(authed):
     assert download.status_code == 200
     assert "Acme Pvt Ltd" in Document(io.BytesIO(download.content)).paragraphs[0].text
 
-    post(authed, f"{base}/details", {"consultant_hours": "5", "intake_completed_unaided": "yes"})
     post(authed, f"{base}/deliver")
     assert "Delivered" in authed.get(base).text
 
     record = authed.get(f"{base}/export.json").json()
     assert record["completed"] and len(record["findings"]) == 13 and len(record["documents"]) == 5
 
-    # KPIs are computed from these records by grc-kpis; the app no longer has a KPI page.
-    card = build_scorecard([parse_engagement(record)], authed.app.state.index)
-    assert card.verified_engagements == 1
+    assert "consultant_hours" not in record  # pilot-only fields are gone
     assert authed.get("/kpis").status_code == 404
 
     # Delivered engagements are locked.
@@ -161,14 +156,16 @@ def test_scoring_a_hallucination_forces_wrong(authed):
     assert authed.get(f"/engagements/{eid}/export.json").json()["findings"][0]["verdict"] == "wrong"
 
 
-def test_manual_baseline_feeds_kpis(authed):
-    eid = create(authed, mode="manual")
-    post(authed, f"/engagements/{eid}/deliver")
-    assert "Consultant hours recorded" in authed.get(f"/engagements/{eid}").text
-    post(authed, f"/engagements/{eid}/details", {"consultant_hours": "18"})
-    post(authed, f"/engagements/{eid}/deliver")
-    assert authed.get(f"/engagements/{eid}/export.json").json()["consultant_hours"] == 18.0
-    assert post(authed, f"/engagements/{eid}/intake", {"action": "save"}).status_code == 400
+def test_old_manual_engagements_become_ordinary_engagements(app, authed):
+    from grc_agent.web import db as webdb
+
+    eid = create(authed)
+    with webdb.connect(app.state.db_path) as conn:
+        conn.execute("UPDATE engagements SET mode = 'manual' WHERE id = ?", (eid,))
+    webdb.init_db(app.state.db_path)  # what happens when the app starts
+    with webdb.connect(app.state.db_path) as conn:
+        assert conn.execute("SELECT mode FROM engagements").fetchone()[0] == "agent"
+    assert authed.get(f"/engagements/{eid}/intake").status_code == 200
 
 
 def test_unknown_engagement_is_404(authed):

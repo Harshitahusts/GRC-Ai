@@ -1,5 +1,5 @@
 @echo off
-rem Start the GRC agent web app on this machine (Windows).
+rem Start the GRC Flow web app on this machine (Windows).
 rem First run: creates .venv, installs the app, and asks you to create an account.
 rem Extra arguments go to "grc-web serve", e.g. start.bat --port 9000
 setlocal

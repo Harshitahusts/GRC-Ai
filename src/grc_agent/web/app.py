@@ -23,7 +23,13 @@ from typing import Annotated, Any
 import anthropic
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import (
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+    Response,
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
@@ -32,25 +38,14 @@ from starlette.middleware.sessions import SessionMiddleware
 from grc_agent.agent import Agent
 from grc_agent.ai_assessment import AssessmentError, ClaudeAssessor
 from grc_agent.assessment import assess, readiness_score
+from grc_agent.citations import CorpusIndex
 from grc_agent.config import Settings
 from grc_agent.connectors import BY_ID as CONNECTORS
 from grc_agent.connectors.secrets import SecretBox
-from grc_agent.content import (
-    TYPES as CONTENT_TYPES,
-)
-from grc_agent.content import (
-    reading_minutes,
-    render_markdown,
-    seed_items,
-    seo_checks,
-    slugify,
-    valid_slug,
-)
 from grc_agent.corpus import load_corpus
 from grc_agent.documents import DOCUMENT_TYPES, Block, EngagementFacts, build_document, to_docx
-from grc_agent.kpis import CorpusIndex
-from grc_agent.kpis.models import DOCUMENT_OUTCOMES, VERDICTS
 from grc_agent.llm import PROVIDERS
+from grc_agent.markdown import render_markdown
 from grc_agent.prompts import ANALYST_PROMPT
 from grc_agent.register import CHOICES, corpus_index_path, load_register
 from grc_agent.risk import summary as risk_summary
@@ -70,7 +65,6 @@ from grc_agent.web import (
     register_views,
     risk_views,
 )
-from grc_agent.web.planned import PLANNED
 from grc_agent.web.security import (
     DUMMY_HASH,
     csrf_matches,
@@ -108,11 +102,9 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
     data_dir.mkdir(parents=True, exist_ok=True)
     db_path = db.database_target(data_dir)
     db.init_db(db_path)
-    with db.connect(db_path) as conn:
-        db.seed_content(conn, seed_items())
 
     app = FastAPI(
-        title="GRC agent",
+        title="GRC Flow",
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
@@ -170,6 +162,10 @@ def _chat_html(text: str) -> str:
     escapes it (raw HTML is off, for safety), so turn exactly that tag back into a break."""
     return _ESCAPED_BR.sub("<br>", render_markdown(text))
 
+
+# How a reviewer scores an AI-drafted finding, and how much a drafted document needed.
+VERDICTS = {"correct", "incomplete", "wrong"}
+DOCUMENT_OUTCOMES = {"usable", "minor_edits", "material_edit", "full_rewrite"}
 
 NO_AI_KEY = (
     "No AI provider is set up. Add a free or paid key on the AI provider page "
@@ -315,7 +311,6 @@ def render(request: Request, name: str, status_code: int = 200, **context: Any) 
         document_types=DOCUMENT_TYPES,
         choices=CHOICES,
         outcome_labels=OUTCOME_LABELS,
-        planned=PLANNED,
         demo_tenant=request.app.state.demo_tenant,
         demo_login=(demo_tenant.DEMO_USER, demo_tenant.DEMO_PASSWORD)
         if request.app.state.demo_tenant
@@ -332,8 +327,6 @@ def get_engagement(conn: sqlite3.Connection, engagement_id: int) -> sqlite3.Row:
 
 
 def require_open_agent_engagement(eng: sqlite3.Row) -> None:
-    if eng["mode"] != "agent":
-        raise HTTPException(status_code=400, detail="Manual engagements have no agent workflow.")
     if eng["delivered_at"]:
         raise HTTPException(status_code=400, detail="This engagement is delivered and locked.")
 
@@ -359,8 +352,6 @@ def documents_of(conn: sqlite3.Connection, engagement_id: int) -> list[sqlite3.R
 
 def delivery_checks(conn: sqlite3.Connection, eng: sqlite3.Row) -> list[tuple[str, bool]]:
     """The hard stop. Every check must pass before delivery; there is no override."""
-    if eng["mode"] == "manual":
-        return [("Consultant hours recorded", eng["consultant_hours"] is not None)]
     findings = findings_of(conn, eng["id"])
     docs = documents_of(conn, eng["id"])
     return [
@@ -387,44 +378,40 @@ def delivery_checks(conn: sqlite3.Connection, eng: sqlite3.Row) -> list[tuple[st
     ]
 
 
-def kpi_record(conn: sqlite3.Connection, eng: sqlite3.Row, register_size: int) -> dict[str, Any]:
-    """Engagement in the grc-kpis JSON record format."""
+def engagement_record(
+    conn: sqlite3.Connection, eng: sqlite3.Row, register_size: int
+) -> dict[str, Any]:
+    """An engagement's findings and documents as JSON, for export."""
     record: dict[str, Any] = {
         "id": f"ENG-{eng['id']:03d}",
         "client": eng["client"],
-        "mode": eng["mode"],
         "completed": bool(eng["delivered_at"]),
-        "consultant_hours": eng["consultant_hours"],
-        "fell_back_to_manual": bool(eng["fell_back_to_manual"]),
     }
-    if eng["mode"] == "agent":
-        unaided = eng["intake_completed_unaided"]
-        record.update(
-            register_size=register_size,
-            intake_completed_unaided=None if unaided is None else bool(unaided),
-            intake_submitted_at=eng["intake_submitted_at"],
-            draft_pack_ready_at=eng["draft_pack_ready_at"],
-            findings=[
-                {
-                    "id": f"F-{f['id']}",
-                    "obligation_id": f["obligation_id"],
-                    "status": f["status"],
-                    "citations": db.finding_citations(f),
-                    "verdict": f["verdict"],
-                    "hallucination": bool(f["hallucination"]),
-                }
-                for f in findings_of(conn, eng["id"])
-            ],
-            documents=[
-                {
-                    "type": d["type"],
-                    "outcome": d["outcome"],
-                    "reviewed_by": d["reviewed_by"],
-                    "reviewed_at": d["reviewed_at"],
-                }
-                for d in documents_of(conn, eng["id"])
-            ],
-        )
+    record.update(
+        register_size=register_size,
+        intake_submitted_at=eng["intake_submitted_at"],
+        draft_pack_ready_at=eng["draft_pack_ready_at"],
+        findings=[
+            {
+                "id": f"F-{f['id']}",
+                "obligation_id": f["obligation_id"],
+                "status": f["status"],
+                "citations": db.finding_citations(f),
+                "verdict": f["verdict"],
+                "hallucination": bool(f["hallucination"]),
+            }
+            for f in findings_of(conn, eng["id"])
+        ],
+        documents=[
+            {
+                "type": d["type"],
+                "outcome": d["outcome"],
+                "reviewed_by": d["reviewed_by"],
+                "reviewed_at": d["reviewed_at"],
+            }
+            for d in documents_of(conn, eng["id"])
+        ],
+    )
     return record
 
 
@@ -512,7 +499,7 @@ def _routes(app: FastAPI) -> None:
     ):
         engagements = conn.execute("SELECT * FROM engagements ORDER BY id DESC").fetchall()
         summaries = [_summary(conn, e) for e in engagements]
-        agent = [s for s in summaries if s["mode"] == "agent"]
+        agent = summaries
         scores = [s["score"] for s in agent if s["score"] is not None]
         activity = conn.execute(
             "SELECT a.*, e.client FROM audit_log a LEFT JOIN engagements e "
@@ -544,8 +531,7 @@ def _routes(app: FastAPI) -> None:
             leaves_india=sum(
                 1
                 for e in engagements
-                if e["mode"] == "agent"
-                and analyst.flow_for(conn, request.app, e)["summary"]["leaves_india"]
+                if analyst.flow_for(conn, request.app, e)["summary"]["leaves_india"]
             ),
             connections_ok=sum(1 for c in connections if c["status"] == "ok"),
             connections_total=len(connections),
@@ -569,7 +555,6 @@ def _routes(app: FastAPI) -> None:
             store=datamanager.report(
                 conn, request.app.state.db_path, data_dir=request.app.state.data_dir
             ),
-            planned_here={k: v for k, v in PLANNED.items() if v["area"] == "Data manager"},
         )
 
     # ---- engagements
@@ -597,16 +582,15 @@ def _routes(app: FastAPI) -> None:
         form = await form_with_csrf(request)
         client = str(form.get("client", "")).strip()
         sector = form.get("sector")
-        mode = form.get("mode", "agent")
-        if not client or sector not in SECTORS or mode not in {"agent", "manual"}:
+        if not client or sector not in SECTORS:
             flash(request, "Enter a client name and choose a sector.", "error")
             return redirect("/engagements")
         cur = conn.execute(
             "INSERT INTO engagements (client, sector, mode, created_by, created_at) "
-            "VALUES (?,?,?,?,?)",
-            (client, sector, mode, user, db.now()),
+            "VALUES (?,?,'agent',?,?)",
+            (client, sector, user, db.now()),
         )
-        db.audit(conn, user, "engagement_created", cur.lastrowid, {"mode": mode})
+        db.audit(conn, user, "engagement_created", cur.lastrowid)
         return redirect(f"/engagements/{cur.lastrowid}")
 
     @app.get("/engagements/{eid}")
@@ -621,14 +605,12 @@ def _routes(app: FastAPI) -> None:
             "SELECT * FROM audit_log WHERE engagement_id = ? ORDER BY id DESC LIMIT 20", (eid,)
         ).fetchall()
         checks = delivery_checks(conn, eng)
-        snapshot = None
-        if eng["mode"] == "agent":
-            risks = analyst.risks_for(conn, request.app, eid)
-            snapshot = {
-                "risks": risk_summary(risks),
-                "top": [r for r in risks if r.status != "closed"][:3],
-                "flow": analyst.flow_for(conn, request.app, eng)["summary"],
-            }
+        risks = analyst.risks_for(conn, request.app, eid)
+        snapshot = {
+            "risks": risk_summary(risks),
+            "top": [r for r in risks if r.status != "closed"][:3],
+            "flow": analyst.flow_for(conn, request.app, eng)["summary"],
+        }
         return render(
             request,
             "engagement.html",
@@ -643,40 +625,6 @@ def _routes(app: FastAPI) -> None:
             activity=activity,
             tab="overview",
         )
-
-    @app.post("/engagements/{eid}/details")
-    async def engagement_details(
-        eid: int,
-        request: Request,
-        user: User,
-        conn: Conn,
-    ):
-        form = await form_with_csrf(request)
-        get_engagement(conn, eid)
-        hours_raw = str(form.get("consultant_hours", "")).strip()
-        try:
-            hours = float(hours_raw) if hours_raw else None
-            if hours is not None and hours < 0:
-                raise ValueError
-        except ValueError:
-            flash(request, "Consultant hours must be a positive number.", "error")
-            return redirect(f"/engagements/{eid}")
-        unaided = {"yes": 1, "no": 0}.get(form.get("intake_completed_unaided", ""))
-        fallback = 1 if form.get("fell_back_to_manual") == "on" else 0
-        conn.execute(
-            "UPDATE engagements SET consultant_hours = ?, intake_completed_unaided = ?, "
-            "fell_back_to_manual = ? WHERE id = ?",
-            (hours, unaided, fallback, eid),
-        )
-        db.audit(
-            conn,
-            user,
-            "details_updated",
-            eid,
-            {"hours": hours, "unaided": unaided, "fallback": fallback},
-        )
-        flash(request, "Details saved.")
-        return redirect(f"/engagements/{eid}")
 
     @app.post("/engagements/{eid}/deliver")
     async def engagement_deliver(
@@ -710,7 +658,7 @@ def _routes(app: FastAPI) -> None:
         conn: Conn,
     ):
         eng = get_engagement(conn, eid)
-        record = kpi_record(conn, eng, len(request.app.state.register.obligations))
+        record = engagement_record(conn, eng, len(request.app.state.register.obligations))
         return JSONResponse(
             record,
             headers={"Content-Disposition": f'attachment; filename="{record["id"]}.json"'},
@@ -1132,274 +1080,10 @@ def _routes(app: FastAPI) -> None:
             resolves=request.app.state.index.resolves(ref),
         )
 
-    # ---- public docs and blog (no login; published items only)
-
-    def public_url(request: Request) -> str:
-        return (os.getenv("GRC_PUBLIC_URL") or str(request.base_url)).rstrip("/")
-
-    def published(conn: sqlite3.Connection, type_: str) -> list[sqlite3.Row]:
-        order = "position, title" if type_ == "docs" else "published_at DESC"
-        return conn.execute(
-            f"SELECT * FROM content WHERE type = ? AND status = 'published' ORDER BY {order}",
-            (type_,),
-        ).fetchall()
-
-    def live_pages(conn: sqlite3.Connection) -> set[str]:
-        rows = conn.execute("SELECT type, slug FROM content WHERE status = 'published'")
-        return {f"/{r['type']}/{r['slug']}" for r in rows}
-
-    def render_public(request: Request, name: str, status_code: int = 200, **ctx: Any):
-        ctx.setdefault("site_name", os.getenv("GRC_SITE_NAME", "GRC agent"))
-        ctx.setdefault("base", public_url(request))
-        return render(request, name, status_code=status_code, **ctx)
-
-    @app.get("/docs")
-    def docs_index(request: Request, conn: Conn):
-        return render_public(
-            request, "public_list.html", type_="docs", items=published(conn, "docs")
-        )
-
-    @app.get("/blog")
-    def blog_index(request: Request, conn: Conn):
-        return render_public(
-            request, "public_list.html", type_="blog", items=published(conn, "blog")
-        )
-
-    def public_item(request: Request, conn: sqlite3.Connection, type_: str, slug: str):
-        item = conn.execute(
-            "SELECT * FROM content WHERE type = ? AND slug = ? AND status = 'published'",
-            (type_, slug),
-        ).fetchone()
-        if item is None:
-            return render_public(
-                request, "error.html", status_code=404, message="That page doesn't exist."
-            )
-        return render_public(
-            request,
-            "public_item.html",
-            item=item,
-            html=render_markdown(item["body_md"], live_pages(conn)),
-            minutes=reading_minutes(item["body_md"]),
-            docs=published(conn, "docs"),
-            recent=published(conn, "blog")[:5],
-        )
-
-    @app.get("/docs/{slug}")
-    def docs_item(slug: str, request: Request, conn: Conn):
-        return public_item(request, conn, "docs", slug)
-
-    @app.get("/blog/{slug}")
-    def blog_item(slug: str, request: Request, conn: Conn):
-        return public_item(request, conn, "blog", slug)
-
-    @app.get("/sitemap.xml")
-    def sitemap(request: Request, conn: Conn):
-        base = public_url(request)
-        urls = [(f"{base}/docs", None), (f"{base}/blog", None)]
-        for type_ in CONTENT_TYPES:
-            urls += [
-                (f"{base}/{type_}/{r['slug']}", r["updated_at"][:10])
-                for r in published(conn, type_)
-            ]
-        body = "".join(
-            f"<url><loc>{loc}</loc>{f'<lastmod>{mod}</lastmod>' if mod else ''}</url>"
-            for loc, mod in urls
-        )
-        xml = (
-            '<?xml version="1.0" encoding="UTF-8"?>'
-            f'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{body}</urlset>'
-        )
-        return Response(xml, media_type="application/xml")
-
     @app.get("/robots.txt")
-    def robots(request: Request):
-        text = (
-            "User-agent: *\nAllow: /docs\nAllow: /blog\nAllow: /static/\nDisallow: /\n"
-            f"Sitemap: {public_url(request)}/sitemap.xml\n"
-        )
-        return Response(text, media_type="text/plain")
-
-    # ---- content editor (login required)
-
-    @app.get("/content")
-    def content_list(request: Request, user: User, conn: Conn):
-        rows = conn.execute("SELECT * FROM content ORDER BY type, position, title").fetchall()
-        live = live_pages(conn)
-        items = []
-        for r in rows:
-            checks = seo_checks(dict(r), live)
-            items.append({**dict(r), "seo_ok": sum(c.ok for c in checks), "seo_total": len(checks)})
-        return render(request, "content_list.html", items=items)
-
-    def _content_form(form: dict[str, Any], type_: str) -> tuple[dict[str, Any], list[str]]:
-        data = {
-            "type": type_,
-            "title": str(form.get("title", "")).strip()[:200],
-            "slug": str(form.get("slug", "")).strip().lower()[:80],
-            "description": str(form.get("description", "")).strip()[:300],
-            "keyword": str(form.get("keyword", "")).strip()[:100],
-            "body_md": str(form.get("body_md", ""))[:100_000],
-            "reviewed_by": str(form.get("reviewed_by", "")).strip()[:100] or None,
-        }
-        try:
-            data["position"] = int(form.get("position") or 100)
-        except ValueError:
-            data["position"] = 100
-        if not data["slug"]:
-            data["slug"] = slugify(data["title"])
-        errors = []
-        if not data["title"]:
-            errors.append("Add a title.")
-        if not valid_slug(data["slug"]):
-            errors.append("The URL slug can only use lowercase letters, numbers and hyphens.")
-        return data, errors
-
-    @app.get("/content/new")
-    def content_new(request: Request, user: User, type: str = "blog"):
-        if type not in CONTENT_TYPES:
-            raise HTTPException(status_code=404, detail="Unknown content type")
-        item = {
-            "id": None,
-            "type": type,
-            "title": "",
-            "slug": "",
-            "description": "",
-            "keyword": "",
-            "body_md": "",
-            "status": "draft",
-            "position": 100,
-            "reviewed_by": "",
-        }
-        return render(request, "content_edit.html", item=item, checks=seo_checks(item), preview="")
-
-    @app.post("/content")
-    async def content_create(request: Request, user: User, conn: Conn):
-        form = await form_with_csrf(request)
-        type_ = form.get("type")
-        if type_ not in CONTENT_TYPES:
-            raise HTTPException(status_code=400, detail="Unknown content type")
-        data, errors = _content_form(form, type_)
-        taken = conn.execute(
-            "SELECT 1 FROM content WHERE type = ? AND slug = ?", (type_, data["slug"])
-        ).fetchone()
-        if taken:
-            errors.append(f"There's already a {type_} item at /{type_}/{data['slug']}.")
-        if errors:
-            for e in errors:
-                flash(request, e, "error")
-            item = {**data, "id": None, "status": "draft"}
-            return render(
-                request,
-                "content_edit.html",
-                item=item,
-                checks=seo_checks(item),
-                preview=render_markdown(data["body_md"]),
-                status_code=400,
-            )
-        cur = conn.execute(
-            "INSERT INTO content (type, slug, title, description, keyword, body_md, position, "
-            "author, reviewed_by, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-            (
-                type_,
-                data["slug"],
-                data["title"],
-                data["description"],
-                data["keyword"],
-                data["body_md"],
-                data["position"],
-                user,
-                data["reviewed_by"],
-                db.now(),
-                db.now(),
-            ),
-        )
-        db.audit(conn, user, "content_created", detail={"id": cur.lastrowid, "slug": data["slug"]})
-        flash(request, "Draft saved.")
-        return redirect(f"/content/{cur.lastrowid}")
-
-    def _content_row(conn: sqlite3.Connection, cid: int) -> sqlite3.Row:
-        row = conn.execute("SELECT * FROM content WHERE id = ?", (cid,)).fetchone()
-        if row is None:
-            raise HTTPException(status_code=404, detail="Content not found")
-        return row
-
-    @app.get("/content/{cid}")
-    def content_edit(cid: int, request: Request, user: User, conn: Conn):
-        item = dict(_content_row(conn, cid))
-        return render(
-            request,
-            "content_edit.html",
-            item=item,
-            checks=seo_checks(item, live_pages(conn)),
-            preview=render_markdown(item["body_md"]),
-        )
-
-    @app.post("/content/{cid}")
-    async def content_save(cid: int, request: Request, user: User, conn: Conn):
-        form = await form_with_csrf(request)
-        row = _content_row(conn, cid)
-        data, errors = _content_form(form, row["type"])
-        taken = conn.execute(
-            "SELECT 1 FROM content WHERE type = ? AND slug = ? AND id != ?",
-            (row["type"], data["slug"], cid),
-        ).fetchone()
-        if taken:
-            errors.append(f"There's already a {row['type']} item at /{row['type']}/{data['slug']}.")
-        action = form.get("action", "save")
-        status = row["status"]
-        if action == "publish":
-            if not data["reviewed_by"]:
-                errors.append(
-                    "Add who reviewed this before publishing. Public pages carry our name."
-                )
-            if not data["description"]:
-                errors.append("Add a meta description before publishing.")
-            status = "published"
-        elif action == "unpublish":
-            status = "draft"
-        if errors:
-            for e in errors:
-                flash(request, e, "error")
-            item = {**dict(row), **data}
-            return render(
-                request,
-                "content_edit.html",
-                item=item,
-                checks=seo_checks(item),
-                preview=render_markdown(data["body_md"]),
-                status_code=400,
-            )
-        published_at = row["published_at"] or (db.now() if status == "published" else None)
-        conn.execute(
-            "UPDATE content SET slug=?, title=?, description=?, keyword=?, body_md=?, position=?, "
-            "reviewed_by=?, status=?, updated_at=?, published_at=? WHERE id=?",
-            (
-                data["slug"],
-                data["title"],
-                data["description"],
-                data["keyword"],
-                data["body_md"],
-                data["position"],
-                data["reviewed_by"],
-                status,
-                db.now(),
-                published_at,
-                cid,
-            ),
-        )
-        event = {"publish": "content_published", "unpublish": "content_unpublished"}
-        db.audit(
-            conn, user, event.get(action, "content_saved"), detail={"id": cid, "slug": data["slug"]}
-        )
-        flash(
-            request,
-            {"publish": "Published.", "unpublish": "Unpublished. It's a draft again."}.get(
-                action, "Saved."
-            ),
-        )
-        return redirect(f"/content/{cid}")
-
-    # ---- KPIs
+    def robots():
+        # Everything here is behind a login; ask search engines to stay out.
+        return PlainTextResponse("User-agent: *\nDisallow: /\n")
 
     # ---- assistant
 
@@ -1434,9 +1118,7 @@ def _routes(app: FastAPI) -> None:
                     text.partition("\n") if text.startswith(FOCUS) else ("", "", text)
                 )
                 history.append((role, question, focus.removeprefix(FOCUS).rstrip("]")))
-        engagements = conn.execute(
-            "SELECT id, client FROM engagements WHERE mode = 'agent' ORDER BY id DESC"
-        ).fetchall()
+        engagements = conn.execute("SELECT id, client FROM engagements ORDER BY id DESC").fetchall()
         focus_id = request.session.get("analyst_focus")
         focus = next((e for e in engagements if e["id"] == focus_id), None)
         return render(
@@ -1463,7 +1145,7 @@ def _routes(app: FastAPI) -> None:
             return redirect("/assistant")
         focus_id = request.session.get("analyst_focus")
         focus = conn.execute(
-            "SELECT id, client FROM engagements WHERE id = ? AND mode = 'agent'", (focus_id,)
+            "SELECT id, client FROM engagements WHERE id = ?", (focus_id,)
         ).fetchone()
         if focus:  # the analyst sees which client the question is about
             question = f"{FOCUS}ENG-{focus['id']:03d} {focus['client']}]\n{question}"
@@ -1505,8 +1187,6 @@ def _summary(conn: sqlite3.Connection, eng: sqlite3.Row) -> dict[str, Any]:
     docs = documents_of(conn, eng["id"])
     if eng["delivered_at"]:
         stage = "Delivered"
-    elif eng["mode"] == "manual":
-        stage = "Manual baseline"
     elif docs and all(d["reviewed_at"] for d in docs):
         stage = "Ready to deliver"
     elif docs:
@@ -1521,7 +1201,6 @@ def _summary(conn: sqlite3.Connection, eng: sqlite3.Row) -> dict[str, Any]:
         "id": eng["id"],
         "client": eng["client"],
         "sector": eng["sector"],
-        "mode": eng["mode"],
         "stage": stage,
         "delivered": bool(eng["delivered_at"]),
         "stale": bool(eng["stale"]),

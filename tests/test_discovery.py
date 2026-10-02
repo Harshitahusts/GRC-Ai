@@ -211,10 +211,8 @@ def db(app):
     return webdb.connect(app.state.db_path)
 
 
-def test_discovery_needs_login_and_an_agent_engagement(client, authed):
+def test_discovery_needs_login(client, authed):
     eid = create(authed)
-    manual = create(authed, mode="manual")
-    assert authed.get(f"/engagements/{manual}/discovery").status_code == 400
     authed.cookies.clear()
     r = authed.get(f"/engagements/{eid}/discovery", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/login"

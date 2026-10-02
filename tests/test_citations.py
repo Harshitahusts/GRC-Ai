@@ -1,6 +1,6 @@
 import pytest
 
-from grc_agent.kpis.citations import CorpusIndex, normalize_citation
+from grc_agent.citations import CorpusIndex, normalize_citation
 
 
 @pytest.mark.parametrize(

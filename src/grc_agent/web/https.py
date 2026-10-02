@@ -158,7 +158,7 @@ def self_signed_cert(folder: Path, extra_hosts: list[str]) -> tuple[str, str]:
         except ValueError:
             if name.isascii():  # a computer name with other characters can't be a DNS name
                 alt.append(x509.DNSName(name.lower()))
-    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "GRC agent (self-signed)")])
+    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "GRC Flow (self-signed)")])
     now = dt.datetime.now(dt.timezone.utc)
     cert = (
         x509.CertificateBuilder()

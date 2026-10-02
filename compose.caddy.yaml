@@ -1,0 +1,37 @@
+# Put GRC Flow on your own domain over HTTPS (for example https://app.grc-flow.com):
+#
+#   docker compose -f compose.yaml -f compose.postgres.yaml -f compose.caddy.yaml up -d --build
+#
+# Before running: point the domain's DNS (an A record) at this server, open ports 80 and
+# 443, and set GRC_DOMAIN, GRC_ROOT_DOMAIN and POSTGRES_PASSWORD in .env. Caddy gets the
+# certificate on first start. See "Deploy to your domain" in the README.
+services:
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      GRC_DOMAIN: ${GRC_DOMAIN:?Set GRC_DOMAIN in .env, e.g. app.grc-flow.com}
+      GRC_ROOT_DOMAIN: ${GRC_ROOT_DOMAIN:?Set GRC_ROOT_DOMAIN in .env, e.g. grc-flow.com}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - web
+    restart: unless-stopped
+  web:
+    # Only Caddy talks to the app; nothing is published on the host.
+    ports: !reset []
+    environment:
+      GRC_PUBLIC_URL: https://${GRC_DOMAIN}
+      GRC_FORCE_HTTPS: "1"
+      # Caddy's address on the Compose network changes, so trust any forwarder here:
+      # the app is reachable only through Caddy because no port is published.
+      GRC_TRUSTED_PROXIES: "*"
+
+volumes:
+  caddy-data:
+  caddy-config:

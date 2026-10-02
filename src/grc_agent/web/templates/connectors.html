@@ -4,7 +4,7 @@
 <div class="page-head">
   <div>
     <h1>Connectors</h1>
-    <p class="muted">Read-only links to a client's systems. Evidence connectors check how systems are set up and where data is stored. Chat connectors post engagement updates. Click a connector to see what it checks and connect it to an engagement.</p>
+    <p class="muted">Read-only links to a client's systems. They check how systems are set up and where data is stored, and the results become evidence on the engagement. Click a connector to see what it checks and connect it.</p>
   </div>
 </div>
 
@@ -27,22 +27,22 @@
 </section>
 {% endif %}
 
-{% for category, items in categories %}
 <section class="card">
-  <h2>{{ category }}</h2>
+  <h2>Available connectors</h2>
   <div class="connector-grid">
-    {% for c in items %}
-    <a class="connector {{ 'planned' if c.status == 'planned' }}" href="/connectors/{{ c.id }}">
+    {% for category, items in categories %}{% for c in items %}
+    <a class="connector" href="/connectors/{{ c.id }}">
       <p class="connector-name"><strong>{{ c.name }}</strong>
-        {% if c.status == "planned" %}<span class="badge badge-none">Coming soon</span>
-        {% elif c.kind == "notify" %}<span class="badge sev-medium">Notifications</span>
-        {% else %}<span class="badge badge-pass">Evidence</span>{% endif %}</p>
+        {% if c.kind == "notify" %}<span class="badge sev-medium">Notifications</span>
+        {% else %}<span class="badge badge-pass">{{ category }}</span>{% endif %}</p>
       <p class="small">{{ c.summary }}</p>
       <p class="small muted">{{ c.why }}</p>
-      <p class="small connector-cta">{{ "Connect →" if c.status == "available" else "See details →" }}</p>
+      <p class="small connector-cta">Connect →</p>
     </a>
-    {% endfor %}
+    {% endfor %}{% endfor %}
   </div>
 </section>
-{% endfor %}
+{% if planned %}
+<p class="small muted">On the roadmap: {{ planned|join(", ") }}. Until then, collect that evidence from the client by hand (exports or screenshots) and upload it on the engagement's Evidence page.</p>
+{% endif %}
 {% endblock %}

@@ -17,9 +17,9 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 
-from grc_agent.connectors import ConnectorError, by_category, cloud, github_app
+from grc_agent.citations import normalize_citation
+from grc_agent.connectors import ConnectorError, by_category, cloud, github_app, planned_names
 from grc_agent.connectors.secrets import mask
-from grc_agent.kpis.citations import normalize_citation
 from grc_agent.web import db, demo_tenant
 
 log = logging.getLogger(__name__)
@@ -114,7 +114,7 @@ def queue_notification(
         # results on its own connection and must not wait on this one's lock.
         # Callers make this the last database step of the request.
         conn.commit()
-        background.add_task(_send_all, request.app.state.db_path, targets, f"[GRC agent] {text}")
+        background.add_task(_send_all, request.app.state.db_path, targets, f"[GRC Flow] {text}")
 
 
 def _send_all(db_path, targets, text: str) -> None:
@@ -208,7 +208,7 @@ def register(app: FastAPI) -> None:
             secrets = request.app.state.secret_box.open(row["secrets_enc"])
             if c.kind == "notify":
                 await run_in_threadpool(
-                    c.send, config, secrets, "[GRC agent] Test message: this channel is connected."
+                    c.send, config, secrets, "[GRC Flow] Test message: this channel is connected."
                 )
                 message, checks = "Test message sent.", None
             elif c.flow == "github_app":
@@ -323,15 +323,21 @@ def register(app: FastAPI) -> None:
             "SELECT c.*, e.client FROM connections c JOIN engagements e ON e.id = c.engagement_id "
             "ORDER BY c.id DESC"
         ).fetchall()
-        return render(request, "connectors.html", categories=by_category(), connections=rows)
+        return render(
+            request,
+            "connectors.html",
+            categories=by_category(),
+            planned=planned_names(),
+            connections=rows,
+        )
 
     @app.get("/connectors/{connector_id}")
     def connector_detail(connector_id: str, request: Request, user: User, conn: Conn):
         c = request.app.state.connectors.get(connector_id)
-        if c is None:
+        if c is None or c.status != "available":
             raise HTTPException(status_code=404, detail="Unknown connector")
         engagements = conn.execute(
-            "SELECT id, client, sector FROM engagements WHERE mode = 'agent' ORDER BY id DESC"
+            "SELECT id, client, sector FROM engagements ORDER BY id DESC"
         ).fetchall()
         connections = conn.execute(
             "SELECT c.*, e.client FROM connections c JOIN engagements e ON e.id = c.engagement_id "
@@ -354,10 +360,6 @@ def register(app: FastAPI) -> None:
         """From the catalog: pick an engagement, then go to its setup form for this connector."""
         c = _connector(request, connector_id)
         eng = get_engagement(conn, engagement)
-        if eng["mode"] != "agent":
-            raise HTTPException(
-                status_code=400, detail="Connectors are for agent-assisted engagements."
-            )
         return redirect(f"/engagements/{eng['id']}/connectors/new?type={c.id}")
 
     @app.get("/engagements/{eid}/connectors")
@@ -443,7 +445,7 @@ def register(app: FastAPI) -> None:
                     c.send,
                     config,
                     secrets,
-                    f"[GRC agent] Connected for engagement {eng['client']}. "
+                    f"[GRC Flow] Connected for engagement {eng['client']}. "
                     "Updates will be posted here.",
                 )
                 message = "Connected. A test message was sent."
@@ -495,7 +497,7 @@ def register(app: FastAPI) -> None:
             app_config=github_config(request.app),
             manifest=manifest,
             state=state,
-            default_name=f"GRC agent {secrets_lib.token_hex(3)}",
+            default_name=f"GRC Flow {secrets_lib.token_hex(3)}",
         )
 
     @app.get("/settings/github-app/callback")

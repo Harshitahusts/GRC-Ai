@@ -6,7 +6,7 @@
 <section class="login-aside">
   <span class="brand">
     <span class="brand-mark" aria-hidden="true">{{ icon("i-shield") }}</span>
-    <span class="brand-text">GRC agent<small>DPDPA</small></span>
+    <span class="brand-text">GRC Flow<small>DPDPA</small></span>
   </span>
   <div>
     <p class="login-eyebrow">India's DPDP Act 2023 &amp; Rules 2025</p>
@@ -25,33 +25,22 @@
     <p class="muted">Welcome back. Sign in to your workspace.</p>
     {% if demo_tenant %}<div class="flash flash-info demo-login" role="note"><strong>Demo tenant</strong> with sample data. Sign in as <code>{{ demo_login[0] }}</code> / <code>{{ demo_login[1] }}</code>.</div>{% endif %}
 
-    <div class="sso">
-      <button type="button" data-soon="sso-google"><span class="sso-mark sso-g" aria-hidden="true">G</span>Continue with Google<span class="soon-tag">Soon</span></button>
-      <button type="button" data-soon="sso-microsoft"><span class="sso-mark sso-m" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Continue with Microsoft<span class="soon-tag">Soon</span></button>
-    </div>
-    <p class="divider"><span>or with your username</span></p>
-
     {% if error %}<div class="flash flash-error login-error" id="login-err" role="alert">{{ icon("i-alert") }} {{ error }}</div>{% endif %}
     <form method="post" action="/login" id="login-form">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <label for="username">Username</label>
       <input id="username" name="username" autocomplete="username" required value="{{ username or '' }}"
              {% if not username %}autofocus{% endif %} {% if error %}aria-invalid="true" aria-describedby="login-err"{% endif %}>
-      <div class="label-row">
-        <label for="password">Password</label>
-        <button type="button" class="link small" data-soon="forgot-password">Forgot password?</button>
-      </div>
+      <label for="password">Password</label>
       <div class="password-field">
         <input id="password" name="password" type="password" autocomplete="current-password" required
                {% if username %}autofocus{% endif %} {% if error %}aria-invalid="true"{% endif %}>
         <button type="button" class="reveal" id="reveal" aria-label="Show password" aria-pressed="false">{{ icon("i-eye") }}</button>
       </div>
       <p class="caps" id="caps" hidden>{{ icon("i-alert") }} Caps Lock is on</p>
-      <label class="inline remember"><input type="checkbox" data-soon="remember-me"> Keep me signed in <span class="soon-tag">Soon</span></label>
       <button type="submit" class="primary"><span class="spinner" aria-hidden="true"></span><span class="label">Sign in</span></button>
     </form>
-    <p class="login-alt small muted">New to the workspace? <button type="button" class="link small" data-soon="request-access">Request access</button></p>
-    <p class="login-alt small muted">Admins can also add users on the server with <code>grc-web adduser NAME</code>. · <a href="/docs">Read the DPDPA docs</a></p>
+    <p class="login-alt small muted">No account yet? Ask an admin to add you on <strong>Team &amp; roles</strong>. Forgot your password? An admin can reset it with <code>grc-web passwd NAME</code>.</p>
   </div>
 </div>
 {% endblock %}

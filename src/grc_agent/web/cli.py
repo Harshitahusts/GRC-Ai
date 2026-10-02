@@ -168,7 +168,7 @@ def _serve(
             file=sys.stderr,
         )
         return 1
-    print(f"GRC agent running at {url}  (data: {db.label(db.database_target(data_dir))})")
+    print(f"GRC Flow running at {url}  (data: {db.label(db.database_target(data_dir))})")
     if tls:
         print(f"HTTPS certificate: {tls[0]}")
         print(f"  SHA-256 fingerprint: {https.fingerprint(tls[0])}")

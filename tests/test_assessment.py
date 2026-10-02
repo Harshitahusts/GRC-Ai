@@ -1,7 +1,7 @@
 import pytest
 
 from grc_agent.assessment import assess, readiness_score
-from grc_agent.kpis.citations import CorpusIndex
+from grc_agent.citations import CorpusIndex
 from grc_agent.register import corpus_index_path, load_register, parse_register
 
 REGISTER = load_register()

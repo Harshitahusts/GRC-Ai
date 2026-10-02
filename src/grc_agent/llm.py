@@ -308,7 +308,7 @@ class OpenAICompatClient:
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
         if self.provider.key == "openrouter":
-            headers["X-Title"] = "GRC Agent"
+            headers["X-Title"] = "GRC Flow"
         for attempt in range(self.retries + 1):
             try:
                 resp = self._http.request(method, url, json=body, headers=headers)

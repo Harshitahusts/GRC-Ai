@@ -1,4 +1,4 @@
-"""GRC agent: a Claude-powered assistant for governance, risk, and compliance."""
+"""GRC Flow: an AI-assisted workspace for governance, risk, and compliance."""
 
 from grc_agent.agent import Agent, AgentResult
 from grc_agent.config import Settings

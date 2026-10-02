@@ -25,10 +25,7 @@ def register(app: FastAPI) -> None:
     )
 
     def agent_engagement(conn, eid):
-        eng = get_engagement(conn, eid)
-        if eng["mode"] != "agent":
-            raise HTTPException(status_code=400, detail="Manual engagements have no risk register.")
-        return eng
+        return get_engagement(conn, eid)
 
     @app.get("/engagements/{eid}/risks")
     def risks_page(eid: int, request: Request, user: User, conn: Conn):

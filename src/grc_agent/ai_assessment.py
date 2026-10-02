@@ -21,10 +21,10 @@ from typing import Any
 import anthropic
 
 from grc_agent.assessment import AssessedFinding, assess
+from grc_agent.citations import normalize_citation
 from grc_agent.config import Settings, make_client
 from grc_agent.corpus.ingest import Chunk
 from grc_agent.corpus.store import Corpus
-from grc_agent.kpis.citations import normalize_citation
 from grc_agent.register import CHOICES, Obligation, Register
 
 FALLBACK_BETA = "server-side-fallback-2026-07-01"

@@ -3,6 +3,7 @@ import io
 from docx import Document
 
 from grc_agent.assessment import assess
+from grc_agent.citations import CorpusIndex
 from grc_agent.documents import (
     DOCUMENT_TYPES,
     DPA_BANNER,
@@ -11,7 +12,6 @@ from grc_agent.documents import (
     build_document,
     to_docx,
 )
-from grc_agent.kpis.citations import CorpusIndex
 from grc_agent.register import corpus_index_path, load_register
 
 REGISTER = load_register()

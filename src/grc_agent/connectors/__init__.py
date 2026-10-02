@@ -2,7 +2,14 @@
 (version control, cloud) or post notifications (Slack, Teams, Google Chat)."""
 
 from grc_agent.connectors.base import Check, ConnectorError
-from grc_agent.connectors.catalog import BY_ID, CATEGORIES, CONNECTORS, Connector, by_category
+from grc_agent.connectors.catalog import (
+    BY_ID,
+    CATEGORIES,
+    CONNECTORS,
+    Connector,
+    by_category,
+    planned_names,
+)
 
 __all__ = [
     "BY_ID",
@@ -12,4 +19,5 @@ __all__ = [
     "Connector",
     "ConnectorError",
     "by_category",
+    "planned_names",
 ]

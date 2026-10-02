@@ -51,9 +51,7 @@ def flow_for(conn: sqlite3.Connection, app: FastAPI, eng: sqlite3.Row) -> dict[s
 
 
 def _engagement(conn: sqlite3.Connection, eid: int) -> sqlite3.Row:
-    row = conn.execute(
-        "SELECT * FROM engagements WHERE id = ? AND mode = 'agent'", (eid,)
-    ).fetchone()
+    row = conn.execute("SELECT * FROM engagements WHERE id = ?", (eid,)).fetchone()
     if row is None:
         raise ToolError(f"No engagement with id {eid}. Call list_engagements for valid ids.")
     return row
@@ -70,7 +68,7 @@ def analyst_tools(app: FastAPI) -> list[Tool]:
 
     def list_engagements() -> dict[str, Any]:
         with connect() as conn:
-            rows = conn.execute("SELECT * FROM engagements WHERE mode = 'agent' ORDER BY id")
+            rows = conn.execute("SELECT * FROM engagements ORDER BY id")
             out = []
             for e in rows.fetchall():
                 s = _summary(conn, e)
@@ -330,9 +328,7 @@ def analyst_tools(app: FastAPI) -> list[Tool]:
 def queue(conn: sqlite3.Connection, app: FastAPI) -> list[dict[str, Any]]:
     """The analyst's to-do list across clients: the top open risks, overdue first."""
     out = []
-    for e in conn.execute(
-        "SELECT * FROM engagements WHERE mode = 'agent' AND delivered_at IS NULL"
-    ):
+    for e in conn.execute("SELECT * FROM engagements WHERE delivered_at IS NULL"):
         for r in risks_for(conn, app, e["id"]):
             if r.status == "closed":
                 continue

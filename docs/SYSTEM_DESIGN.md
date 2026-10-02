@@ -1,6 +1,6 @@
 # System design
 
-How a request moves through the GRC agent, from the user's click to the
+How a request moves through GRC Flow, from the user's click to the
 feedback they see. GitHub renders the diagrams below.
 
 ## 1. Architecture
@@ -70,7 +70,6 @@ sequenceDiagram
     S-->>B: 303 → /
     B->>S: GET / (dashboard)
   end
-  Note over U,B: Planned buttons (Google/Microsoft SSO, Forgot password,<br/>Keep me signed in, Request access) show a "coming soon" toast
 ```
 
 ## 3. Dashboard load
@@ -258,7 +257,6 @@ sequenceDiagram
   M->>M: watch list: uncatalogued tables, rows past retention, free space, no backups
   M-->>S: report
   S-->>U: tiles, watch list, files, filterable catalogue
-  Note over U: Back up, Export, Purge, Set retention and Compact<br/>are planned buttons ("coming soon" toast)
 ```
 
 ## 11. Personal data discovery
@@ -325,15 +323,3 @@ sequenceDiagram
   S->>S: check extension, size and first bytes, random stored name
   S->>D: INSERT evidence_files (sha256, version), history comment, audit
 ```
-
-## 13. Planned buttons
-
-```mermaid
-flowchart LR
-  C["Click a button with data-soon=key"] --> J[app.js reads the planned-features JSON]
-  J --> T["Toast: X is coming soon + what the backend will do"]
-  P["planned.py PLANNED registry"] -->|rendered into every page| J
-  P -.->|tests/test_ui.py| CHK{every data-soon key registered?}
-```
-
-To build one: add the route, replace the `data-soon` button with a real form or link, delete the entry from `planned.py`, and add a test.

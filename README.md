@@ -1,8 +1,9 @@
-# GRC-Ai
+# GRC Flow
 
-A GRC workspace for **India's Digital Personal Data Protection Act, 2023 and the DPDP
-Rules, 2025**, built on the [Claude API](https://docs.claude.com) with the official
-`anthropic` Python SDK. It covers DPDPA only for now; other frameworks come later.
+**[grc-flow.com](https://grc-flow.com)** · A GRC workspace for **India's Digital Personal
+Data Protection Act, 2023 and the DPDP Rules, 2025**. The AI parts run on Claude or on a
+free OpenAI-compatible provider (Groq, Gemini, ...). It covers DPDPA only for now; other
+frameworks come later.
 
 The GRC Analyst chats with you and, when it needs facts, calls tools: the DPDPA
 obligations register, the text of the Act and Rules, 5x5 risk scoring, and (in the web
@@ -142,14 +143,11 @@ workspace on http://127.0.0.1:8001. Sign in as `demo` / `grc-demo-2026`.
   each browser warns once: choose **Advanced > Proceed**. The connection is still
   encrypted, and the window prints the certificate's fingerprint so you can check it.
 
-### Search, shortcuts and planned buttons
+### Search and shortcuts
 
 Press **Ctrl K** (or **/**) on any page to search pages and actions. Press **?** to see
 all keyboard shortcuts, for example **g** then **d** for the dashboard and **n** for a
-new engagement. Some buttons (Google and Microsoft sign-in, forgot password, backups,
-export, invite a teammate) are designed but not built yet. They show a "coming soon"
-toast. Each one is listed in `src/grc_agent/web/planned.py` with a note on what its
-backend will do.
+new engagement.
 
 ### Data manager
 
@@ -157,7 +155,8 @@ backend will do.
 the database size and health, the number of records and how many hold personal data,
 and a catalogue of every table with its purpose and suggested retention. A watch
 list flags tables missing from the catalogue, rows past their retention, wasted space
-and missing backups. The page only reads for now.
+and when to back up. It only reads: back up by copying the data folder, or with your
+PostgreSQL provider's backups.
 
 See [docs/SYSTEM_DESIGN.md](docs/SYSTEM_DESIGN.md) for how each request flows from click to feedback.
 
@@ -237,6 +236,50 @@ Content-Security-Policy and clickjacking, sniffing and referrer protections. AI 
 keys are only ever sent over HTTPS, or over plain HTTP to a server on your own network
 (such as Ollama).
 
+### Deploy to your domain (grc-flow.com)
+
+This puts the app at `https://app.grc-flow.com` with a real certificate (no browser
+warning), PostgreSQL for the data, and Caddy in front for HTTPS. Visitors to
+`grc-flow.com` are sent to the app until a marketing site lives there.
+
+1. **Get a server.** Any small Linux VPS with 2 GB RAM works (DigitalOcean, Hetzner,
+   AWS Lightsail, an Indian region if clients want data kept in India). Install Docker.
+2. **Point the domain at it.** At your domain registrar, add two DNS **A records** with
+   the server's IP address: `app` (for app.grc-flow.com) and `@` (for grc-flow.com).
+3. **Open ports 80 and 443** in the server's firewall. Caddy needs both to get the
+   certificate.
+4. **Copy the code and create `.env`** on the server:
+
+   ```bash
+   git clone https://github.com/Harshitahusts/GRC-Ai.git && cd GRC-Ai
+   cp .env.example .env
+   ```
+
+   In `.env`, set at least:
+
+   ```bash
+   GRC_DOMAIN=app.grc-flow.com
+   GRC_ROOT_DOMAIN=grc-flow.com
+   POSTGRES_PASSWORD=<a long random password>
+   GROQ_API_KEY=<your key>        # or add it later on the AI provider page
+   ```
+
+5. **Start everything:**
+
+   ```bash
+   docker compose -f compose.yaml -f compose.postgres.yaml -f compose.caddy.yaml up -d --build
+   docker compose exec web grc-web adduser yourname   # your first login
+   ```
+
+6. Open **https://app.grc-flow.com**. The first visit can take a minute while Caddy gets
+   the certificate.
+
+What this setup does for security: only Caddy is reachable from the internet; the app and
+the database have no public ports. Plain HTTP is redirected to HTTPS, login cookies are
+`Secure`, and browsers are told to always use HTTPS. Back up both Docker volumes
+(`grc-data` and `grc-pg`) regularly. To update later: `git pull`, then run the same
+`up -d --build` command.
+
 ### Database: SQLite or PostgreSQL
 
 By default everything (logins, client data, the audit log) lives in one SQLite file,
@@ -291,8 +334,9 @@ Each engagement has a **Connectors** tab for linking the client's systems. The c
 | GitHub | Installs the firm's GitHub App, picks which repositories to share, approves read-only access on GitHub | Public repositories, default branch protection, secret scanning |
 | AWS | Runs a CloudFormation template that creates a read-only role (AWS `SecurityAudit`) only the firm can use, then sends back the role ARN | **Where data is stored (India or not)**, S3 public access, root MFA, password policy, CloudTrail |
 
-Everything else (GitLab, Bitbucket, Google Cloud, Azure, Slack, Teams, Google Chat, and the
-identity, HR, ticketing, device and data-store connectors) shows as **Coming soon**.
+Other connectors (GitLab, Bitbucket, Google Cloud, Azure, Slack, Teams, Google Chat, and
+identity, HR, ticketing, device and data-store systems) are on the roadmap and listed in
+one line on the Connectors page. Until then, collect that evidence by hand and upload it.
 
 One-time setup for the firm:
 
@@ -340,35 +384,11 @@ checks, failed logins and published content. Your own actions arrive already rea
 count shows what others did and what the system found. New items pop up as they happen
 (checked every 20 seconds). Filter by type, level or unread on the **Notifications** page.
 
-### Docs and blog
-
-**Docs & blog** in the app is where you write and publish DPDPA guides and SEO articles in
-Markdown. The editor shows a live SEO checklist: title and description length, focus
-keyword placement, word count, subheadings, internal links, and links to unpublished pages.
-
-- It ships with 13 DPDPA docs and 2 blog posts, imported once as **drafts**. They were
-  written from general knowledge of the Act and Rules, so check every point and section
-  reference against the gazetted text before publishing.
-- Publishing needs a named reviewer.
-- Published items appear on public pages that need no login: `/docs`, `/blog`, and
-  `/sitemap.xml` and `/robots.txt` for search engines. Every page has its own title,
-  description, canonical link, Open Graph tags and article structured data.
-- Search engines can only find these pages once the site is hosted at a public address.
-  Set `GRC_PUBLIC_URL` (for example `https://www.example.in`) so canonical links and the
-  sitemap use it, and `GRC_SITE_NAME` for the site name.
-
 The app binds to this machine only (127.0.0.1) by default. It uses the **sample** register
 in `src/grc_agent/data/`. Point `GRC_REGISTER` and `GRC_CORPUS_INDEX` at the reviewed
 register and the real corpus index before any client use.
 
-## Usage
-
-```bash
-grc-agent "What does the DPDP Act require for consent?"
-grc-agent -v                     # interactive chat; -v shows tool calls
-```
-
-From Python:
+## Using the agent from Python
 
 ```python
 from grc_agent import Agent
@@ -378,19 +398,6 @@ print(agent.ask("Score a risk with likelihood 4 and impact 3").text)
 print(agent.ask("Which DPDPA obligation covers security safeguards?").text)  # same conversation
 ```
 
-## Pilot KPIs (command line)
-
-`grc-kpis` scores the DPDPA pilot against the build plan's KPIs (they're no longer shown in the web app): the North Star
-(**Verified Engagements Delivered**) and eight pilot thresholds, including zero
-fabricated citations. For each engagement that doesn't count yet, it lists what's blocking it.
-
-```bash
-grc-kpis examples/kpis/engagements --corpus-index examples/kpis/corpus_index.sample.txt
-```
-
-See [docs/kpis.md](docs/kpis.md) for each metric, the draft term dictionary, and the
-engagement record format.
-
 ## Project layout
 
 ```
@@ -399,8 +406,8 @@ src/grc_agent/
   tools.py          tool definitions and handlers (add new tools here)
   prompts.py        system prompt
   config.py         settings from environment variables
-  cli.py            `grc-agent` command
-  kpis/             citation verifier, engagement records, KPI scorecard, `grc-kpis`
+  llm.py            free and other OpenAI-compatible AI providers
+  citations.py      citation verifier: does a cited provision exist in the corpus?
   corpus/           Act and Rules ingestion (H2), search and lookup (H3), `grc-corpus`
   ai_assessment.py  Claude-drafted findings over the rule-based assessment (H6)
   web/              local web app (`grc-web`): FastAPI, templates, SQLite
@@ -412,8 +419,6 @@ src/grc_agent/
   web/registers.py  tasks, consent, requests, breaches, vendors, DPIAs, policies (one engine)
 docs/RESEARCH.md    what we took from Probo, Openlane and CISO Assistant
 tests/              unit tests (use a fake client; no API key needed)
-docs/kpis.md        KPI definitions and dictionary
-examples/kpis/      fictional engagement records and a sample corpus index
 ```
 
 ## Configuration

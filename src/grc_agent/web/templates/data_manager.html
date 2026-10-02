@@ -5,12 +5,10 @@
 <div class="page-head">
   <div>
     <h1>Data manager</h1>
-    <p class="muted">Keeps an eye on what this workspace stores, where it lives and how long it should stay. Read-only for now.</p>
+    <p class="muted">What this workspace stores, where it lives and how long it should stay.</p>
   </div>
   <div class="head-actions">
     <a class="button" href="/data-manager">{{ icon("i-refresh") }} Re-check</a>
-    <button type="button" class="button" data-soon="export-data">{{ icon("i-download") }} Export all data<span class="soon-tag">Soon</span></button>
-    <button type="button" class="button primary" data-soon="backup-now">{{ icon("i-database") }} Back up now<span class="soon-tag">Soon</span></button>
   </div>
 </div>
 
@@ -34,11 +32,6 @@
     <p class="tile-label">Personal data</p>
     <p class="tile-value">{{ "{:,}".format(store.personal_rows) }}</p>
     <p class="muted small">rows in {{ store.personal_tables }} tables</p>
-  </div>
-  <div class="tile">
-    <p class="tile-label">Last backup</p>
-    <p class="tile-value">Never</p>
-    <p class="muted small"><button type="button" class="link small" data-soon="schedule-backups">Schedule backups</button></p>
   </div>
 </section>
 
@@ -77,10 +70,6 @@
 <section class="card">
   <div class="card-head">
     <h2>Data catalogue</h2>
-    <div class="head-actions">
-      <button type="button" class="button small" data-soon="set-retention">{{ icon("i-clock") }} Set retention<span class="soon-tag">Soon</span></button>
-      <button type="button" class="button small" data-soon="purge-expired">{{ icon("i-x") }} Purge expired<span class="soon-tag">Soon</span></button>
-    </div>
   </div>
   {% set cats = store.tables|map(attribute="category")|unique|sort %}
   <div class="table-filter" data-filter-table="catalogue">
@@ -108,13 +97,4 @@
   </table>
 </section>
 
-<section class="card">
-  <div class="card-head"><h2>Coming next</h2><span class="muted small">Buttons are in place; the backend comes next</span></div>
-  <ul class="planned-list">
-    {% for key, p in planned_here.items() %}
-    <li><strong>{{ p.label }}</strong><span class="muted small">{{ p.backend }}</span></li>
-    {% endfor %}
-  </ul>
-  <p class="small"><button type="button" class="button small" data-soon="vacuum">{{ icon("i-refresh") }} Compact the database<span class="soon-tag">Soon</span></button></p>
-</section>
 {% endblock %}

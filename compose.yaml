@@ -4,6 +4,11 @@ services:
     # Published on this machine only. Change to "8000:8000" to expose it on your network.
     ports:
       - "127.0.0.1:8000:8000"
+    # AI provider keys (GROQ_API_KEY, GEMINI_API_KEY, ANTHROPIC_API_KEY...) and other
+    # settings come from .env. Keys can also be added in the app: AI provider page.
+    env_file:
+      - path: .env
+        required: false
     environment:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       # Empty: data stays in the SQLite file in the grc-data volume.

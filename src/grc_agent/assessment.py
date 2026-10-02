@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from grc_agent.kpis.citations import CorpusIndex
+from grc_agent.citations import CorpusIndex
 from grc_agent.register import Obligation, Register
 
 SEVERITY_WEIGHTS = {"critical": 4, "high": 3, "medium": 2, "low": 1}
