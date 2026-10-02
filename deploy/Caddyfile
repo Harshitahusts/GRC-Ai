@@ -1,15 +1,11 @@
-# Caddy puts GRC Flow on your domain with a real HTTPS certificate.
+# Caddy puts GRC Flow on its subdomain with a real HTTPS certificate.
 # It gets and renews a free Let's Encrypt certificate by itself; nothing to configure.
-# GRC_DOMAIN comes from .env, for example app.grc-flow.com.
+# GRC_DOMAIN comes from .env, for example app.grc-flow.com. The main domain
+# (grc-flow.com) is the website and is hosted elsewhere, so it is not handled here.
 {$GRC_DOMAIN} {
 	encode zstd gzip
 	reverse_proxy web:8000
 	header {
 		-Server
 	}
-}
-
-# The bare domain sends visitors to the app until a marketing site lives there.
-{$GRC_ROOT_DOMAIN} {
-	redir https://{$GRC_DOMAIN}{uri} 302
 }
