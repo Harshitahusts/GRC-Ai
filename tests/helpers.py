@@ -21,10 +21,8 @@ def post(client, path, data=None, **kwargs):
     return client.post(path, data={**(data or {}), "csrf": csrf(client, "/")}, **kwargs)
 
 
-def create(client, mode="agent"):
-    response = post(
-        client, "/engagements", {"client": "Acme Pvt Ltd", "sector": "SaaS", "mode": mode}
-    )
+def create(client):
+    response = post(client, "/engagements", {"client": "Acme Pvt Ltd", "sector": "SaaS"})
     return int(response.url.path.rsplit("/", 1)[1])
 
 

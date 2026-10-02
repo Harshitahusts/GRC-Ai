@@ -200,10 +200,7 @@ def register(app: FastAPI) -> None:
     )
 
     def agent_engagement(conn, eid):
-        eng = get_engagement(conn, eid)
-        if eng["mode"] != "agent":
-            raise HTTPException(status_code=400, detail="Manual engagements have no controls.")
-        return eng
+        return get_engagement(conn, eid)
 
     def open_engagement(conn, eid):
         eng = agent_engagement(conn, eid)

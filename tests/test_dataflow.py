@@ -223,8 +223,3 @@ def test_safe_cell():
     assert safe_cell("=HYPERLINK(1)") == "'=HYPERLINK(1)"
     assert safe_cell("@SUM(A1)") == "'@SUM(A1)" and safe_cell("-1+1") == "'-1+1"
     assert safe_cell("Mailchimp") == "Mailchimp" and safe_cell(3) == 3
-
-
-def test_manual_engagements_have_no_map(authed):
-    eid = create(authed, mode="manual")
-    assert authed.get(f"/engagements/{eid}/dataflow").status_code == 400

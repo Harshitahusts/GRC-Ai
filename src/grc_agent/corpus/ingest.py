@@ -16,7 +16,7 @@ import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from grc_agent.kpis.citations import CorpusIndex, normalize_citation
+from grc_agent.citations import CorpusIndex, normalize_citation
 
 KINDS = {"act": "Section", "rules": "Rule"}
 

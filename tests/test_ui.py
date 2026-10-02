@@ -1,4 +1,4 @@
-"""Login and dashboard UX, the search palette, planned-feature stubs and the Data manager."""
+"""Login and dashboard UX, the search palette and the Data manager."""
 
 import re
 from datetime import datetime, timedelta, timezone
@@ -7,25 +7,21 @@ from pathlib import Path
 from helpers import ALL_YES, create, csrf, post
 
 from grc_agent.web import datamanager, db
-from grc_agent.web.planned import PLANNED
 
 TEMPLATES = Path(__file__).parents[1] / "src" / "grc_agent" / "web" / "templates"
 
 
-def test_every_planned_button_is_registered():
-    used = set()
+def test_no_placeholder_buttons_for_features_that_do_not_exist():
     for path in TEMPLATES.glob("*.html"):
-        used |= set(re.findall(r'data-soon="([\w-]+)"', path.read_text(encoding="utf-8")))
-    assert used, "no planned buttons found"
-    assert used <= set(PLANNED), f"unregistered: {used - set(PLANNED)}"
-    assert all({"label", "area", "backend"} <= set(p) for p in PLANNED.values())
+        text = path.read_text(encoding="utf-8")
+        assert not re.search(r"data-soon|soon-tag|Coming next", text), path.name
 
 
 def test_login_page_has_the_new_flow(client):
     page = client.get("/login").text
-    for text in ("Continue with Google", "Forgot password?", 'id="reveal"', "Caps Lock is on"):
+    for text in ('id="reveal"', "Caps Lock is on", "Team &amp; roles", "grc-web passwd"):
         assert text in page
-    assert 'data-soon="request-access"' in page and 'id="planned-features"' in page
+    assert "Continue with Google" not in page
     assert 'id="palette"' not in page  # the search palette is for signed-in users only
 
 
@@ -40,7 +36,7 @@ def test_failed_login_keeps_the_username(client):
 def test_app_shell_has_search_menu_and_shortcuts(authed):
     page = authed.get("/").text
     assert 'id="palette"' in page and 'id="shortcuts"' in page
-    assert 'href="/data-manager"' in page and "Search all records for" in page
+    assert 'href="/data-manager"' in page and "Search all records for" not in page
     assert "Getting started" in page and "0 of 4 done" in page
 
 
@@ -56,7 +52,7 @@ def test_getting_started_tracks_progress(authed):
 
 def test_dashboard_quick_actions_and_store_line(authed):
     page = authed.get("/").text
-    assert 'data-soon="export-portfolio"' in page and 'data-soon="date-range"' in page
+    assert 'href="/team"' in page and "Add a teammate" in page and "Invite teammate" not in page
     assert "Data store:" in page and "Data manager" in page
 
 
@@ -65,8 +61,8 @@ def test_data_manager_page(authed):
     page = authed.get("/data-manager").text
     assert "Data catalogue" in page and "Watch list" in page
     assert "<code>engagements</code>" in page and "<code>audit_log</code>" in page
-    assert "Integrity: ok" in page and "No backups yet" in page
-    assert 'data-soon="backup-now"' in page and 'data-soon="purge-expired"' in page
+    assert "Integrity: ok" in page and "Back up regularly" in page
+    assert "Back up now" not in page and "Purge expired" not in page
 
 
 def test_data_manager_needs_login(client):
@@ -101,3 +97,11 @@ def test_human_size():
     assert datamanager.human_size(512) == "512 B"
     assert datamanager.human_size(2048) == "2.0 KB"
     assert datamanager.human_size(5 * 1024 * 1024) == "5.0 MB"
+
+
+def test_removed_features_are_gone(client, authed):
+    for path in ("/docs", "/blog", "/sitemap.xml", "/content", "/kpis"):
+        assert authed.get(path).status_code == 404, path
+    robots = client.get("/robots.txt")
+    assert robots.status_code == 200 and "Disallow: /" in robots.text
+    assert "Docs &amp; blog" not in authed.get("/").text

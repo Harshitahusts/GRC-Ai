@@ -363,4 +363,14 @@ BY_ID = {c.id: c for c in CONNECTORS}
 
 
 def by_category() -> list[tuple[str, list[Connector]]]:
-    return [(cat, [c for c in CONNECTORS if c.category == cat]) for cat in CATEGORIES]
+    """Working connectors by category. Planned ones are not shown as cards."""
+    groups = [
+        (cat, [c for c in CONNECTORS if c.category == cat and c.status == "available"])
+        for cat in CATEGORIES
+    ]
+    return [(cat, items) for cat, items in groups if items]
+
+
+def planned_names() -> list[str]:
+    """Names of connectors on the roadmap, for one line on the Connectors page."""
+    return [c.name for c in CONNECTORS if c.status == "planned"]

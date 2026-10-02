@@ -456,7 +456,7 @@ def _seed_client(app, clients: dict, clock: _Clock, c: dict, i: int) -> None:
     me = clients[DEMO_USER]
     stage = ORDER.index(c["stage"])
 
-    r = _post(lead, "/engagements", {"client": c["client"], "sector": c["sector"], "mode": "agent"})
+    r = _post(lead, "/engagements", {"client": c["client"], "sector": c["sector"]})
     eid = int(r.url.path.rsplit("/", 1)[1])
     clock.tick(40)
     answers = _answers(c)

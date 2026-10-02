@@ -35,8 +35,6 @@ scanner = ["presidio-analyzer>=2.2"]
 postgres = ["psycopg[binary]>=3.2"]
 
 [project.scripts]
-grc-agent = "grc_agent.cli:main"
-grc-kpis = "grc_agent.kpis.cli:main"
 grc-web = "grc_agent.web.cli:main"
 grc-corpus = "grc_agent.corpus.cli:main"
 

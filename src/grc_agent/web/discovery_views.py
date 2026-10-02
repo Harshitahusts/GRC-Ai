@@ -222,7 +222,7 @@ def by_engagement(conn: sqlite3.Connection) -> list[dict]:
         "(SELECT COUNT(*) FROM scan_findings f WHERE f.engagement_id = e.id "
         " AND f.status = 'pending') AS pending, "
         "(SELECT COUNT(*) FROM data_inventory i WHERE i.engagement_id = e.id) AS inventory "
-        "FROM engagements e WHERE e.mode = 'agent'"
+        "FROM engagements e"
     ).fetchall()
     out = [dict(r) for r in rows if r["pending"] or r["inventory"]]
     for r in out:
@@ -284,10 +284,7 @@ def register(app: FastAPI) -> None:
     )
 
     def agent_engagement(conn, eid):
-        eng = get_engagement(conn, eid)
-        if eng["mode"] != "agent":
-            raise HTTPException(status_code=400, detail="Manual engagements have no discovery.")
-        return eng
+        return get_engagement(conn, eid)
 
     def open_engagement(conn, eid):
         eng = agent_engagement(conn, eid)

@@ -24,16 +24,6 @@
     {% endif %}
   </section>
 
-  {% if eng.mode == "manual" %}
-  <form method="post" action="/engagements/{{ eng.id }}/details" class="card">
-    <h2>Baseline details</h2>
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <label>Consultant hours (first call to delivery, including review)
-      <input name="consultant_hours" type="number" step="0.25" min="0" value="{{ eng.consultant_hours if eng.consultant_hours is not none else '' }}">
-    </label>
-    <button>Save details</button>
-  </form>
-  {% else %}
   <section class="card">
     <div class="card-head"><h2>Risk &amp; data snapshot</h2><a class="small" href="/engagements/{{ eng.id }}/risks">Risk register {{ icon("i-arrow") }}</a></div>
     {% set rs = snapshot.risks %}
@@ -47,9 +37,8 @@
       {% for r in snapshot.top %}<li><span class="badge risk-{{ r.level }}">{{ r.score }}</span><span class="queue-text"><a href="/engagements/{{ eng.id }}/risks#{{ r.key }}">{{ r.title }}</a><small>{{ r.threat }}</small></span></li>{% endfor %}
     </ul>
     {% elif eng.assessed_at %}<p class="muted small">No open risks.</p>{% else %}<p class="muted small">Risks appear after the assessment.</p>{% endif %}
-    <p class="small"><a href="/engagements/{{ eng.id }}/dataflow">Data-flow map</a> · <a href="/assistant">Ask the GRC Analyst</a></p>
+    <p class="small"><a href="/engagements/{{ eng.id }}/dataflow">Data-flow map</a> · <a href="/assistant">Ask the GRC Analyst</a> · <a href="/engagements/{{ eng.id }}/export.json">Download findings (JSON)</a></p>
   </section>
-  {% endif %}
 </div>
 
 <section class="card">

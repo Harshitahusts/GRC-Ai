@@ -25,7 +25,7 @@ CATEGORIES = {
     "privacy": "Privacy operations",
     "compliance": "Compliance",
     "security": "Security",
-    "content": "Docs & blog",
+    "content": "Docs & blog",  # removed feature; kept so older notifications still show
 }
 
 
@@ -203,10 +203,6 @@ def _rule(
     if action in ("user_created", "password_changed"):
         verb = "Account created" if action == "user_created" else "Password changed"
         return "security", "info", f"{verb}: {raw}", ""
-    if action == "content_published":
-        return "content", "good", f"Published: {d.get('slug', '')}", f"/content/{d.get('id', '')}"
-    if action == "content_created":
-        return "content", "info", f"New draft: {d.get('slug', '')}", f"/content/{d.get('id', '')}"
     return None
 
 

@@ -19,7 +19,7 @@
       {% for s in summaries %}
       <tr>
         <td class="muted">ENG-{{ '%03d' % s.id }}</td>
-        <td><a class="strong-link" href="/engagements/{{ s.id }}">{{ s.client }}</a><br><span class="muted small">{{ s.sector }} · {{ s.mode }}</span></td>
+        <td><a class="strong-link" href="/engagements/{{ s.id }}">{{ s.client }}</a><br><span class="muted small">{{ s.sector }}</span></td>
         <td>{{ stage_badge(s) }}</td>
         <td class="readiness">{% if s.score is not none %}<span class="readiness-cell"><span class="num-inline">{{ s.score }}</span>{{ meter(s.score, 100, "Readiness for " ~ s.client) }}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
         <td class="num">{{ "%d/%d"|format(s.reviewed, s.documents) if s.documents else "–" }}</td>
@@ -39,7 +39,6 @@
         {% for sector in sectors %}<option>{{ sector }}</option>{% endfor %}
       </select>
     </label>
-    <input type="hidden" name="mode" value="agent">
     <button class="primary">Create</button>
   </form>
 </div>

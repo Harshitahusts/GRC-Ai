@@ -14,8 +14,8 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
+from grc_agent.citations import CorpusIndex, normalize_citation
 from grc_agent.corpus.ingest import Chunk
-from grc_agent.kpis.citations import CorpusIndex, normalize_citation
 
 _STOPWORDS = set(
     "a an and any are as at be by for from has have in is it its may of on or shall such that "

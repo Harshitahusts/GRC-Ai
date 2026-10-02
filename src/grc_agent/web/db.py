@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS engagements (
     id INTEGER PRIMARY KEY,
     client TEXT NOT NULL,
     sector TEXT NOT NULL,
-    mode TEXT NOT NULL CHECK (mode IN ('agent', 'manual')),
+    mode TEXT NOT NULL DEFAULT 'agent' CHECK (mode IN ('agent', 'manual')),  -- always 'agent' now
     created_by TEXT NOT NULL,
     created_at TEXT NOT NULL,
     intake_submitted_at TEXT,
@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS engagements (
     stale INTEGER NOT NULL DEFAULT 0,
     draft_pack_ready_at TEXT,
     delivered_at TEXT,
+    -- No longer used (pilot measurements); kept so older workspaces still load and migrate.
     consultant_hours REAL,
     intake_completed_unaided INTEGER,
     fell_back_to_manual INTEGER NOT NULL DEFAULT 0
@@ -385,6 +386,13 @@ def init_db(path: str | Path) -> None:
             for name, spec in columns.items():
                 if name not in existing:
                     conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {spec}")
+        _data_fixes(conn)
+
+
+def _data_fixes(conn) -> None:
+    """One-off data changes that keep old workspaces working with current code."""
+    # The "manual baseline" engagement mode was removed; those become ordinary engagements.
+    conn.execute("UPDATE engagements SET mode = 'agent' WHERE mode <> 'agent'")
 
 
 def _init_postgres(url: str) -> None:
@@ -410,38 +418,7 @@ def _init_postgres(url: str) -> None:
             for name, spec in columns.items():
                 if name not in existing:
                     conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {spec}")
-
-
-def seed_content(conn: sqlite3.Connection, items: list[dict]) -> int:
-    """Import starter docs and posts as drafts, once each. Returns how many were added."""
-    added = 0
-    for item in items:
-        seen = conn.execute(
-            "SELECT 1 FROM content_seeds WHERE type = ? AND slug = ?", (item["type"], item["slug"])
-        ).fetchone()
-        if seen:
-            continue
-        conn.execute(
-            "INSERT OR IGNORE INTO content (type, slug, title, description, keyword, body_md, "
-            "position, status, author, created_at, updated_at) "
-            "VALUES (?,?,?,?,?,?,?, 'draft', 'starter content', ?, ?)",
-            (
-                item["type"],
-                item["slug"],
-                item["title"],
-                item["description"],
-                item["keyword"],
-                item["body_md"],
-                item["position"],
-                now(),
-                now(),
-            ),
-        )
-        conn.execute(
-            "INSERT INTO content_seeds (type, slug) VALUES (?, ?)", (item["type"], item["slug"])
-        )
-        added += 1
-    return added
+        _data_fixes(conn)
 
 
 def finding_citations(row) -> list[str]:

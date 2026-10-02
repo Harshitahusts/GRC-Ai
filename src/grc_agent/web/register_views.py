@@ -105,8 +105,7 @@ def counts(conn: sqlite3.Connection, eid: int | None = None) -> dict[str, dict[s
 def queue(conn: sqlite3.Connection, limit: int = 50) -> list[dict]:
     """Open work across every client, overdue and soonest first."""
     rows = conn.execute(
-        "SELECT r.*, e.client FROM records r JOIN engagements e ON e.id = r.engagement_id "
-        "WHERE e.mode = 'agent'"
+        "SELECT r.*, e.client FROM records r JOIN engagements e ON e.id = r.engagement_id"
     ).fetchall()
     items = []
     for r in rows:
@@ -206,10 +205,7 @@ def register(app: FastAPI) -> None:
         return REGISTERS[key]
 
     def agent_engagement(conn, eid):
-        eng = get_engagement(conn, eid)
-        if eng["mode"] != "agent":
-            raise HTTPException(status_code=400, detail="Manual engagements have no registers.")
-        return eng
+        return get_engagement(conn, eid)
 
     def open_engagement(conn, eid):
         eng = agent_engagement(conn, eid)

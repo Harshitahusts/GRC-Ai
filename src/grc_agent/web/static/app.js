@@ -23,25 +23,6 @@
   }
   window.grcToast = toast;
 
-  // ---- Planned features: the button exists, the backend doesn't yet.
-  let planned = {};
-  try { planned = JSON.parse($("#planned-features")?.textContent || "{}"); } catch (e) {}
-  document.addEventListener("click", (event) => {
-    const el = event.target.closest("[data-soon]");
-    if (!el) return;
-    event.preventDefault();
-    const info = planned[el.dataset.soon] || {};
-    if (el.type === "checkbox") el.checked = false;
-    toast(`${info.label || "This feature"} is coming soon`, "warning", info.backend ? `Planned: ${info.backend}` : "");
-  });
-  document.addEventListener("change", (event) => {
-    const el = event.target.closest("select[data-soon]");
-    if (!el) return;
-    const info = planned[el.dataset.soon] || {};
-    el.selectedIndex = 0;
-    toast(`${info.label || "This filter"} is coming soon`, "warning", info.backend ? `Planned: ${info.backend}` : "");
-  });
-
   // ---- Login form: show/hide password, Caps Lock hint, busy state.
   const login = $("#login-form");
   if (login) {
@@ -73,7 +54,6 @@
   const shortcuts = $("#shortcuts");
   if (palette) {
     const q = $("#palette-q");
-    const echo = $("#palette-echo");
     const options = $$("#palette-list li");
     let active = 0;
     const visible = () => options.filter((li) => !li.hidden);
@@ -86,8 +66,6 @@
       options.forEach((li) => {
         li.hidden = li.dataset.keep === undefined && !!term && !li.textContent.toLowerCase().includes(term);
       });
-      $(".palette-search-all").hidden = !term;
-      echo.textContent = q.value.trim() || "…";
       active = 0;
       mark();
     }

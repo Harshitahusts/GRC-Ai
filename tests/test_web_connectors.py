@@ -61,23 +61,14 @@ def test_pages_require_login(client):
         assert client.get(path, follow_redirects=False).status_code == 303
 
 
-def test_catalog_page(authed):
+def test_catalog_page_shows_working_connectors_and_a_roadmap_line(authed):
     page = authed.get("/connectors").text
-    for name in [
-        "GitHub",
-        "GitLab",
-        "Bitbucket",
-        "Amazon Web Services",
-        "Google Cloud",
-        "Microsoft Azure",
-        "Slack",
-        "Microsoft Teams",
-        "Google Chat",
-        "Okta",
-        "Keka",
-    ]:
-        assert name in page
-    assert page.count("Coming soon") >= 20
+    assert page.count('class="connector"') == 2  # GitHub and AWS
+    assert 'href="/connectors/github"' in page and 'href="/connectors/aws"' in page
+    assert "Coming soon" not in page
+    roadmap = page.split("On the roadmap:")[1]
+    for name in ["GitLab", "Google Cloud", "Slack", "Okta", "Keka"]:
+        assert name in roadmap
 
 
 def test_aws_role_connection_collects_evidence(app_with_fakes):
@@ -174,12 +165,6 @@ def test_coming_soon_connectors_cannot_be_added(authed):
         assert authed.get(f"/engagements/{eid}/connectors/new?type={cid}").status_code == 404
 
 
-def test_catalog_cards_link_to_detail_pages(authed):
-    page = authed.get("/connectors").text
-    assert 'href="/connectors/github"' in page and 'href="/connectors/okta"' in page
-    assert page.count('class="connector') >= 24
-
-
 def test_detail_page_and_connect_flow(authed):
     eid = create(authed)
     page = authed.get("/connectors/aws").text
@@ -194,13 +179,12 @@ def test_detail_page_and_connect_flow(authed):
 
 def test_detail_page_without_engagements_and_for_planned(authed):
     assert "Agent-assisted</strong> client engagement" in authed.get("/connectors/github").text
-    page = authed.get("/connectors/okta").text
-    assert "coming soon" in page and "For which engagement?" not in page
+    assert authed.get("/connectors/okta").status_code == 404  # planned: not shown
     assert authed.get("/connectors/okta/connect?engagement=1").status_code == 404
+    page = authed.get("/connectors").text
+    assert "On the roadmap:" in page and "Okta" in page and 'href="/connectors/okta"' not in page
     assert authed.get("/connectors/nope").status_code == 404
 
 
-def test_connect_rejects_manual_and_missing_engagements(authed):
-    eid = create(authed, mode="manual")
-    assert authed.get(f"/connectors/aws/connect?engagement={eid}").status_code == 400
+def test_connect_rejects_missing_engagements(authed):
     assert authed.get("/connectors/aws/connect?engagement=999").status_code == 404

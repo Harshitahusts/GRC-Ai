@@ -40,16 +40,11 @@ def register(app: FastAPI) -> None:
     )
 
     def agent_engagement(conn, eid):
-        eng = get_engagement(conn, eid)
-        if eng["mode"] != "agent":
-            raise HTTPException(status_code=400, detail="Manual engagements have no data-flow map.")
-        return eng
+        return get_engagement(conn, eid)
 
     @app.get("/dataflows")
     def dataflow_index(request: Request, user: User, conn: Conn):
-        rows = conn.execute(
-            "SELECT * FROM engagements WHERE mode = 'agent' ORDER BY id DESC"
-        ).fetchall()
+        rows = conn.execute("SELECT * FROM engagements ORDER BY id DESC").fetchall()
         maps = [{"eng": e, "flow": flow_for(request, conn, e)} for e in rows]
         return render(request, "dataflows.html", maps=maps)
 

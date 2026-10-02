@@ -9,12 +9,7 @@
     <p class="muted">{{ total }} engagement{{ "" if total == 1 else "s" }} in the workspace.</p>
   </div>
   <div class="head-actions">
-    <label class="sr-only" for="period">Period</label>
-    <select id="period" class="compact" data-soon="date-range">
-      <option>All time</option><option>Last 7 days</option><option>Last 30 days</option><option>This quarter</option>
-    </select>
     <a class="button" href="/" title="Refresh">{{ icon("i-refresh") }}<span class="sr-only">Refresh</span></a>
-    <button type="button" class="button" data-soon="customise-dashboard">{{ icon("i-sliders") }} Customise<span class="soon-tag">Soon</span></button>
     <a class="button primary" href="/engagements#new">{{ icon("i-plus") }} New engagement</a>
   </div>
 </div>
@@ -52,9 +47,9 @@
   <a class="quick-item" href="/engagements#new"><span class="quick-icon">{{ icon("i-plus") }}</span><span><strong>New engagement</strong><small>Start a client intake</small></span></a>
   <a class="quick-item" href="/assistant"><span class="quick-icon">{{ icon("i-spark") }}</span><span><strong>Ask the analyst</strong><small>Questions on any client</small></span></a>
   <a class="quick-item" href="/dataflows"><span class="quick-icon">{{ icon("i-flow") }}</span><span><strong>Data flows</strong><small>Where client data goes</small></span></a>
-  <button type="button" class="quick-item" data-soon="export-portfolio"><span class="quick-icon">{{ icon("i-download") }}</span><span><strong>Export report</strong><small>Portfolio PDF / Excel</small></span><span class="soon-tag">Soon</span></button>
-  <button type="button" class="quick-item" data-soon="invite-teammate"><span class="quick-icon">{{ icon("i-users") }}</span><span><strong>Invite teammate</strong><small>Add a consultant</small></span><span class="soon-tag">Soon</span></button>
-  <button type="button" class="quick-item" data-soon="schedule-review"><span class="quick-icon">{{ icon("i-calendar") }}</span><span><strong>Schedule review</strong><small>Book time with a client</small></span><span class="soon-tag">Soon</span></button>
+  <a class="quick-item" href="/team"><span class="quick-icon">{{ icon("i-users") }}</span><span><strong>Add a teammate</strong><small>Team &amp; roles</small></span></a>
+  <a class="quick-item" href="/work"><span class="quick-icon">{{ icon("i-check") }}</span><span><strong>Work queue</strong><small>What's due across clients</small></span></a>
+  <a class="quick-item" href="/settings/ai"><span class="quick-icon">{{ icon("i-spark") }}</span><span><strong>AI provider</strong><small>Claude or a free model</small></span></a>
 </section>
 
 {% set live_risks = risk_queue %}
@@ -165,8 +160,8 @@
         <td><a class="strong-link" href="/engagements/{{ s.id }}">{{ s.client }}</a><br><span class="muted small">{{ s.sector }}</span></td>
         <td>{{ stage_badge(s) }}</td>
         <td class="readiness">{% if s.score is not none %}<span class="readiness-cell"><span class="num-inline">{{ s.score }}</span>{{ meter(s.score, 100, "Readiness for " ~ s.client) }}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
-        <td class="num hide-sm">{{ s.gaps if s.mode == "agent" else "–" }}</td>
-        <td class="num hide-sm">{{ s.open_items if s.mode == "agent" else "–" }}</td>
+        <td class="num hide-sm">{{ s.gaps }}</td>
+        <td class="num hide-sm">{{ s.open_items }}</td>
       </tr>
       {% endfor %}
       </tbody>

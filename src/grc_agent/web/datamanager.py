@@ -3,8 +3,8 @@
 It only reads. It lists every table with its purpose, whether it holds
 personal data, how many rows it has and how old they are, then raises
 watch items (unknown tables, records past their suggested retention, a
-fragmented file, a failed integrity check). Backups, purges and retention
-settings are planned; their buttons are in the UI but not wired yet.
+fragmented file, a failed integrity check). Backups are up to you: copy the
+data folder, or use your PostgreSQL provider's backups.
 """
 
 from __future__ import annotations
@@ -140,14 +140,14 @@ CATALOG: dict[str, dict] = {
         "retention": "Contract term + 3 years",
     },
     "content": {
-        "purpose": "Docs and blog posts",
-        "category": "Content",
+        "purpose": "Old docs and blog posts (that editor was removed; kept so nothing is lost)",
+        "category": "System",
         "personal": False,
         "retain_days": None,
-        "retention": "Until unpublished",
+        "retention": "Delete when no longer needed",
     },
     "content_seeds": {
-        "purpose": "Which starter articles have been loaded",
+        "purpose": "Which starter articles were loaded (no longer used)",
         "category": "System",
         "personal": False,
         "retain_days": None,
@@ -350,7 +350,8 @@ def report(
                 Watch(
                     "warning",
                     f"{t.expired} {t.name} row{'s' if t.expired != 1 else ''} past retention",
-                    f"Suggested retention is {t.retention.lower()}. Purge is planned.",
+                    f"Suggested retention is {t.retention.lower()}. "
+                    "Review them and delete what is no longer needed.",
                 )
             )
     if free_pct >= 20 and page_count > 100:
@@ -360,11 +361,11 @@ def report(
     watch.append(
         Watch(
             "warning",
-            "No backups yet",
+            "Back up regularly",
             "Use your PostgreSQL provider's backups (or pg_dump), and back up the data "
             "folder for the key and evidence files."
             if _is_pg(conn)
-            else "Scheduled backups are planned. Copy the data folder by hand until then.",
+            else "Copy the data folder (grc.db, keys and evidence files) to a safe place.",
         )
     )
 
