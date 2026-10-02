@@ -146,18 +146,26 @@ def _parse(response: Any) -> dict[str, Any]:
     return data
 
 
+def drafted_by(settings: Settings) -> str:
+    """Who wrote a finding: "demo" (placeholder), "claude", or another provider's key."""
+    if settings.demo:
+        return "demo"
+    return "claude" if settings.provider == "anthropic" else settings.provider
+
+
 class ClaudeAssessor:
     def __init__(
         self,
         corpus: Corpus,
         client: anthropic.Anthropic | None = None,
         settings: Settings | None = None,
-        workers: int = 4,
+        workers: int | None = None,
     ) -> None:
         self.settings = settings or Settings.from_env()
         self.client = client or make_client(self.settings)
         self.corpus = corpus
-        self.workers = workers
+        # Free tiers allow a few requests a minute, so fewer calls run at once.
+        self.workers = workers or (4 if self.settings.provider == "anthropic" else 2)
 
     def _call(self, prompt: str) -> Any:
         return self.client.beta.messages.create(
@@ -209,7 +217,7 @@ class ClaudeAssessor:
             unresolved=unresolved,
             summary=data["finding"].strip(),
             remediation=data["remediation"].strip() if finding.status != "compliant" else "",
-            drafted_by="demo" if self.settings.demo else "claude",
+            drafted_by=drafted_by(self.settings),
             confidence=data["confidence"],
             needs_legal_review=bool(data["needs_legal_review"]),
             provisions=tuple(c.ref for c in provisions),

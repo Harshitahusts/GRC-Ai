@@ -133,7 +133,7 @@ workspace on http://127.0.0.1:8001. Sign in as `demo` / `grc-demo-2026`.
   GitHub or AWS calls are made.
 - `start-demo.bat --reset` starts from fresh sample data. `--live-seconds 0` turns the live
   activity off.
-- Without an `ANTHROPIC_API_KEY`, the analyst gives simulated answers in the demo.
+- Without any AI key, the analyst gives simulated answers in the demo. Pick a provider on the AI provider page to use a real model.
 - **Share it on your office network:** double-click **`start-demo-lan.bat`** (or run
   `grc-web demo --lan`). It prints a link such as `http://192.168.1.20:8001` that anyone on
   the same Wi-Fi or LAN can open. No outside service is involved. If Windows Firewall asks,
@@ -179,8 +179,24 @@ The first run sets up a `.venv`, installs the app, creates a `.env` from `.env.e
 asks you to create your login, then opens http://127.0.0.1:8000 in your browser. Later
 runs start in a few seconds. Press Ctrl+C to stop it. Add `--port 9000` to use another port.
 
-Put your `ANTHROPIC_API_KEY` in `.env` to enable the GRC Analyst and Claude drafting.
-Everything else works without it.
+To switch on the GRC Analyst and AI drafting, open **AI provider** in the sidebar
+(`/settings/ai`). Pick a provider, paste its key and press **Test connection**.
+Everything else in the app works without a key.
+
+| Provider | Cost | Where to get a key |
+|---|---|---|
+| Anthropic Claude | Paid. Best answers | console.anthropic.com |
+| Groq | Free tier, no card, very fast | console.groq.com/keys |
+| Google Gemini | Free tier | aistudio.google.com/apikey |
+| OpenRouter | Free `:free` models, 50 requests a day | openrouter.ai/keys |
+| Cerebras, Mistral, NVIDIA NIM | Free tiers | their consoles |
+| Ollama | Free, runs on your own computer | ollama.com |
+| Any OpenAI-compatible server | Varies | LM Studio, vLLM, LiteLLM... |
+
+Saved keys are encrypted in the database and never shown again. You can also put a key in
+`.env` instead (`GROQ_API_KEY=...`, `GEMINI_API_KEY=...`, `ANTHROPIC_API_KEY=...`). Then
+the first key found is used, or the one `GRC_AI_PROVIDER` names. Free models are weaker
+than Claude at legal reasoning, so review their drafted findings with extra care.
 
 **No API key yet?** Add `GRC_AI_MODE=demo` to `.env` and restart. A built-in stand-in for
 Claude then answers in the same format as the real API: the analyst calls the real tools,
@@ -378,11 +394,14 @@ Set in `.env` or the environment:
 | Variable | Default | Meaning |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | none | API key (or use `ant auth login`) |
-| `GRC_AGENT_MODEL` | `claude-opus-5` | Claude model |
+| `GRC_AGENT_MODEL` | provider default | Model name (`claude-opus-5`, `llama-3.3-70b-versatile`, ...) |
 | `GRC_AGENT_EFFORT` | `high` | `low` / `medium` / `high` / `xhigh` / `max` |
-| `GRC_AGENT_MAX_TOKENS` | `16000` | Max output tokens per response |
+| `GRC_AGENT_MAX_TOKENS` | `16000` (4096 for others) | Max output tokens per response |
 | `GRC_AGENT_MAX_TURNS` | `20` | Max model calls per question |
 | `GRC_AI_MODE` | `api` | `demo` runs the offline stand-in for Claude, for testing without a key |
+| `GRC_AI_PROVIDER` | first key found | `anthropic`, `groq`, `gemini`, `openrouter`, `cerebras`, `mistral`, `nvidia`, `ollama`, `openai`, `custom`. The AI provider page overrides it |
+| `GROQ_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, ... | none | Keys for the free providers |
+| `GRC_LLM_BASE_URL`, `GRC_LLM_API_KEY` | none | Address and key for `custom` (any OpenAI-compatible API) |
 | `GRC_AWS_PROFILE` | none | AWS profile with the firm's credentials (for assuming clients' roles) |
 | `GRC_PUBLIC_URL` | this server | Homepage shown on the GitHub App |
 | `GRC_SCANNER` | auto | `builtin` skips Presidio even when it is installed |

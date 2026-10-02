@@ -988,3 +988,9 @@ dl.details dd { margin: 0; overflow-wrap: anywhere; }
 .find-group { margin: 1rem 0 .25rem; font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
 .next-prompt { display: flex; gap: .75rem; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: .8rem 1rem; border-radius: var(--radius-sm); background: var(--pass-bg); color: var(--pass); margin-bottom: 1rem; }
 .next-prompt p { margin: 0; }
+
+/* AI provider page */
+.ai-now h2 { margin: .1rem 0 .3rem; }
+.ai-now .row-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .6rem; }
+form.inline { display: inline; }
+.ai-now .badge { white-space: normal; text-align: left; }

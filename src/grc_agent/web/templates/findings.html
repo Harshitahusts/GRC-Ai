@@ -55,7 +55,7 @@
         <span class="badge status-badge-{{ f.status }}">{{ f.status.replace("_", " ") }}</span>
         <span class="badge sev-{{ f.severity }}">{{ f.severity }}</span>
         {% if f.drafted_by == "demo" %}<span class="badge badge-fail">Demo placeholder</span>{% endif %}
-        {% if f.drafted_by == "claude" %}<span class="badge badge-none">{{ icon("i-spark") }} Drafted by Claude · {{ f.confidence }} confidence</span>{% endif %}
+        {% if f.drafted_by not in ("demo", "rules") %}<span class="badge badge-none">{{ icon("i-spark") }} Drafted by {{ ai_names.get(f.drafted_by, f.drafted_by) }} · {{ f.confidence }} confidence</span>{% endif %}
         {% if f.needs_legal_review %}<span class="badge badge-fail">Legal review</span>{% endif %}
       </div>
       <h3>{{ o.obligation if o else f.obligation_id }}</h3>
@@ -75,10 +75,10 @@
       {% for ref, ok in f.cites %}
       <div class="nowrap cite"><a href="/corpus/provision?ref={{ ref|urlencode }}">{{ ref }}</a>
         {% if ok %}<span class="badge badge-pass" title="Resolves in the corpus index">✓</span>
-        {% else %}<span class="badge badge-fail" title="Doesn't resolve, or wasn't among the provisions Claude was shown. Blocks delivery.">✗ unresolved</span>{% endif %}
+        {% else %}<span class="badge badge-fail" title="Doesn't resolve, or wasn't among the provisions the AI was shown. Blocks delivery.">✗ unresolved</span>{% endif %}
       </div>
       {% endfor %}
-      {% if f.drafted_by == "claude" and f.provisions %}<details class="small"><summary>Provisions shown</summary>{{ f.provisions|join(", ") }}</details>{% endif %}
+      {% if f.drafted_by not in ("demo", "rules") and f.provisions %}<details class="small"><summary>Provisions shown</summary>{{ f.provisions|join(", ") }}</details>{% endif %}
       <form method="post" action="/engagements/{{ eng.id }}/findings/{{ f.id }}" class="verdict">
         <input type="hidden" name="csrf" value="{{ csrf }}">
         <p class="tile-label">Accuracy scoring</p>

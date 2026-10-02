@@ -289,6 +289,19 @@ CREATE TABLE IF NOT EXISTS evidence_files (
     uploaded_by TEXT NOT NULL,
     uploaded_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS ai_providers (
+    provider TEXT PRIMARY KEY,                -- a key of grc_agent.llm.PROVIDERS
+    model TEXT NOT NULL DEFAULT '',
+    base_url TEXT NOT NULL DEFAULT '',
+    key_enc TEXT NOT NULL DEFAULT '',         -- API key, encrypted like connector secrets
+    key_hint TEXT NOT NULL DEFAULT '',        -- masked, e.g. "••••abcd"
+    active INTEGER NOT NULL DEFAULT 0,        -- at most one row is active
+    status TEXT NOT NULL DEFAULT '',          -- '', 'ok' or 'error' from the last test
+    message TEXT NOT NULL DEFAULT '',
+    tested_at TEXT,
+    updated_by TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS audit_log (
     id INTEGER PRIMARY KEY,
     at TEXT NOT NULL,
@@ -483,6 +496,7 @@ COPY_ORDER = (
     "record_events",
     "controls",
     "evidence_files",
+    "ai_providers",
     "audit_log",
 )
 

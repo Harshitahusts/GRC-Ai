@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block title %}AI provider{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>AI provider</h1>
+    <p class="muted">The model behind the GRC Analyst and the AI-drafted findings. Claude gives the best answers; the free providers are good for trying things out.</p>
+  </div>
+</div>
+
+<section class="card ai-now">
+  <p class="tile-label">In use now</p>
+  <h2>{{ settings.provider_label }}{% if not settings.demo %} <span class="mono small muted">{{ settings.model }}</span>{% endif %}</h2>
+  <p class="small muted">
+    {% if source == "page" %}Chosen on this page.
+    {% elif source == "demo" %}Demo mode: answers are placeholders, not AI. Pick a provider below to switch it off.
+    {% else %}From the <code>.env</code> file.{% endif %}
+    {% set r = rows.get(settings.provider) %}
+    {% if source == "page" and r and r.status %}
+      Last test {{ r.tested_at[:16].replace("T", " ") }}:
+      <span class="badge {{ 'badge-pass' if r.status == 'ok' else 'badge-fail' }}">{{ r.message }}</span>
+    {% endif %}
+  </p>
+  {% if is_admin %}
+  <div class="row-actions">
+    {% if not settings.demo %}
+    <form method="post" action="/settings/ai/test"><input type="hidden" name="csrf" value="{{ csrf }}">
+      <button type="submit" class="primary">{{ icon("i-check") }} Test connection</button></form>
+    {% endif %}
+    {% if source == "page" %}
+    <form method="post" action="/settings/ai/off"><input type="hidden" name="csrf" value="{{ csrf }}">
+      <button type="submit" class="button">Use .env settings instead</button></form>
+    {% endif %}
+  </div>
+  {% endif %}
+</section>
+
+<div class="grid-2 wide-left">
+  <section class="card">
+    <h3>Providers</h3>
+    <table class="table">
+      <thead><tr><th>Provider</th><th class="hide-sm">Free tier</th><th>Key</th></tr></thead>
+      <tbody>
+        {% for p in providers %}{% set r = rows.get(p.key) %}
+        <tr>
+          <td><strong>{{ p.label }}</strong>{% if p.key == settings.provider and not settings.demo %} <span class="tag">in use</span>{% endif %}
+            {% if p.signup %}<br><a class="small" href="{{ p.signup }}" target="_blank" rel="noopener">{{ "Get a key" if p.key_env else "Download" }} ↗</a>{% endif %}</td>
+          <td class="hide-sm small">{{ p.free }}</td>
+          <td class="small nowrap">
+            {% if r and r.key_hint %}Saved {{ r.key_hint }}
+              {% if is_admin %}<form method="post" action="/settings/ai/{{ p.key }}/forget" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="link small">Remove</button></form>{% endif %}
+            {% elif not p.key_env %}Not needed
+            {% elif env[p.key] %}In .env
+            {% else %}<span class="muted">None</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  {% if is_admin %}
+  <section class="card">
+    <h3>Switch provider</h3>
+    <form method="post" action="/settings/ai" class="stack" autocomplete="off">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label>Provider
+        <select name="provider" id="ai-provider">
+          {% for p in providers %}<option value="{{ p.key }}" data-model="{{ p.model }}" {% if p.key == settings.provider %}selected{% endif %}>{{ p.label }}</option>{% endfor %}
+        </select></label>
+      <label>API key <input name="api_key" type="password" autocomplete="new-password" placeholder="Paste the key (leave blank to keep the saved or .env key)"></label>
+      <label>Model <input name="model" id="ai-model" maxlength="120" placeholder="Leave blank for the default"></label>
+      <label>Server address <span class="muted small">(only for Ollama on another machine, or "Other")</span>
+        <input name="base_url" maxlength="300" placeholder="https://..."></label>
+      <p class="small muted">The key is encrypted before it is stored and never shown again. Only admins can see this form.</p>
+      <p><button type="submit" class="primary">{{ icon("i-check") }} Save and use</button></p>
+    </form>
+  </section>
+  {% else %}
+  <section class="card"><p class="muted">Only an admin can change the AI provider.</p></section>
+  {% endif %}
+</div>
+<script>
+  (function () {
+    var sel = document.getElementById("ai-provider"), model = document.getElementById("ai-model");
+    if (!sel || !model) return;
+    function hint() { model.placeholder = "Default: " + (sel.selectedOptions[0].dataset.model || "set one"); }
+    sel.addEventListener("change", hint); hint();
+  })();
+</script>
+{% endblock %}

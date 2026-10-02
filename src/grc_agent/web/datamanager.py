@@ -69,6 +69,13 @@ CATALOG: dict[str, dict] = {
         "retain_days": None,
         "retention": "Until the connector is removed",
     },
+    "ai_providers": {
+        "purpose": "AI provider settings for the GRC Analyst (API keys are encrypted)",
+        "category": "System",
+        "personal": False,
+        "retain_days": None,
+        "retention": "Until the provider is removed",
+    },
     "dataflow_nodes": {
         "purpose": "Systems added by hand to a client's data-flow map",
         "category": "Client data",
