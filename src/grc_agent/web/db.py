@@ -296,6 +296,7 @@ CREATE TABLE IF NOT EXISTS ai_providers (
     key_enc TEXT NOT NULL DEFAULT '',         -- API key, encrypted like connector secrets
     key_hint TEXT NOT NULL DEFAULT '',        -- masked, e.g. "••••abcd"
     active INTEGER NOT NULL DEFAULT 0,        -- at most one row is active
+    models_json TEXT NOT NULL DEFAULT '[]',   -- the provider's model ids at the last test
     status TEXT NOT NULL DEFAULT '',          -- '', 'ok' or 'error' from the last test
     message TEXT NOT NULL DEFAULT '',
     tested_at TEXT,
@@ -368,6 +369,7 @@ MIGRATIONS = {
         "needs_legal_review": "INTEGER NOT NULL DEFAULT 0",
         "provisions_json": "TEXT",
     },
+    "ai_providers": {"models_json": "TEXT NOT NULL DEFAULT '[]'"},
 }
 
 

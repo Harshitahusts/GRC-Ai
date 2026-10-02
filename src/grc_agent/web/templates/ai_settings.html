@@ -11,7 +11,7 @@
 
 <section class="card ai-now">
   <p class="tile-label">In use now</p>
-  <h2>{{ settings.provider_label }}{% if not settings.demo %} <span class="mono small muted">{{ settings.model }}</span>{% endif %}</h2>
+  <h2>{{ settings.provider_label }}{% if not settings.demo %} <span class="mono small muted">{{ settings.model or "model picked automatically" }}</span>{% endif %}</h2>
   <p class="small muted">
     {% if source == "page" %}Chosen on this page.
     {% elif source == "demo" %}Demo mode: answers are placeholders, not AI. Pick a provider below to switch it off.
@@ -70,7 +70,11 @@
           {% for p in providers %}<option value="{{ p.key }}" data-model="{{ p.model }}" {% if p.key == settings.provider %}selected{% endif %}>{{ p.label }}</option>{% endfor %}
         </select></label>
       <label>API key <input name="api_key" type="password" autocomplete="new-password" placeholder="Paste the key (leave blank to keep the saved or .env key)"></label>
-      <label>Model <input name="model" id="ai-model" maxlength="120" placeholder="Leave blank for the default"></label>
+      <label>Model <input name="model" id="ai-model" maxlength="120" placeholder="Leave blank for the default" list="models-{{ settings.provider }}"></label>
+      {% for key, ids in models.items() if ids %}
+      <datalist id="models-{{ key }}">{% for m in ids %}<option value="{{ m }}">{% endfor %}</datalist>
+      {% endfor %}
+      <p class="small muted" id="ai-model-help">Leave it blank and the app picks a current model. Providers retire models every few months; if yours goes, the app switches to a live one and says so here.</p>
       <label>Server address <span class="muted small">(only for Ollama on another machine, or "Other")</span>
         <input name="base_url" maxlength="300" placeholder="https://..."></label>
       <p class="small muted">The key is encrypted before it is stored and never shown again. Only admins can see this form.</p>
@@ -85,7 +89,11 @@
   (function () {
     var sel = document.getElementById("ai-provider"), model = document.getElementById("ai-model");
     if (!sel || !model) return;
-    function hint() { model.placeholder = "Default: " + (sel.selectedOptions[0].dataset.model || "set one"); }
+    function hint() {
+      var p = sel.selectedOptions[0];
+      model.placeholder = "Default: " + (p.dataset.model || "picked from the provider's list");
+      model.setAttribute("list", "models-" + p.value);  // suggestions from the last test
+    }
     sel.addEventListener("change", hint); hint();
   })();
 </script>

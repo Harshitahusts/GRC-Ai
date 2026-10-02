@@ -33,6 +33,9 @@ class Provider:
     model: str  # default model; GRC_AGENT_MODEL overrides it
     free: str  # one line on the free tier, shown on the AI provider page
     signup: str
+    # Models to fall back to, best first, when the chosen one isn't offered (any more).
+    # Exact ids or parts of ids; the provider's live model list decides what exists.
+    preferred: tuple[str, ...] = ()
 
 
 ANTHROPIC = Provider(
@@ -54,27 +57,30 @@ PROVIDERS: dict[str, Provider] = {
             "Groq",
             "https://api.groq.com/openai/v1",
             "GROQ_API_KEY",
-            "llama-3.3-70b-versatile",
+            "openai/gpt-oss-120b",
             "Free tier, no card: about 30 requests a minute and 1,000 a day. Very fast.",
             "https://console.groq.com/keys",
+            ("openai/gpt-oss-120b", "qwen/qwen3", "openai/gpt-oss-20b", "llama"),
         ),
         Provider(
             "gemini",
             "Google Gemini",
             "https://generativelanguage.googleapis.com/v1beta/openai",
             "GEMINI_API_KEY",
-            "gemini-2.5-flash",
+            "gemini-flash-latest",  # Google's alias that always points at the current Flash
             "Free tier in Google AI Studio: a few requests a minute, long context.",
             "https://aistudio.google.com/apikey",
+            ("gemini-flash-latest", "gemini-3-flash", "gemini-3.1-flash", "flash"),
         ),
         Provider(
             "openrouter",
             "OpenRouter",
             "https://openrouter.ai/api/v1",
             "OPENROUTER_API_KEY",
-            "meta-llama/llama-3.3-70b-instruct:free",
+            "",  # the free line-up changes weekly: picked from the live list
             "Many ':free' models: 20 requests a minute, 50 a day (1,000 after a $10 top-up).",
             "https://openrouter.ai/keys",
+            ("gpt-oss-120b", "nemotron", "gemma", "glm", "qwen", "llama"),
         ),
         Provider(
             "cerebras",
@@ -84,6 +90,7 @@ PROVIDERS: dict[str, Provider] = {
             "gpt-oss-120b",
             "Free tier: about 30 requests a minute and a million tokens a day.",
             "https://cloud.cerebras.ai/",
+            ("gpt-oss-120b", "qwen", "llama"),
         ),
         Provider(
             "mistral",
@@ -93,15 +100,17 @@ PROVIDERS: dict[str, Provider] = {
             "mistral-small-latest",
             "Free 'Experiment' plan: needs a phone number, generous monthly tokens.",
             "https://console.mistral.ai/api-keys",
+            ("mistral-small-latest", "mistral-medium-latest", "mistral-large-latest"),
         ),
         Provider(
             "nvidia",
             "NVIDIA NIM",
             "https://integrate.api.nvidia.com/v1",
             "NVIDIA_API_KEY",
-            "meta/llama-3.3-70b-instruct",
+            "openai/gpt-oss-120b",
             "Free developer credits for many open models, email sign-up only.",
             "https://build.nvidia.com/",
+            ("openai/gpt-oss-120b", "nvidia/nemotron", "qwen", "llama"),
         ),
         Provider(
             "ollama",
@@ -111,15 +120,17 @@ PROVIDERS: dict[str, Provider] = {
             "llama3.1",
             "Free and private: the model runs on your own machine. Needs a good computer.",
             "https://ollama.com/download",
+            ("gpt-oss", "qwen", "llama", "gemma", "mistral"),  # whatever you have pulled
         ),
         Provider(
             "openai",
             "OpenAI",
             "https://api.openai.com/v1",
             "OPENAI_API_KEY",
-            "gpt-4.1-mini",
+            "gpt-5-mini",
             "Paid.",
             "https://platform.openai.com/api-keys",
+            ("gpt-5-mini", "gpt-5", "gpt-4.1-mini", "gpt-4o-mini"),
         ),
         Provider(
             "custom",
@@ -195,6 +206,16 @@ class OpenAICompatClient:
         self._http = httpx.Client(timeout=httpx.Timeout(120.0, connect=10.0), transport=transport)
         self.beta = SimpleNamespace(messages=SimpleNamespace(create=self.create))
         self.messages = self.beta.messages
+        # Set when the requested model turned out not to exist and another was used.
+        self.model_in_use: str | None = None
+        self.replaced: str | None = None
+
+    def list_models(self) -> list[str]:
+        """The model ids the provider offers this key right now (GET /models)."""
+        self._check_ready()
+        data = self._request("GET", f"{self.base_url}/models")
+        ids = [str(m.get("id", "")) for m in data.get("data") or [] if isinstance(m, dict)]
+        return [i.removeprefix("models/") for i in ids if i]
 
     # The Anthropic-only arguments (thinking, cache_control, betas, fallbacks) are accepted
     # and ignored: the other providers have no equivalent.
@@ -209,16 +230,14 @@ class OpenAICompatClient:
         output_config: dict[str, Any] | None = None,
         **_ignored: Any,
     ) -> SimpleNamespace:
-        if self.provider.key_env and not self.api_key:
+        self._check_ready()
+        # A model that was already swapped in for a retired one sticks for this client.
+        if not model and not self.model_in_use:
+            self.model_in_use = self._pick(None)  # no default: choose from the live list
+        model = self.model_in_use or model
+        if not model:
             raise anthropic.CredentialsError(
-                f"No API key for {self.provider.label}. Put {self.provider.key_env} in .env."
-            )
-        if not self.base_url:
-            raise anthropic.CredentialsError("Set GRC_LLM_BASE_URL for the custom provider.")
-        if self.api_key and not _safe_for_key(self.base_url):
-            raise anthropic.CredentialsError(
-                f"Refusing to send the API key to {self.base_url} over plain HTTP. "
-                "Use an https:// address."
+                f"No model chosen for {self.provider.label}, and its model list is empty."
             )
 
         schema = ((output_config or {}).get("format") or {}).get("schema")
@@ -246,19 +265,53 @@ class OpenAICompatClient:
             ]
         if schema:
             body["response_format"] = {"type": "json_object"}
-        data = self._post(body)
+        try:
+            data = self._post(body)
+        except anthropic.NotFoundError:
+            # Usually the model was retired (providers do this every few months).
+            replacement = self._pick(model)
+            if not replacement or replacement == model:
+                raise
+            body["model"] = replacement
+            data = self._post(body)
+            self.model_in_use, self.replaced = replacement, model
         return from_openai_response(data, json_only=bool(schema))
 
+    def _check_ready(self) -> None:
+        if self.provider.key_env and not self.api_key:
+            raise anthropic.CredentialsError(
+                f"No API key for {self.provider.label}. Put {self.provider.key_env} in .env."
+            )
+        if not self.base_url:
+            raise anthropic.CredentialsError("Set GRC_LLM_BASE_URL for the custom provider.")
+        if self.api_key and not _safe_for_key(self.base_url):
+            raise anthropic.CredentialsError(
+                f"Refusing to send the API key to {self.base_url} over plain HTTP. "
+                "Use an https:// address."
+            )
+
+    def _pick(self, unavailable: str | None) -> str | None:
+        """A working model from the live list, or None if the list can't be read."""
+        try:
+            ids = self.list_models()
+        except anthropic.APIError:
+            return None
+        if unavailable in ids:
+            return None  # the model exists, so the 404 meant something else
+        return pick_model(self.provider, ids)
+
     def _post(self, body: dict[str, Any]) -> dict[str, Any]:
+        return self._request("POST", f"{self.base_url}/chat/completions", body)
+
+    def _request(self, method: str, url: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
         if self.provider.key == "openrouter":
             headers["X-Title"] = "GRC Agent"
-        url = f"{self.base_url}/chat/completions"
         for attempt in range(self.retries + 1):
             try:
-                resp = self._http.post(url, json=body, headers=headers)
+                resp = self._http.request(method, url, json=body, headers=headers)
             except httpx.HTTPError as exc:
                 raise anthropic.APIConnectionError(
                     message=f"Could not reach {self.provider.label}: {exc.__class__.__name__}",
@@ -272,6 +325,39 @@ class OpenAICompatClient:
         if resp.status_code >= 400:
             raise _status_error(resp, self.provider.label)
         return resp.json()
+
+
+# Ids that are clearly not chat models (speech, embeddings, safety filters, images).
+NOT_CHAT = (
+    "embed",
+    "whisper",
+    "tts",
+    "guard",
+    "rerank",
+    "moderation",
+    "transcribe",
+    "speech",
+    "image",
+    "audio",
+    "aqa",
+    "ocr",
+    "safety",
+)
+
+
+def pick_model(provider: Provider, ids: list[str], wanted: str = "") -> str | None:
+    """The model to use: `wanted` if offered, else the best of `provider.preferred`."""
+    if wanted and wanted in ids:
+        return wanted
+    chat = [i for i in ids if not any(word in i.lower() for word in NOT_CHAT)]
+    if provider.key == "openrouter":  # never fall back to a paid model by accident
+        chat = [i for i in chat if i.endswith(":free")]
+    for pref in provider.preferred:
+        exact = [i for i in chat if i == pref]
+        part = [i for i in chat if pref in i]
+        if exact or part:
+            return (exact or part)[0]
+    return chat[0] if chat else None
 
 
 def _safe_for_key(url: str) -> bool:
