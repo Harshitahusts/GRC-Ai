@@ -1,8 +1,30 @@
 # Deploy GRC Flow on Oracle Cloud (free, Mumbai)
 
-This puts GRC Flow at a subdomain such as **https://app.grc-flow.com** on Oracle Cloud's
-Always Free server in the Mumbai region. The main domain (`grc-flow.com`) is left for your
-website. Time needed: about 30 minutes, most of it waiting.
+This puts **both** on one Oracle Cloud Always Free server in the Mumbai region:
+
+- **https://app.grc-flow.com**: the GRC Flow app (sign-in, clients, AI analyst);
+- **https://grc-flow.com** (and www): your website. A starter page is included in
+  `deploy/site/`; replace it with your own design whenever you like. Hosting the website
+  here is optional: skip it if the website lives somewhere else.
+
+Time needed: about 30 minutes, most of it waiting.
+
+### How it fits together
+
+```
+            Internet
+               │  ports 80 / 443 only
+     ┌─────────▼──────────────────────────────────────────┐
+     │ Oracle Cloud · Mumbai · free Arm server (Ubuntu)   │
+     │                                                    │
+     │  Caddy ── HTTPS certificates for every address     │
+     │   ├─ app.grc-flow.com ──► GRC Flow app ──► PostgreSQL
+     │   └─ grc-flow.com, www ──► website files (deploy/site)
+     └────────────────────────────────────────────────────┘
+```
+
+Only Caddy is reachable from the internet. The app and the database have no public
+ports, and everything runs in Docker so it can move to a bigger server later unchanged.
 
 What you get for free: an Arm server with 2 CPUs and 12 GB of memory, enough for the app,
 PostgreSQL and Caddy (HTTPS). Oracle's free tier has limits that change from time to time;
@@ -47,15 +69,20 @@ but this network rule must be added in the console:
    - Source CIDR `0.0.0.0/0`, IP protocol **TCP**, destination port **80**
    - Source CIDR `0.0.0.0/0`, IP protocol **TCP**, destination port **443**
 
-## 4. Point your subdomain at the server
+## 4. Point your domain at the server
 
-At the company where you bought grc-flow.com, open the DNS settings and add one record:
+At the company where you bought grc-flow.com (for example Namecheap: *Domain List →
+Manage → Advanced DNS*), add these records. Remove any existing *parking page* or *URL
+redirect* records for `@` and `www` first, if you're hosting the website here.
 
-| Type | Name | Value | TTL |
-|---|---|---|---|
-| A | `app` (or the subdomain you chose) | the server's public IP | 300 or Auto |
+| Type | Host / Name | Value | TTL | For |
+|---|---|---|---|---|
+| A | `app` | the server's public IP | Automatic | the GRC Flow app |
+| A | `@` | the server's public IP | Automatic | the website (skip if hosted elsewhere) |
+| A | `www` | the server's public IP | Automatic | the website (skip if hosted elsewhere) |
 
-Don't change the `@` / root record: that one is for your website.
+Changes usually work within 5 to 30 minutes. Check from your PC with
+`nslookup app.grc-flow.com`: it should show the server's IP.
 
 ## 5. Log in to the server
 
@@ -84,7 +111,8 @@ bash setup.sh
 
 It asks for:
 
-- **the subdomain**, for example `app.grc-flow.com`;
+- **the app's subdomain**, for example `app.grc-flow.com`;
+- **the website's domain**, `grc-flow.com` (or press Enter to skip hosting the website);
 - **a Groq API key** (optional; you can add it later on the app's *AI provider* page).
 
 Then it installs Docker, opens ports 80 and 443 on the server, downloads GRC Flow to
@@ -98,8 +126,21 @@ cd ~/grc-flow
 sudo docker compose exec web grc-web adduser yourname
 ```
 
-Open **https://app.grc-flow.com**. The first visit can take a minute while Caddy gets the
-certificate. Then open **AI provider** in the sidebar to add or test your Groq key.
+Open **https://app.grc-flow.com** and **https://grc-flow.com**. The first visit can take a
+minute while Caddy gets the certificates. Then open **AI provider** in the app's sidebar to
+add or test your Groq key.
+
+## 8. Change the website
+
+The website is the files in `~/grc-flow/deploy/site/` on the server (plain HTML; the
+starter page is `index.html`). To use your own design, replace those files (for example
+copy them up with `scp -r -i ssh-key.key mysite/* ubuntu@YOUR_SERVER_IP:~/grc-flow/deploy/site/`).
+Changes show immediately; no restart needed.
+
+For your own design, keep it in a separate folder rather than editing `deploy/site/`:
+edited files there would stop the update script's `git pull`. Put the site in, say,
+`/home/ubuntu/site`, add `GRC_SITE_DIR=/home/ubuntu/site` to `~/grc-flow/.env`, and run
+`bash deploy/setup-server.sh` once to apply it.
 
 ---
 
