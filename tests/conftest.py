@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from helpers import PASSWORD, login
 
 from grc_agent.connectors import ConnectorError
+from grc_agent.llm import PROVIDERS
 from grc_agent.web import cli as web_cli
 from grc_agent.web.app import create_app
 
@@ -44,6 +45,10 @@ def _keep_database_schema(monkeypatch):
 def _api_mode(monkeypatch):
     """Tests control the AI mode themselves; a developer's .env must not switch it."""
     monkeypatch.setenv("GRC_AI_MODE", "api")
+    monkeypatch.delenv("GRC_AI_PROVIDER", raising=False)
+    for provider in PROVIDERS.values():
+        if provider.key_env and provider.key != "anthropic":
+            monkeypatch.delenv(provider.key_env, raising=False)
 
 
 @pytest.fixture(autouse=True)

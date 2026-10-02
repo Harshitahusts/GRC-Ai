@@ -22,6 +22,7 @@ dependencies = [
     "markdown-it-py>=3.0",
     "cryptography>=42",
     "boto3>=1.34",
+    "httpx>=0.27",  # talks to the OpenAI-compatible AI providers (grc_agent.llm)
 ]
 
 [project.optional-dependencies]

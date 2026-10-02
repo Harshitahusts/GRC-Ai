@@ -201,7 +201,7 @@ class FakeAgent:
 def test_assistant_without_credentials(authed, monkeypatch, exc):
     monkeypatch.setattr("grc_agent.web.app.Agent", lambda **kw: FakeAgent(exc))
     page = post(authed, "/assistant", {"question": "hello"}).text
-    assert "No Claude API credentials" in page
+    assert "No AI provider is set up" in page
 
 
 def test_assistant_conversation(authed, monkeypatch):

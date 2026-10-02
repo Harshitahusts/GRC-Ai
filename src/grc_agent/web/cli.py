@@ -14,6 +14,7 @@ import os
 import sys
 from pathlib import Path
 
+from grc_agent.llm import PROVIDERS
 from grc_agent.web import db
 from grc_agent.web.security import hash_password
 
@@ -178,8 +179,11 @@ def _demo(args) -> int:
         # On PostgreSQL the demo gets its own schema, so its sample data never mixes
         # with the real workspace in the same database.
         os.environ["GRC_DATABASE_SCHEMA"] = os.getenv("GRC_DEMO_SCHEMA", "grc_demo")
-    if not os.getenv("ANTHROPIC_API_KEY"):
-        # No key: the analyst gives simulated answers instead of failing mid-demo.
+    if not any(os.getenv(p.key_env) for p in PROVIDERS.values() if p.key_env) and not os.getenv(
+        "GRC_AI_PROVIDER"
+    ):
+        # No AI key at all: the analyst gives simulated answers instead of failing
+        # mid-demo. A provider picked on the AI provider page still takes over.
         os.environ.setdefault("GRC_AI_MODE", "demo")
     if args.live_seconds is not None:
         os.environ["GRC_DEMO_LIVE_SECONDS"] = str(args.live_seconds)

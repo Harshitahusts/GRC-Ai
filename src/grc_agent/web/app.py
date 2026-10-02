@@ -49,10 +49,12 @@ from grc_agent.corpus import load_corpus
 from grc_agent.documents import DOCUMENT_TYPES, Block, EngagementFacts, build_document, to_docx
 from grc_agent.kpis import CorpusIndex
 from grc_agent.kpis.models import DOCUMENT_OUTCOMES, VERDICTS
+from grc_agent.llm import PROVIDERS
 from grc_agent.prompts import ANALYST_PROMPT
 from grc_agent.register import CHOICES, corpus_index_path, load_register
 from grc_agent.risk import summary as risk_summary
 from grc_agent.web import (
+    ai_views,
     analyst,
     connector_views,
     dataflow_views,
@@ -117,7 +119,7 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
     app.state.db_path = db_path
     app.state.login_failures = {}
     app.state.agents = {}
-    app.state.demo = Settings.from_env().demo  # also loads .env
+    app.state.demo = Settings.from_env().demo  # also loads .env; refreshed below
     app.state.register = load_register()
     app.state.corpus = load_corpus()
     if os.getenv("GRC_CORPUS_INDEX"):
@@ -129,9 +131,10 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
     else:
         app.state.index = CorpusIndex.from_file(corpus_index_path())
         app.state.index_source = "sample index"
-    app.state.make_assessor = lambda corpus: ClaudeAssessor(corpus)
+    app.state.make_assessor = _assessor_factory(app)
     app.state.connectors = dict(CONNECTORS)
     app.state.secret_box = SecretBox.for_data_dir(data_dir)
+    ai_views.refresh(app)  # the AI provider: saved on /settings/ai, else from .env
     app.state.data_dir = data_dir
     app.state.demo_tenant = demo_tenant.is_demo(data_dir)
     app.state.secret_key = _secret_key(data_dir)
@@ -152,7 +155,28 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
     discovery_views.register(app)
     register_views.register(app)
     ops_views.register(app)
+    ai_views.register(app)
     return app
+
+
+NO_AI_KEY = (
+    "No AI provider is set up. Add a free or paid key on the AI provider page "
+    "(Settings → AI provider), or put one in .env and restart."
+)
+
+
+def _ai_error(exc: Exception) -> str:
+    """A short, safe description of a provider error: its class and first line."""
+    first = str(exc).splitlines()[0][:160] if str(exc) else ""
+    return f"{exc.__class__.__name__}: {first}" if first else exc.__class__.__name__
+
+
+def _assessor_factory(app: FastAPI):
+    def make(corpus):
+        settings, client = ai_views.client_for(app)
+        return ClaudeAssessor(corpus, client=client, settings=settings)
+
+    return make
 
 
 def _demo_lifespan(data_dir: Path, db_path: Path):
@@ -274,6 +298,8 @@ def render(request: Request, name: str, status_code: int = 200, **context: Any) 
         flashes=request.session.pop("flash", []),
         register=request.app.state.register,
         demo_mode=request.app.state.demo,
+        ai_label=request.app.state.ai.provider_label,
+        ai_names={k: p.label for k, p in PROVIDERS.items()} | {"claude": "Claude"},
         document_types=DOCUMENT_TYPES,
         choices=CHOICES,
         outcome_labels=OUTCOME_LABELS,
@@ -775,19 +801,15 @@ def _routes(app: FastAPI) -> None:
             except (TypeError, anthropic.CredentialsError) as exc:
                 if isinstance(exc, TypeError) and "authentication method" not in str(exc):
                     raise
-                flash(
-                    request,
-                    "No Claude API credentials. Put ANTHROPIC_API_KEY in .env and restart.",
-                    "error",
-                )
+                flash(request, NO_AI_KEY, "error")
                 return redirect(f"/engagements/{eid}/findings")
             except AssessmentError as exc:
-                flash(request, f"Claude assessment failed, nothing was changed: {exc}", "error")
+                flash(request, f"AI assessment failed, nothing was changed: {exc}", "error")
                 return redirect(f"/engagements/{eid}/findings")
             except anthropic.APIError as exc:
                 flash(
                     request,
-                    f"Claude API error ({exc.__class__.__name__}), nothing was changed.",
+                    f"AI provider error ({_ai_error(exc)}), nothing was changed.",
                     "error",
                 )
                 return redirect(f"/engagements/{eid}/findings")
@@ -1372,8 +1394,12 @@ def _routes(app: FastAPI) -> None:
     def analyst_agent(request: Request, user: str) -> Agent:
         agents = request.app.state.agents
         if user not in agents:
+            settings, client = ai_views.client_for(request.app)
             agents[user] = Agent(
-                tools=analyst.analyst_tools(request.app), system_prompt=ANALYST_PROMPT
+                client=client,
+                settings=settings,
+                tools=analyst.analyst_tools(request.app),
+                system_prompt=ANALYST_PROMPT,
             )
         return agents[user]
 
@@ -1437,16 +1463,22 @@ def _routes(app: FastAPI) -> None:
         except (TypeError, anthropic.CredentialsError) as exc:
             if isinstance(exc, TypeError) and "authentication method" not in str(exc):
                 raise
+            flash(request, NO_AI_KEY, "error")
+        except anthropic.AuthenticationError:
             flash(
                 request,
-                "No Claude API credentials. Put ANTHROPIC_API_KEY in .env and restart, "
-                "or set GRC_AI_MODE=demo to test without a key.",
+                f"{request.app.state.ai.provider_label} rejected the API key. "
+                "Check it on the AI provider page.",
                 "error",
             )
-        except anthropic.AuthenticationError:
-            flash(request, "The Claude API rejected the API key.", "error")
+        except anthropic.RateLimitError:
+            flash(
+                request,
+                "The AI provider's rate limit was hit. Wait a minute and ask again.",
+                "error",
+            )
         except anthropic.APIError as exc:
-            flash(request, f"Claude API error: {exc.__class__.__name__}. Try again.", "error")
+            flash(request, f"AI provider error: {_ai_error(exc)}. Try again.", "error")
         return redirect("/assistant")
 
     @app.post("/assistant/reset")

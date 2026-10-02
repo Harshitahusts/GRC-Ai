@@ -27,7 +27,7 @@
     {{ nav_link("/assistant", "i-spark", "GRC Analyst", path == "/assistant") }}
     <p class="nav-group">Evidence</p>
     {{ nav_link("/dataflows", "i-flow", "Data flows", path.startswith("/dataflows") or path.endswith("/dataflow")) }}
-    {{ nav_link("/connectors", "i-plug", "Connectors", path.startswith("/connectors") or path.startswith("/settings")) }}
+    {{ nav_link("/connectors", "i-plug", "Connectors", path.startswith("/connectors") or path.startswith("/settings/github")) }}
     {{ nav_link("/corpus", "i-book", "Corpus", path.startswith("/corpus")) }}
     <p class="nav-group">Growth</p>
     {{ nav_link("/content", "i-pen", "Docs & blog", path.startswith("/content")) }}
@@ -35,6 +35,7 @@
     {{ nav_link("/team", "i-users", "Team & roles", path.startswith("/team")) }}
     {{ nav_link("/audit", "i-clock", "Audit log", path.startswith("/audit")) }}
     {{ nav_link("/data-manager", "i-database", "Data manager", path.startswith("/data-manager")) }}
+    {{ nav_link("/settings/ai", "i-spark", "AI provider", path.startswith("/settings/ai")) }}
   </nav>
   <div class="side-foot">
     <a href="/notifications" class="bell" {% if path.startswith("/notifications") %}aria-current="page"{% endif %}>
@@ -87,7 +88,7 @@
   <div class="tenant-banner" role="status"><svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg><span><strong>Demo tenant.</strong> Sample clients and data for demos, not real. Colleagues act every minute or so, and connector syncs are simulated. Your main workspace is separate and untouched.</span></div>
   {% endif %}
   {% if demo_mode and user and path == "/assistant" %}
-  <div class="demo-banner" role="status"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg><span>Demo mode: AI answers and drafted findings are simulated placeholders, not real AI. Don't use them with clients. Set <code>ANTHROPIC_API_KEY</code> and remove <code>GRC_AI_MODE=demo</code> from <code>.env</code> to use Claude.</span></div>
+  <div class="demo-banner" role="status"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg><span>Demo mode: AI answers and drafted findings are simulated placeholders, not real AI. Don't use them with clients. Pick a real model, free or paid, on the <a href="/settings/ai">AI provider</a> page.</span></div>
   {% endif %}
   <main class="{% block main_class %}page{% endblock %}">
     {% for kind, message in flashes %}
@@ -116,6 +117,7 @@
       ("Pages", "Docs & blog", "/content", "i-pen", ""),
       ("Pages", "Notifications", "/notifications", "i-bell", "g n"),
       ("Pages", "Data manager", "/data-manager", "i-database", "g m"),
+      ("Pages", "AI provider (Claude, Groq, Gemini...)", "/settings/ai", "i-spark", ""),
       ("Actions", "New engagement", "/engagements#new", "i-plus", "n"),
       ("Actions", "Ask the GRC Analyst", "/assistant", "i-spark", ""),
       ("Actions", "Unread notifications", "/notifications?show=unread", "i-bell", ""),
