@@ -114,7 +114,7 @@ def queue_notification(
         # results on its own connection and must not wait on this one's lock.
         # Callers make this the last database step of the request.
         conn.commit()
-        background.add_task(_send_all, request.app.state.db_path, targets, f"[GRC agent] {text}")
+        background.add_task(_send_all, request.app.state.db_path, targets, f"[GRC Flow] {text}")
 
 
 def _send_all(db_path, targets, text: str) -> None:
@@ -208,7 +208,7 @@ def register(app: FastAPI) -> None:
             secrets = request.app.state.secret_box.open(row["secrets_enc"])
             if c.kind == "notify":
                 await run_in_threadpool(
-                    c.send, config, secrets, "[GRC agent] Test message: this channel is connected."
+                    c.send, config, secrets, "[GRC Flow] Test message: this channel is connected."
                 )
                 message, checks = "Test message sent.", None
             elif c.flow == "github_app":
@@ -445,7 +445,7 @@ def register(app: FastAPI) -> None:
                     c.send,
                     config,
                     secrets,
-                    f"[GRC agent] Connected for engagement {eng['client']}. "
+                    f"[GRC Flow] Connected for engagement {eng['client']}. "
                     "Updates will be posted here.",
                 )
                 message = "Connected. A test message was sent."
@@ -497,7 +497,7 @@ def register(app: FastAPI) -> None:
             app_config=github_config(request.app),
             manifest=manifest,
             state=state,
-            default_name=f"GRC agent {secrets_lib.token_hex(3)}",
+            default_name=f"GRC Flow {secrets_lib.token_hex(3)}",
         )
 
     @app.get("/settings/github-app/callback")

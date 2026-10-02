@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "grc-agent"
 version = "0.1.0"
-description = "A Claude-powered agent for governance, risk, and compliance (GRC) work."
+description = "GRC Flow: a DPDPA governance, risk and compliance workspace with an AI analyst."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }

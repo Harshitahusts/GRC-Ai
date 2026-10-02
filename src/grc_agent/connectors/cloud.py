@@ -89,14 +89,14 @@ def cloudformation_template(firm_account: str, external_id: str) -> str:
     """What the client runs in CloudFormation: a read-only role only this firm can use."""
     return f"""AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
-  Read-only access for the GRC agent (AWS managed policy SecurityAudit).
+  Read-only access for GRC Flow (AWS managed policy SecurityAudit).
   Only AWS account {firm_account} can use it, and only with the external ID below.
   Delete this stack to remove the access.
 Resources:
   GrcAgentReadOnlyRole:
     Type: AWS::IAM::Role
     Properties:
-      Description: Read-only access for the GRC agent's DPDPA assessment
+      Description: Read-only access for GRC Flow's DPDPA assessment
       MaxSessionDuration: 3600
       AssumeRolePolicyDocument:
         Version: "2012-10-17"

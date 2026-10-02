@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start the GRC agent web app on this machine (macOS / Linux).
+# Start the GRC Flow web app on this machine (macOS / Linux).
 # First run: creates .venv, installs the app, and asks you to create an account.
 # Extra arguments go to `grc-web serve`, e.g. ./start.sh --port 9000
 set -euo pipefail

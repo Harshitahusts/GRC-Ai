@@ -1,5 +1,5 @@
 @echo off
-rem Check this machine's setup for the GRC agent: which Python and Node are installed,
+rem Check this machine's setup for GRC Flow: which Python and Node are installed,
 rem which Python start.bat will use, and whether .venv still works. Changes nothing.
 setlocal
 cd /d "%~dp0"

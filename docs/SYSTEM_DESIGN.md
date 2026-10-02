@@ -1,6 +1,6 @@
 # System design
 
-How a request moves through the GRC agent, from the user's click to the
+How a request moves through GRC Flow, from the user's click to the
 feedback they see. GitHub renders the diagrams below.
 
 ## 1. Architecture

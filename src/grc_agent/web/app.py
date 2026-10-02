@@ -104,7 +104,7 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
     db.init_db(db_path)
 
     app = FastAPI(
-        title="GRC agent",
+        title="GRC Flow",
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
