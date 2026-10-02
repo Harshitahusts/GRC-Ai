@@ -87,6 +87,7 @@ if [ -f .env ] && grep -q '^GRC_DOMAIN=' .env; then
   echo "Keeping the existing .env."
 else
   read -rp "Subdomain for the app, e.g. app.grc-flow.com: " domain
+  read -rp "Also host the website here? Enter its domain (e.g. grc-flow.com) or press Enter to skip: " site
   read -rsp "Groq API key (optional, press Enter to add it later in the app): " groq
   echo
   cp .env.example .env
@@ -94,6 +95,7 @@ else
     echo ""
     echo "# Written by deploy/setup-server.sh on $(date -u +%Y-%m-%d)"
     echo "GRC_DOMAIN=$domain"
+    if [ -n "$site" ]; then echo "GRC_SITE_ADDRESS=$site, www.$site"; fi
     echo "POSTGRES_PASSWORD=$(openssl rand -hex 24)"
     if [ -n "$groq" ]; then echo "GROQ_API_KEY=$groq"; fi
   } >> .env
@@ -102,14 +104,17 @@ else
 fi
 
 domain=$(grep '^GRC_DOMAIN=' .env | tail -1 | cut -d= -f2)
+site=$(grep '^GRC_SITE_ADDRESS=' .env | tail -1 | cut -d= -f2 | cut -d, -f1 || true)
 public_ip=$(curl -fsS --max-time 5 https://api.ipify.org || true)
-resolved=$(getent ahostsv4 "$domain" 2>/dev/null | awk 'NR==1 {print $1}' || true)
 echo "This server's public IP: ${public_ip:-unknown}"
-echo "$domain points to:      ${resolved:-nothing yet}"
-if [ -z "$resolved" ] || [ "$resolved" != "$public_ip" ]; then
-  warn "DNS for $domain doesn't point here yet. Add an A record for it with ${public_ip:-the server IP}."
-  warn "Caddy keeps retrying, and HTTPS starts working a few minutes after DNS is right."
-fi
+for name in "$domain" ${site:+"$site" "www.$site"}; do
+  resolved=$(getent ahostsv4 "$name" 2>/dev/null | awk 'NR==1 {print $1}' || true)
+  echo "$name points to: ${resolved:-nothing yet}"
+  if [ -z "$resolved" ] || [ "$resolved" != "$public_ip" ]; then
+    warn "DNS for $name doesn't point here yet. Add an A record for it with ${public_ip:-the server IP}."
+  fi
+done
+echo "Caddy keeps retrying certificates, so HTTPS starts a few minutes after DNS is right."
 
 say "6/6 Starting GRC Flow (the first build takes a few minutes)"
 $DOCKER "${COMPOSE[@]}" up -d --build
@@ -121,7 +126,7 @@ cat <<EOF
 Done. Next:
   1. Create your login (asks for a password):
        cd $DIR && $run exec web grc-web adduser yourname
-  2. Open https://$domain
+  2. Open https://$domain${site:+   (website: https://$site)}
      (the first visit can take a minute while the certificate is issued)
 
 Update later:   cd $DIR && bash deploy/setup-server.sh

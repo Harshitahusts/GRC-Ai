@@ -1,11 +1,31 @@
-# Caddy puts GRC Flow on its subdomain with a real HTTPS certificate.
-# It gets and renews a free Let's Encrypt certificate by itself; nothing to configure.
-# GRC_DOMAIN comes from .env, for example app.grc-flow.com. The main domain
-# (grc-flow.com) is the website and is hosted elsewhere, so it is not handled here.
+# Caddy is the only thing on this server that faces the internet. It gets and renews free
+# Let's Encrypt certificates by itself and sends each address to the right place:
+#
+#   app.grc-flow.com           -> the GRC Flow app (container "web")
+#   grc-flow.com, www.         -> the website: plain files from deploy/site (optional)
+#
+# Both addresses come from .env (GRC_DOMAIN and GRC_SITE_ADDRESS); see compose.caddy.yaml.
+
 {$GRC_DOMAIN} {
 	encode zstd gzip
 	reverse_proxy web:8000
 	header {
 		-Server
+	}
+}
+
+# The website. With GRC_SITE_ADDRESS unset this block listens on a local-only address that
+# never asks for a certificate, so a server that hosts only the app needs no extra DNS.
+{$GRC_SITE_ADDRESS} {
+	root * /srv/site
+	encode zstd gzip
+	file_server
+	header {
+		-Server
+		Strict-Transport-Security "max-age=15552000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'self'"
 	}
 }
