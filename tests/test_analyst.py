@@ -136,3 +136,13 @@ def test_portfolio_and_scope_questions(demo):
     assert "Tools used: list_engagements" in page and "Acme Pvt Ltd (ENG-001)" in page
     page = post(client, "/assistant", {"question": "How does this map to GDPR?"}).text
     assert "DPDP Act and Rules only" in page
+
+
+def test_replies_turn_br_tags_into_line_breaks_but_keep_other_html_escaped():
+    from grc_agent.web.app import _chat_html
+
+    html = _chat_html(
+        "| Aspect | Points |\n|---|---|\n| Core | • a <br>• b <BR/> <script>x</script> |"
+    )
+    assert "• a <br>• b <br>" in html
+    assert "<script>" not in html and "&lt;script&gt;" in html
