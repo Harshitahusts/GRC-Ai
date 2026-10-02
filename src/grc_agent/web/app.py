@@ -62,6 +62,7 @@ from grc_agent.web import (
     db,
     demo_tenant,
     discovery_views,
+    https,
     notification_views,
     notify,
     ops_views,
@@ -144,8 +145,9 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
         session_cookie="grc_session",
         max_age=SESSION_SECONDS,
         same_site="strict",
-        https_only=os.getenv("GRC_SECURE_COOKIES") == "1",
+        https_only=https.https_enabled(),  # Secure cookie whenever HTTPS is on
     )
+    https.install(app)  # security headers, HSTS, optional redirect to HTTPS
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
     _routes(app)
     connector_views.register(app)

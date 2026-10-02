@@ -135,10 +135,12 @@ workspace on http://127.0.0.1:8001. Sign in as `demo` / `grc-demo-2026`.
   activity off.
 - Without any AI key, the analyst gives simulated answers in the demo. Pick a provider on the AI provider page to use a real model.
 - **Share it on your office network:** double-click **`start-demo-lan.bat`** (or run
-  `grc-web demo --lan`). It prints a link such as `http://192.168.1.20:8001` that anyone on
-  the same Wi-Fi or LAN can open. No outside service is involved. If Windows Firewall asks,
-  allow Python on **Private networks** only. The link only works inside your network and
-  only while the window stays open.
+  `grc-web demo --lan --https`). It prints a link such as `https://192.168.1.20:8001` that
+  anyone on the same Wi-Fi or LAN can open. No outside service is involved. If Windows
+  Firewall asks, allow Python on **Private networks** only. The link only works inside
+  your network and only while the window stays open. The certificate is self-signed, so
+  each browser warns once: choose **Advanced > Proceed**. The connection is still
+  encrypted, and the window prints the certificate's fingerprint so you can check it.
 
 ### Search, shortcuts and planned buttons
 
@@ -207,6 +209,28 @@ Remove the line once you have a key. Add more accounts with `.venv/bin/grc-web a
 
 Data (SQLite database and session secret) lives in `./var/`. It's git-ignored, so back up
 that folder. To update, run `git pull` and then start the app again.
+
+### HTTPS and security headers
+
+On your own computer (`127.0.0.1`), plain HTTP is fine: the traffic never leaves the
+machine. As soon as other people connect, use HTTPS so passwords and client data are
+encrypted on the way. Three ways, from simplest to most robust:
+
+1. **Built-in, self-signed:** `grc-web serve --lan --https`. The app makes a
+   certificate in `var/tls/` (it covers `localhost`, the computer's name and its network
+   address) and serves HTTPS itself. Browsers warn once because no public authority
+   signed it.
+2. **Your own certificate:** set `GRC_TLS_CERT` and `GRC_TLS_KEY` to the PEM files (from
+   your company's certificate authority, or Let's Encrypt), then start the app as usual.
+3. **Behind a reverse proxy** (Caddy, nginx, a cloud load balancer) that handles HTTPS: set
+   `GRC_TRUSTED_PROXIES` to the proxy's address and `GRC_FORCE_HTTPS=1`. Plain-HTTP visits
+   from outside your network are then redirected to HTTPS.
+
+Whenever HTTPS is on, the login cookie is marked `Secure` (never sent over plain HTTP) and
+browsers are told to keep using HTTPS (HSTS). Every page also sends a strict
+Content-Security-Policy and clickjacking, sniffing and referrer protections. AI provider
+keys are only ever sent over HTTPS, or over plain HTTP to a server on your own network
+(such as Ollama).
 
 ### Database: SQLite or PostgreSQL
 
@@ -403,7 +427,11 @@ Set in `.env` or the environment:
 | `GROQ_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, ... | none | Keys for the free providers |
 | `GRC_LLM_BASE_URL`, `GRC_LLM_API_KEY` | none | Address and key for `custom` (any OpenAI-compatible API) |
 | `GRC_AWS_PROFILE` | none | AWS profile with the firm's credentials (for assuming clients' roles) |
-| `GRC_PUBLIC_URL` | this server | Homepage shown on the GitHub App |
+| `GRC_PUBLIC_URL` | this server | Homepage shown on the GitHub App. An `https://` value also turns on Secure cookies |
+| `GRC_TLS_CERT`, `GRC_TLS_KEY` | none | Certificate and key (PEM) to serve HTTPS directly |
+| `GRC_FORCE_HTTPS` | off | `1` redirects plain-HTTP visits from outside your network to HTTPS |
+| `GRC_TRUSTED_PROXIES` | `127.0.0.1` | Proxies whose `X-Forwarded-Proto` header is believed |
+| `GRC_HTTPS` | off | `1` marks cookies Secure (set automatically by `--https`) |
 | `GRC_SCANNER` | auto | `builtin` skips Presidio even when it is installed |
 | `GRC_SCAN_MAX_MB` | `5` | Largest file the discovery scan accepts |
 | `GRC_SCAN_SAMPLE_ROWS` | `200` | Records sampled per field |

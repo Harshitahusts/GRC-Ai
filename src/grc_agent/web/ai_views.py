@@ -21,6 +21,7 @@ from grc_agent.config import Settings, make_client
 from grc_agent.connectors.secrets import mask
 from grc_agent.llm import PROVIDERS, OpenAICompatClient, key_status
 from grc_agent.web import db
+from grc_agent.web.https import insecure_url_problem
 
 TEST_PROMPT = "Reply with the single word OK."
 
@@ -108,8 +109,8 @@ def register(app: FastAPI) -> None:
         api_key = str(form.get("api_key", "")).strip()
         model = str(form.get("model", "")).strip()[:120]
         base_url = str(form.get("base_url", "")).strip()[:300]
-        if base_url and not base_url.startswith(("http://", "https://")):
-            flash(request, "The address must start with http:// or https://.", "error")
+        if base_url and (problem := insecure_url_problem(base_url)):
+            flash(request, problem, "error")
             return redirect("/settings/ai")
         if key == "custom" and not base_url:
             flash(request, "Give the address of your OpenAI-compatible server.", "error")
