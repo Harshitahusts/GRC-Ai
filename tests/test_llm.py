@@ -13,7 +13,14 @@ from helpers import post
 from grc_agent.agent import Agent
 from grc_agent.ai_assessment import drafted_by
 from grc_agent.config import Settings, make_client
-from grc_agent.llm import PROVIDERS, OpenAICompatClient, choose_provider, from_openai_response
+from grc_agent.llm import (
+    PROVIDERS,
+    OpenAICompatClient,
+    _status_error,
+    choose_provider,
+    from_openai_response,
+    pick_model,
+)
 from grc_agent.tools import Tool
 from grc_agent.web import db as webdb
 
@@ -164,17 +171,31 @@ def test_findings_record_which_provider_drafted_them():
 # ---------------------------------------------------------------- the AI provider page
 
 
-@pytest.fixture
-def stub_provider(monkeypatch):
-    """Every OpenAI-compatible call answers 'OK' and records the key it was made with."""
-    keys = []
+class FakeProvider:
+    """Answers OpenAI-style calls: GET /models lists `models`; a chat with a model not
+    in the list gets a 404, like a retired model does."""
 
-    def _post(self, body):
-        keys.append(self.api_key)
+    def __init__(self, models):
+        self.models = models
+        self.keys = []
+        self.chat_models = []
+
+    def __call__(self, client, method, url, body=None):
+        self.keys.append(client.api_key)
+        if method == "GET":
+            return {"data": [{"id": m} for m in self.models]}
+        self.chat_models.append(body["model"])
+        if body["model"] not in self.models:
+            response = httpx.Response(404, request=httpx.Request(method, url), json={})
+            raise _status_error(response, client.provider.label)
         return reply("OK")
 
-    monkeypatch.setattr(OpenAICompatClient, "_post", _post)
-    return keys
+
+@pytest.fixture
+def stub_provider(monkeypatch):
+    fake = FakeProvider(["openai/gpt-oss-120b", "openai/gpt-oss-20b", "whisper-large-v3"])
+    monkeypatch.setattr(OpenAICompatClient, "_request", lambda client, *a: fake(client, *a))
+    return fake
 
 
 def test_admin_switches_to_a_free_provider(authed, app, stub_provider):
@@ -182,16 +203,19 @@ def test_admin_switches_to_a_free_provider(authed, app, stub_provider):
     assert "Groq" in page and "Get a key" in page
 
     r = post(authed, "/settings/ai", {"provider": "groq", "api_key": "gsk_secret_value_1234"})
-    assert r.status_code == 200 and "now uses Groq" in r.text
+    # Saving tests the connection straight away.
+    assert "now uses Groq" in r.text and "Connected to Groq (openai/gpt-oss-120b)" in r.text
     with webdb.connect(app.state.db_path) as conn:
         row = conn.execute("SELECT * FROM ai_providers").fetchone()
     assert row["active"] == 1 and "gsk_secret" not in row["key_enc"]
-    assert row["key_hint"] == "••••1234"
+    assert row["key_hint"] == "••••1234" and row["status"] == "ok"
+    assert "whisper-large-v3" in row["models_json"]
     page = authed.get("/settings/ai").text
     assert "gsk_secret_value_1234" not in page and "••••1234" in page
+    assert '<option value="openai/gpt-oss-20b">' in page  # model suggestions
+    assert set(stub_provider.keys) == {"gsk_secret_value_1234"}
 
-    r = post(authed, "/settings/ai/test")
-    assert "Connected to Groq" in r.text and stub_provider == ["gsk_secret_value_1234"]
+    assert "Connected to Groq" in post(authed, "/settings/ai/test").text
 
     # The analyst now answers through Groq.
     r = post(authed, "/assistant", {"question": "Hello?"})
@@ -205,10 +229,76 @@ def test_admin_switches_to_a_free_provider(authed, app, stub_provider):
         assert conn.execute("SELECT COUNT(*) FROM ai_providers").fetchone()[0] == 0
 
 
+def test_a_retired_model_is_swapped_for_a_live_one(authed, app, stub_provider):
+    r = post(
+        authed,
+        "/settings/ai",
+        {"provider": "groq", "api_key": "gsk_k_1234", "model": "llama-3.3-70b-versatile"},
+    )
+    assert "no longer offers llama-3.3-70b-versatile" in r.text
+    assert "switched to openai/gpt-oss-120b" in r.text
+    assert app.state.ai.model == "openai/gpt-oss-120b"  # remembered, not just this once
+    with webdb.connect(app.state.db_path) as conn:
+        assert conn.execute("SELECT model FROM ai_providers").fetchone()[0] == "openai/gpt-oss-120b"
+
+
+def test_env_only_setup_is_tested_and_fixed_too(authed, app, stub_provider, monkeypatch):
+    from grc_agent.web import ai_views
+
+    monkeypatch.setenv("GROQ_API_KEY", "gsk_from_env_9876")
+    monkeypatch.setenv("GRC_AI_PROVIDER", "groq")  # another test may leave an Anthropic key set
+    monkeypatch.setenv("GRC_AGENT_MODEL", "llama-3.3-70b-versatile")
+    ai_views.refresh(app)
+    assert app.state.ai.provider == "groq"
+    r = post(authed, "/settings/ai/test")
+    assert "switched to openai/gpt-oss-120b" in r.text and "Connected" in r.text
+    assert app.state.ai.model == "openai/gpt-oss-120b"
+    assert set(stub_provider.keys) == {"gsk_from_env_9876"}  # still the .env key
+
+
+def test_the_analyst_survives_a_model_retired_mid_session(stub_provider):
+    client = OpenAICompatClient(GROQ, api_key="k")
+    agent = Agent(client=client, settings=Settings(provider="groq", model="gone-model"), tools=[])
+    assert agent.ask("Hi").text == "OK"
+    assert stub_provider.chat_models == ["gone-model", "openai/gpt-oss-120b"]
+    agent.ask("Again")  # goes straight to the live model now
+    assert stub_provider.chat_models[-1] == "openai/gpt-oss-120b"
+
+
+def test_no_default_model_picks_from_the_live_list(monkeypatch):
+    fake = FakeProvider(["paid/model", "z-ai/glm-5:free", "nvidia/nemotron-3-super:free"])
+    monkeypatch.setattr(OpenAICompatClient, "_request", lambda client, *a: fake(client, *a))
+    client = OpenAICompatClient(PROVIDERS["openrouter"], api_key="k")
+    client.beta.messages.create(model="", max_tokens=5, messages=[])
+    assert fake.chat_models == ["nvidia/nemotron-3-super:free"]  # preferred, and free
+
+
+@pytest.mark.parametrize(
+    ("provider", "ids", "wanted", "expected"),
+    [
+        ("groq", ["openai/gpt-oss-20b", "openai/gpt-oss-120b"], "", "openai/gpt-oss-120b"),
+        ("groq", ["openai/gpt-oss-20b", "x"], "x", "x"),
+        ("groq", ["whisper-large-v3", "llama-guard-4", "qwen/qwen3.6-27b"], "", "qwen/qwen3.6-27b"),
+        (
+            "gemini",
+            ["text-embedding-004", "gemini-3-flash", "gemini-flash-latest"],
+            "",
+            "gemini-flash-latest",
+        ),
+        ("openrouter", ["openai/gpt-5", "google/gemma-4-31b:free"], "", "google/gemma-4-31b:free"),
+        ("openrouter", ["openai/gpt-5"], "", None),  # never a paid model
+        ("ollama", ["mistral:7b"], "", "mistral:7b"),
+        ("groq", [], "", None),
+    ],
+)
+def test_pick_model(provider, ids, wanted, expected):
+    assert pick_model(PROVIDERS[provider], ids, wanted) == expected
+
+
 def test_saving_a_provider_switches_demo_mode_off(app, authed, stub_provider):
     app.state.demo = True
-    post(authed, "/settings/ai", {"provider": "ollama", "model": "llama3.1"})
-    assert app.state.demo is False and app.state.ai.model == "llama3.1"
+    post(authed, "/settings/ai", {"provider": "ollama", "model": "openai/gpt-oss-20b"})
+    assert app.state.demo is False and app.state.ai.model == "openai/gpt-oss-20b"
     assert "Demo mode" not in authed.get("/assistant").text
 
 

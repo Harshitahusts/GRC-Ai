@@ -195,6 +195,11 @@ Everything else in the app works without a key.
 | Ollama | Free, runs on your own computer | ollama.com |
 | Any OpenAI-compatible server | Varies | LM Studio, vLLM, LiteLLM... |
 
+Saving runs the test straight away. Providers retire free models every few months (Groq
+shut down Llama 3.3 70B in August 2026). When that happens, the app reads the provider's
+current model list, switches to a live model, remembers it, and says so. The Model box
+suggests the provider's current models.
+
 Saved keys are encrypted in the database and never shown again. You can also put a key in
 `.env` instead (`GROQ_API_KEY=...`, `GEMINI_API_KEY=...`, `ANTHROPIC_API_KEY=...`). Then
 the first key found is used, or the one `GRC_AI_PROVIDER` names. Free models are weaker

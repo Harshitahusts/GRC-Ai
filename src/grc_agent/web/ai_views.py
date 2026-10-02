@@ -8,6 +8,7 @@ Where the settings come from, highest priority first:
 A saved key never leaves the server: the page shows only a masked hint.
 """
 
+import json
 import os
 import sqlite3
 from dataclasses import replace
@@ -47,7 +48,7 @@ def resolve(app: FastAPI, conn: sqlite3.Connection | None = None) -> tuple[Setti
     settings = replace(
         base,
         provider=provider.key,
-        model=row["model"] or provider.model or base.model,
+        model=row["model"] or provider.model,  # "" lets the client pick from the live list
         ai_mode="api",
     )
     if provider.key != "anthropic" and not os.getenv("GRC_AGENT_MAX_TOKENS"):
@@ -92,6 +93,7 @@ def register(app: FastAPI) -> None:
             "ai_settings.html",
             providers=list(PROVIDERS.values()),
             rows=rows,
+            models={k: json.loads(r.get("models_json") or "[]") for k, r in rows.items()},
             env=env,
             settings=settings,
             source="page" if active else ("demo" if settings.demo else ".env"),
@@ -135,22 +137,23 @@ def register(app: FastAPI) -> None:
         db.audit(conn, user, "ai_provider_set", None, {"provider": key, "model": model})
         conn.commit()
         refresh(request.app)
-        flash(request, f"The GRC Analyst now uses {provider.label}. Test it below.")
+        # Test straight away: it proves the key and swaps a retired model for a live one.
+        ok, message = await run_in_threadpool(check, request.app, conn)
+        flash(
+            request,
+            f"The GRC Analyst now uses {provider.label}. {message}",
+            None if ok else "error",
+        )
         return redirect("/settings/ai")
 
     @app.post("/settings/ai/test")
     async def ai_test(request: Request, user: User, conn: Conn):
         await form_with_csrf(request)
         require_admin(request)
-        settings, client = client_for(request.app)
-        if settings.demo:
+        if request.app.state.ai.demo:
             flash(request, "Demo mode is on: there is no real AI to test.", "error")
             return redirect("/settings/ai")
-        ok, message = await run_in_threadpool(probe, client, settings)
-        conn.execute(
-            "UPDATE ai_providers SET status = ?, message = ?, tested_at = ? WHERE active = 1",
-            ("ok" if ok else "error", message, db.now()),
-        )
+        ok, message = await run_in_threadpool(check, request.app, conn)
         flash(request, message, None if ok else "error")
         return redirect("/settings/ai")
 
@@ -181,6 +184,55 @@ def key_status_of(provider_key: str) -> bool:
     return next(s["configured"] for s in key_status() if s["provider"].key == provider_key)
 
 
+def check(app: FastAPI, conn: sqlite3.Connection) -> tuple[bool, str]:
+    """Test the provider in force, and keep the page's model list and choice up to date.
+
+    For a provider configured only in .env, the result is saved as a page setting (using
+    the .env key), so a model swapped in for a retired one is remembered.
+    """
+    settings, client = client_for(app)
+    models: list[str] | None = None
+    if isinstance(client, OpenAICompatClient):
+        try:
+            models = client.list_models()
+        except anthropic.APIError:
+            models = None  # some servers have no model list; the chat test still runs
+    ok, message = probe(client, settings)
+    used = getattr(client, "model_in_use", None)
+    if used and used != settings.model:
+        if settings.model:
+            message = (
+                f"{settings.provider_label} no longer offers {settings.model}, "
+                f"so the app switched to {used}. {message}"
+            )
+        else:
+            message = f"Picked {used} from {settings.provider_label}'s current models. {message}"
+    row = conn.execute("SELECT 1 FROM ai_providers WHERE active = 1").fetchone()
+    if row is None and settings.provider in PROVIDERS and not settings.demo:
+        conn.execute(
+            "INSERT INTO ai_providers (provider, model, active, updated_by, updated_at) "
+            "VALUES (?,?,1,?,?) ON CONFLICT (provider) DO UPDATE SET active = 1",
+            (settings.provider, "", "system", db.now()),
+        )
+    conn.execute(
+        "UPDATE ai_providers SET status = ?, message = ?, tested_at = ?"
+        + (", model = ?" if used else "")
+        + (", models_json = ?" if models is not None else "")
+        + " WHERE active = 1",
+        (
+            "ok" if ok else "error",
+            message,
+            db.now(),
+            *([used] if used else []),
+            *([json.dumps(sorted(models))] if models is not None else []),
+        ),
+    )
+    conn.commit()
+    if used:
+        refresh(app)
+    return ok, message
+
+
 def probe(client: Any, settings: Settings) -> tuple[bool, str]:
     """One tiny request, to prove the key, the address and the model all work."""
     label = settings.provider_label
@@ -193,7 +245,10 @@ def probe(client: Any, settings: Settings) -> tuple[bool, str]:
     except anthropic.AuthenticationError:
         return False, f"{label} rejected the API key. Check it and save again."
     except anthropic.NotFoundError:
-        return False, f"{label} doesn't know the model {settings.model!r}. Pick another."
+        return False, (
+            f"{label} doesn't offer the model {settings.model!r} to this key, and no "
+            "replacement could be found. Pick one from the Model list and save again."
+        )
     except anthropic.RateLimitError:
         return False, f"{label} says you've hit the free-tier limit. Wait a minute and retry."
     except anthropic.APIConnectionError:
@@ -203,4 +258,5 @@ def probe(client: Any, settings: Settings) -> tuple[bool, str]:
     except anthropic.APIError as exc:
         return False, f"{label} error: {str(exc)[:200]}"
     text = " ".join(b.text for b in response.content if b.type == "text").strip()
-    return True, f"Connected to {label} ({settings.model}). It replied: {text[:60] or '(empty)'}"
+    model = getattr(client, "model_in_use", None) or settings.model
+    return True, f"Connected to {label} ({model}). It replied: {text[:60] or '(empty)'}"
