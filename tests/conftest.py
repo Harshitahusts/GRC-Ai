@@ -46,6 +46,14 @@ def _api_mode(monkeypatch):
     """Tests control the AI mode themselves; a developer's .env must not switch it."""
     monkeypatch.setenv("GRC_AI_MODE", "api")
     monkeypatch.delenv("GRC_AI_PROVIDER", raising=False)
+    for name in (
+        "GRC_HTTPS",
+        "GRC_SECURE_COOKIES",
+        "GRC_FORCE_HTTPS",
+        "GRC_TLS_CERT",
+        "GRC_TLS_KEY",
+    ):
+        monkeypatch.delenv(name, raising=False)
     for provider in PROVIDERS.values():
         if provider.key_env and provider.key != "anthropic":
             monkeypatch.delenv(provider.key_env, raising=False)

@@ -2,7 +2,7 @@
 
 grc-web adduser NAME     create an account (prompts for a password)
 grc-web passwd NAME      change an account's password
-grc-web serve            start the app on http://127.0.0.1:8000
+grc-web serve            start the app on http://127.0.0.1:8000 (--https for HTTPS)
 grc-web demo             start a separate demo tenant with sample clients on port 8001
 """
 
@@ -42,6 +42,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Share on your local network (listens on all interfaces, prints the link).",
     )
+    serve.add_argument(
+        "--https",
+        action="store_true",
+        help="Serve over HTTPS with a self-signed certificate (or GRC_TLS_CERT/GRC_TLS_KEY).",
+    )
 
     demo = sub.add_parser(
         "demo", help="Start a separate demo tenant with sample data (never your main data)."
@@ -56,7 +61,12 @@ def main(argv: list[str] | None = None) -> int:
     demo.add_argument(
         "--lan",
         action="store_true",
-        help="Share the demo on your local network, e.g. http://192.168.1.20:8001",
+        help="Share the demo on your local network, e.g. https://192.168.1.20:8001",
+    )
+    demo.add_argument(
+        "--https",
+        action="store_true",
+        help="Serve over HTTPS with a self-signed certificate (or GRC_TLS_CERT/GRC_TLS_KEY).",
     )
     demo.add_argument(
         "--live-seconds",
@@ -89,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "serve":
         host = "0.0.0.0" if args.lan else args.host
-        return _serve(data_dir, host, args.port, args.reload, args.open)
+        return _serve(data_dir, host, args.port, args.reload, args.open, args.https)
     if args.command == "demo":
         return _demo(args)
     if args.command == "init":
@@ -122,12 +132,29 @@ def _migrate(data_dir: Path, url: str | None) -> int:
     return 0
 
 
-def _serve(data_dir: Path, host: str, port: int, reload: bool, open_browser: bool) -> int:
+def _serve(
+    data_dir: Path,
+    host: str,
+    port: int,
+    reload: bool,
+    open_browser: bool,
+    use_https: bool = False,
+) -> int:
     import uvicorn
+
+    from grc_agent.web import https
 
     os.environ["GRC_DATA_DIR"] = str(data_dir)
     local = "127.0.0.1" if host in ("0.0.0.0", "::") else host
-    url = f"http://{local}:{port}"
+    shared = host in ("0.0.0.0", "::")
+    ip = lan_ip() if shared else None
+    data_dir.mkdir(parents=True, exist_ok=True)
+    tls = https.tls_files(data_dir, use_https, [ip] if ip else [])
+    scheme = "https" if tls else "http"
+    if tls:
+        # The app reads this when it starts: session cookies become Secure.
+        os.environ["GRC_HTTPS"] = "1"
+    url = f"{scheme}://{local}:{port}"
     if _port_in_use(local, port):
         # Usually an older copy of the app. Opening the browser would show that copy,
         # running old code, so stop here instead.
@@ -142,16 +169,29 @@ def _serve(data_dir: Path, host: str, port: int, reload: bool, open_browser: boo
         )
         return 1
     print(f"GRC agent running at {url}  (data: {db.label(db.database_target(data_dir))})")
-    if host in ("0.0.0.0", "::"):
-        ip = lan_ip()
+    if tls:
+        print(f"HTTPS certificate: {tls[0]}")
+        print(f"  SHA-256 fingerprint: {https.fingerprint(tls[0])}")
+        if not os.getenv("GRC_TLS_CERT"):
+            print(
+                "  It is self-signed, so browsers warn once: choose Advanced > Proceed. The\n"
+                "  connection is still encrypted. Compare the fingerprint to be sure it's yours."
+            )
+    if shared:
         if ip:
-            print(f"On your network: http://{ip}:{port}  (share this link with colleagues)")
+            print(f"On your network: {scheme}://{ip}:{port}  (share this link with colleagues)")
         else:
             print("Couldn't find this computer's network address. Run ipconfig to look it up.")
         print(
             "Anyone on the same network can open it. If Windows asks, allow Python through the\n"
             "firewall on Private networks only. Other devices must use the same Wi-Fi or LAN."
         )
+        if not tls:
+            print(
+                "Warning: this is plain HTTP, so passwords cross the network unencrypted.\n"
+                "Add --https to encrypt it.",
+                file=sys.stderr,
+            )
     print("Press Ctrl+C to stop.")
     if open_browser:
         import threading
@@ -165,6 +205,11 @@ def _serve(data_dir: Path, host: str, port: int, reload: bool, open_browser: boo
         port=port,
         reload=reload,
         log_level="info",
+        ssl_certfile=tls[0] if tls else None,
+        ssl_keyfile=tls[1] if tls else None,
+        # Behind a reverse proxy that terminates HTTPS, trust its X-Forwarded-Proto
+        # header only from the addresses listed here.
+        forwarded_allow_ips=os.getenv("GRC_TRUSTED_PROXIES", "127.0.0.1"),
     )
     return 0
 
@@ -198,7 +243,8 @@ def _demo(args) -> int:
     )
     if args.seed_only:
         return 0
-    return _serve(data_dir, "0.0.0.0" if args.lan else "127.0.0.1", args.port, False, args.open)
+    host = "0.0.0.0" if args.lan else "127.0.0.1"
+    return _serve(data_dir, host, args.port, False, args.open, args.https)
 
 
 def lan_ip() -> str | None:

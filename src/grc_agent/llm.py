@@ -215,6 +215,11 @@ class OpenAICompatClient:
             )
         if not self.base_url:
             raise anthropic.CredentialsError("Set GRC_LLM_BASE_URL for the custom provider.")
+        if self.api_key and not _safe_for_key(self.base_url):
+            raise anthropic.CredentialsError(
+                f"Refusing to send the API key to {self.base_url} over plain HTTP. "
+                "Use an https:// address."
+            )
 
         schema = ((output_config or {}).get("format") or {}).get("schema")
         if schema:
@@ -267,6 +272,14 @@ class OpenAICompatClient:
         if resp.status_code >= 400:
             raise _status_error(resp, self.provider.label)
         return resp.json()
+
+
+def _safe_for_key(url: str) -> bool:
+    """A key may go over HTTPS anywhere, or over plain HTTP only within this network."""
+    from grc_agent.web.https import is_local_host
+
+    parts = httpx.URL(url)
+    return parts.scheme == "https" or is_local_host(parts.host)
 
 
 def _retry_after(resp: httpx.Response, attempt: int) -> float:
