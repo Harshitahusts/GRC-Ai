@@ -490,7 +490,11 @@ fieldset:disabled .choice span { cursor: not-allowed; opacity: .7; }
 .prose-chat p, .prose-chat ul, .prose-chat ol { margin: 0 0 .6rem; }
 .prose-chat ul, .prose-chat ol { padding-left: 1.2rem; }
 .prose-chat h1, .prose-chat h2, .prose-chat h3 { font-size: 1rem; margin: .8rem 0 .4rem; }
-.prose-chat table { font-size: .88rem; margin: .5rem 0; }
+/* Tables in replies: scroll sideways when wide rather than squeezing a column down to
+   a letter per line (overflow-wrap: anywhere above would otherwise allow that). */
+.prose-chat table { font-size: .88rem; margin: .5rem 0; display: block; max-width: 100%; overflow-x: auto; }
+.prose-chat th, .prose-chat td { overflow-wrap: normal; word-break: normal; vertical-align: top; min-width: 9rem; }
+.prose-chat th:first-child, .prose-chat td:first-child { min-width: 7rem; max-width: 12rem; }
 .prose-chat pre { overflow-x: auto; background: var(--none-bg); padding: .6rem; border-radius: 6px; }
 .dots { display: inline-flex; gap: 4px; padding: .2rem 0; }
 .dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: blink 1.2s infinite both; }
@@ -515,7 +519,7 @@ fieldset:disabled .choice span { cursor: not-allowed; opacity: .7; }
 .capabilities span { display: flex; flex-direction: column; }
 .capabilities small { color: var(--muted); font-size: .82rem; }
 @media (max-width: 960px) { .chat-layout { grid-template-columns: 1fr; } .chat-side { display: none; } }
-@media (max-width: 560px) { .suggestions { grid-template-columns: 1fr; } .composer button span { display: none; } .msg-body { max-width: 100%; } }
+@media (max-width: 560px) { .suggestions { grid-template-columns: 1fr; } .composer button span { display: none; } .msg-body { max-width: calc(100% - 2.6rem); } .prose-chat th, .prose-chat td { min-width: 0; } .prose-chat th:first-child, .prose-chat td:first-child { min-width: 5.5rem; } }
 
 /* ---- KPIs */
 .kpi-main { display: grid; gap: 1.1rem; }

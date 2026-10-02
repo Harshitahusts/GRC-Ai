@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import secrets
 import sqlite3
 import time
@@ -159,6 +160,15 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
     ops_views.register(app)
     ai_views.register(app)
     return app
+
+
+_ESCAPED_BR = re.compile(r"&lt;br\s*/?&gt;", re.IGNORECASE)
+
+
+def _chat_html(text: str) -> str:
+    """An analyst reply as HTML. Models often put <br> inside table cells; Markdown
+    escapes it (raw HTML is off, for safety), so turn exactly that tag back into a break."""
+    return _ESCAPED_BR.sub("<br>", render_markdown(text))
 
 
 NO_AI_KEY = (
@@ -1418,7 +1428,7 @@ def _routes(app: FastAPI) -> None:
         history = []
         for role, text in merged:
             if role == "assistant":
-                history.append((role, Markup(render_markdown(text)), ""))
+                history.append((role, Markup(_chat_html(text)), ""))
             else:
                 focus, _, question = (
                     text.partition("\n") if text.startswith(FOCUS) else ("", "", text)
