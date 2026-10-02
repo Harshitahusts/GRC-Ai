@@ -1,10 +1,10 @@
-# Put GRC Flow on your own domain over HTTPS (for example https://app.grc-flow.com):
+# Put GRC Flow on its own subdomain over HTTPS (for example https://app.grc-flow.com):
 #
 #   docker compose -f compose.yaml -f compose.postgres.yaml -f compose.caddy.yaml up -d --build
 #
-# Before running: point the domain's DNS (an A record) at this server, open ports 80 and
-# 443, and set GRC_DOMAIN, GRC_ROOT_DOMAIN and POSTGRES_PASSWORD in .env. Caddy gets the
-# certificate on first start. See "Deploy to your domain" in the README.
+# Before running: point the subdomain's DNS (an A record) at this server, open ports 80
+# and 443, and set GRC_DOMAIN and POSTGRES_PASSWORD in .env. Caddy gets the certificate on
+# first start. deploy/setup-server.sh does all of this; see docs/DEPLOY_ORACLE.md.
 services:
   caddy:
     image: caddy:2
@@ -14,7 +14,6 @@ services:
       - "443:443/udp"
     environment:
       GRC_DOMAIN: ${GRC_DOMAIN:?Set GRC_DOMAIN in .env, e.g. app.grc-flow.com}
-      GRC_ROOT_DOMAIN: ${GRC_ROOT_DOMAIN:?Set GRC_ROOT_DOMAIN in .env, e.g. grc-flow.com}
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data

@@ -236,49 +236,29 @@ Content-Security-Policy and clickjacking, sniffing and referrer protections. AI 
 keys are only ever sent over HTTPS, or over plain HTTP to a server on your own network
 (such as Ollama).
 
-### Deploy to your domain (grc-flow.com)
+### Deploy to your domain (for example app.grc-flow.com)
 
-This puts the app at `https://app.grc-flow.com` with a real certificate (no browser
-warning), PostgreSQL for the data, and Caddy in front for HTTPS. Visitors to
-`grc-flow.com` are sent to the app until a marketing site lives there.
+The app runs on its own subdomain, such as `https://app.grc-flow.com`, with a real
+certificate (no browser warning), PostgreSQL for the data, and Caddy in front for HTTPS.
+The main domain (`grc-flow.com`) stays free for your website, hosted anywhere.
 
-1. **Get a server.** Any small Linux VPS with 2 GB RAM works (DigitalOcean, Hetzner,
-   AWS Lightsail, an Indian region if clients want data kept in India). Install Docker.
-2. **Point the domain at it.** At your domain registrar, add two DNS **A records** with
-   the server's IP address: `app` (for app.grc-flow.com) and `@` (for grc-flow.com).
-3. **Open ports 80 and 443** in the server's firewall. Caddy needs both to get the
-   certificate.
-4. **Copy the code and create `.env`** on the server:
+**Step-by-step for Oracle Cloud's free server in Mumbai:** [docs/DEPLOY_ORACLE.md](docs/DEPLOY_ORACLE.md).
 
-   ```bash
-   git clone https://github.com/Harshitahusts/GRC-Ai.git && cd GRC-Ai
-   cp .env.example .env
-   ```
+On any Ubuntu server (Oracle, DigitalOcean, AWS...), the setup is one script once the
+server exists and the subdomain's DNS A record points at it:
 
-   In `.env`, set at least:
+```bash
+curl -fsSL https://raw.githubusercontent.com/Harshitahusts/GRC-Ai/main/deploy/setup-server.sh -o setup.sh
+bash setup.sh                                   # installs Docker, opens ports, starts everything
+cd ~/grc-flow && docker compose exec web grc-web adduser yourname   # your first login
+```
 
-   ```bash
-   GRC_DOMAIN=app.grc-flow.com
-   GRC_ROOT_DOMAIN=grc-flow.com
-   POSTGRES_PASSWORD=<a long random password>
-   GROQ_API_KEY=<your key>        # or add it later on the AI provider page
-   ```
-
-5. **Start everything:**
-
-   ```bash
-   docker compose -f compose.yaml -f compose.postgres.yaml -f compose.caddy.yaml up -d --build
-   docker compose exec web grc-web adduser yourname   # your first login
-   ```
-
-6. Open **https://app.grc-flow.com**. The first visit can take a minute while Caddy gets
-   the certificate.
-
-What this setup does for security: only Caddy is reachable from the internet; the app and
-the database have no public ports. Plain HTTP is redirected to HTTPS, login cookies are
-`Secure`, and browsers are told to always use HTTPS. Back up both Docker volumes
-(`grc-data` and `grc-pg`) regularly. To update later: `git pull`, then run the same
-`up -d --build` command.
+It asks for the subdomain and (optionally) a Groq key, generates the database password,
+and runs `compose.yaml` + `compose.postgres.yaml` + `compose.caddy.yaml`. Only Caddy is
+reachable from the internet; the app and database have no public ports. Plain HTTP is
+redirected to HTTPS, login cookies are `Secure`, and browsers are told to keep using HTTPS.
+To update later, run `bash deploy/setup-server.sh` again in `~/grc-flow`: it keeps your
+`.env` and data. Back up the Docker volumes `grc-data` and `grc-pg` regularly.
 
 ### Database: SQLite or PostgreSQL
 
