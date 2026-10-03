@@ -89,7 +89,11 @@ Each engagement groups its work in three rows under the workflow steps:
   **Requests** from Data Principals (access, correction, erasure, grievance, nomination;
   response clock up to 90 days, Rule 14(3)), and **Breaches** (the Board's detailed report
   is due 72 hours after awareness, Rule 7(2)(b)).
-- **Compliance:** **Controls** (the client's own status for every obligation; "not
+- **Compliance:** the **Readiness plan** (the client's obligations as steps in working
+  order, from scoping through notice and consent, security and breaches, rights,
+  retention, processors and transfers to delivery, each with one next action; progress is
+  recalculated from live data on every visit, so it can't be ticked off by hand),
+  **Controls** (the client's own status for every obligation; "not
   applicable" needs a reason and an admin, "implemented" needs evidence or a description),
   **Tasks**, the **Evidence** library, and **Policies** (version, approver, review date).
 - **Risk:** the risk register, **Vendors & processors** (contract, data location, review),
@@ -102,9 +106,32 @@ assigned work. The **Work queue** lists everything open across clients, most urg
 first; the **Audit log** shows every change; **Team & roles** sets who is an admin,
 member or read-only viewer.
 
+The audit log is **tamper-evident**: each entry is sealed with a SHA-256 hash over its
+own fields and the hash of the entry before it. **Check integrity** on the Audit log page
+recomputes the whole chain and names the first entry that was changed, removed or
+reordered outside the app; **Download CSV** exports the log with its hashes so an auditor
+can recompute it independently (`db.entry_hash` shows the exact recipe). Entries written
+before sealing existed are counted, not checked.
+
 Evidence files (PDF, images, Word, Excel, CSV, text, JSON, up to 10 MB) are checked
 against their extension, stored under a random name in `var/evidence/`, and only
 downloadable by signed-in users. Back that folder up with the rest of `var/`.
+
+**Evidence relevance check.** With an AI provider set up, the AI reads each file linked to
+an obligation (text, PDF with a text layer, Word) and says whether it is about that
+obligation: on topic, partly, not about it, or too little to judge, with a reason and what
+it doesn't show. A file flagged as off-topic stops counting as evidence (a control can't
+be marked implemented on it) until someone replaces it or clicks **Count it anyway**,
+which is logged. The check runs after each upload and on demand; it judges only what a
+document is about, never whether the control works. Images and spreadsheets are left to
+a person.
+
+**AI drafts, people decide.** Status and severity always come from the rules. When the AI
+drafts a finding's wording, the finding is labelled **Human review required** until a
+consultant reviews it, and the engagement can't be delivered until every AI-drafted
+finding is reviewed. A draft marked **wrong** must be rewritten by a person (**Rewrite
+this finding**), which also clears the draft pack so it's regenerated from the new
+wording.
 
 The demo notices (demo mode and demo tenant) appear on the GRC Analyst page only.
 
@@ -114,9 +141,31 @@ The **GRC Analyst** page is an AI analyst that works from the workspace's live d
 a client (or all clients) and ask: "What should I work on today?", "Summarise ENG-001 for
 management", "What evidence should I request?", "Draft the audit report". It follows an
 analyst's workflow (planning, fieldwork, evidence evaluation, risk assessment,
-reporting), fetches the data before answering, cites DPDPA provisions from the register
-and corpus, and can't change anything. The **Analyst queue** lists the highest open risks
-across clients, overdue first.
+reporting), fetches the data before answering, and cites DPDPA provisions from the
+register and corpus. It also reads uploaded evidence (with the AI relevance check) and the
+readiness plan. Its one action is **create_task**: when you ask it to, it adds tasks to a
+client's Tasks register, labelled as drafted by the analyst and recorded under your name,
+for a person to check. It never marks a finding, control or delivery; read-only viewers
+don't get the action at all. The **Analyst queue** lists the highest open risks across
+clients, overdue first.
+
+### MCP: use GRC Flow from Claude Desktop, Claude Code or Cursor
+
+The app is also an **MCP server** at `/mcp`, so the AI app a consultant already uses can
+read the workspace. Make a key on **API keys & MCP** (shown once; only its SHA-256 hash is
+stored), then:
+
+```bash
+claude mcp add --transport http grc-flow https://app.grc-flow.com/mcp \
+  --header "Authorization: Bearer YOUR_KEY"
+```
+
+For Claude Desktop and other apps, the page shows a config using `mcp-remote`. The app
+gets the analyst's read-only tools (clients, findings, risks, data flows, evidence,
+readiness plans, the obligations register and the Act's text), never `create_task`. A key
+acts as its owner, works only in the `Authorization` header (never the browser cookie),
+and stops working when revoked. Every call is recorded in the audit log as
+`mcp_tool_called`.
 
 ### Demo tenant (sample data for demos)
 
@@ -395,6 +444,9 @@ src/grc_agent/
   assessment.py     rule-based gap assessment and readiness score
   documents.py      draft documents (gap report, RoPA, notice, playbook, DPA)
   risk.py           DPDPA risk register (threats, likelihood x impact, treatments)
+  plan.py           DPDPA readiness plan: obligations as steps, next action for each
+  evidence_check.py AI check that an evidence file is about its obligation
+  web/mcp_views.py  API keys and the read-only MCP server (/mcp)
   discovery/        personal data scanner: India detectors, Presidio engine, file parsing
   web/registers.py  tasks, consent, requests, breaches, vendors, DPIAs, policies (one engine)
 docs/RESEARCH.md    what we took from Probo, Openlane and CISO Assistant

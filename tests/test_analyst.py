@@ -1,4 +1,4 @@
-"""The GRC Analyst: read-only tools over the workspace's data, DPDPA only."""
+"""The GRC Analyst: tools over the workspace's data, DPDPA only; one gated action."""
 
 import json
 import shutil
@@ -36,19 +36,23 @@ def call(tools, name, **args):
     return json.loads(content)
 
 
+READ_TOOLS = {
+    "search_obligations",
+    "get_provision",
+    "score_risk",
+    "list_engagements",
+    "get_engagement",
+    "get_findings",
+    "get_risk_register",
+    "get_data_flow",
+    "get_evidence",
+    "get_readiness_plan",
+}
+
+
 def test_tool_set_is_dpdpa_and_read_only(workspace):
     _, _, tools = workspace
-    assert set(tools) == {
-        "search_obligations",
-        "get_provision",
-        "score_risk",
-        "list_engagements",
-        "get_engagement",
-        "get_findings",
-        "get_risk_register",
-        "get_data_flow",
-        "get_evidence",
-    }
+    assert set(tools) == READ_TOOLS
     for t in tools.values():
         spec = t.to_api()
         assert spec["strict"] and spec["input_schema"]["additionalProperties"] is False
@@ -81,6 +85,68 @@ def test_tools_read_the_workspace(workspace):
     evidence = call(tools, "get_evidence", engagement_id=eid)
     assert evidence["collected_by_connectors"] == []
     assert any(r["obligation_id"] == "OBL-004" for r in evidence["still_to_request"])
+
+
+def test_readiness_plan_and_uploaded_files(workspace):
+    authed, eid, tools = workspace
+    from helpers import csrf
+
+    authed.post(
+        f"/engagements/{eid}/evidence",
+        data={"csrf": csrf(authed, "/"), "obligation_id": "OBL-004", "title": "ISMS"},
+        files={"file": ("isms.txt", b"Encryption and access control policy text.", "text/plain")},
+    )
+    files = call(tools, "get_evidence", engagement_id=eid)["uploaded_files"]
+    assert files == [
+        {
+            "title": "ISMS",
+            "kind": "Other",
+            "supports": "Section 8(5)",
+            "version": 1,
+            "uploaded": files[0]["uploaded"],
+            "ai_relevance_check": "not checked",
+            "ai_check_reason": None,
+            "counts_as_evidence": True,
+            "overruled_by": None,
+        }
+    ]
+    result = call(tools, "get_readiness_plan", engagement_id=eid)
+    steps = {s["step"]: s for s in result["steps"]}
+    assert result["start_here"] == "scope" and "security" in steps
+    security = {o["obligation_id"]: o for o in steps["security"]["obligations"]}
+    assert security["OBL-004"]["evidence_files"] == 1
+
+
+def test_create_task_is_an_action_for_editors_only(workspace):
+    authed, eid, _ = workspace
+    app = authed.app
+    assert "create_task" not in {t.name for t in analyst_tools(app, "harshit", can_act=False)}
+    tools = {t.name: t for t in analyst_tools(app, "harshit", can_act=True)}
+    args = {
+        "engagement_id": eid,
+        "obligation_id": "OBL-004",
+        "title": "Adopt an information security policy",
+        "details": "Section 8(5): write and approve an ISMS policy.",
+        "priority": "urgent",
+    }
+    made = call(tools, "create_task", **args)
+    assert made["created"] and made["ref"].startswith("TSK-")
+    again = call(tools, "create_task", **args)  # no duplicates of an open task
+    assert not again["created"] and again["ref"] == made["ref"]
+
+    page = authed.get(made["link"]).text
+    assert "Adopt an information security policy" in page
+    assert "Drafted by the GRC Analyst (AI) when harshit asked" in page
+
+    content, is_error = run_tool(tools, "create_task", {**args, "obligation_id": "OBL-999"})
+    assert is_error and "Unknown obligation" in content
+    from grc_agent.web import db
+
+    with db.connect(app.state.db_path) as conn:
+        audit = conn.execute(
+            "SELECT username FROM audit_log WHERE action = 'analyst_created_task'"
+        ).fetchall()
+    assert [r[0] for r in audit] == ["harshit"]
 
 
 def test_unknown_engagement_is_a_tool_error(workspace):

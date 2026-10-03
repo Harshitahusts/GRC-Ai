@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block title %}API keys & MCP{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>API keys &amp; MCP</h1>
+    <p class="muted">Connect the AI app you already use (Claude Desktop, Claude Code, Cursor, any MCP client) to this workspace. It gets the GRC Analyst's read-only tools: clients, findings, risks, data flows, evidence, readiness plans and the text of the Act. It can't change anything.</p>
+  </div>
+</div>
+
+{% if new_key %}
+<section class="card key-once" role="status">
+  <h2>{{ icon("i-check") }} Your new key for “{{ new_key.name }}”</h2>
+  <p><strong>Copy it now. It won't be shown again</strong>: GRC Flow keeps only a fingerprint of it.</p>
+  <p><code class="hash key-value" id="new-key">{{ new_key.key }}</code>
+    <button type="button" class="small" data-copy="new-key">Copy</button></p>
+  <p class="muted small">Treat it like a password: it reads everything you can read. Revoke it below if it leaks.</p>
+</section>
+{% endif %}
+
+<div class="grid-2 wide-left">
+  <section class="card">
+    <h2>{{ "All keys" if is_admin else "Your keys" }}</h2>
+    {% if keys %}
+    <table class="table">
+      <thead><tr><th>Name</th>{% if is_admin %}<th>Owner</th>{% endif %}<th class="hide-sm">Key</th><th class="hide-sm">Last used</th><th></th></tr></thead>
+      <tbody>
+        {% for k in keys %}
+        <tr class="{{ 'is-closed' if k.revoked_at }}">
+          <td>{{ k.name }}<br><span class="muted small">created {{ k.created_at[:10] }}</span></td>
+          {% if is_admin %}<td class="small">{{ k.username }}</td>{% endif %}
+          <td class="hide-sm mono small">{{ k.hint }}</td>
+          <td class="hide-sm small muted">{{ k.last_used_at[:16].replace("T", " ") if k.last_used_at else "never" }}</td>
+          <td class="nowrap">
+            {% if k.revoked_at %}<span class="badge badge-none">Revoked {{ k.revoked_at[:10] }}</span>
+            {% else %}
+            <form method="post" action="/settings/api-keys/{{ k.id }}/revoke" onsubmit="return confirm('Revoke {{ k.name }}? Apps using it will stop working.')">
+              <input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="link small danger">Revoke</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty"><p><strong>No keys yet.</strong> Make one for each AI app, so you can revoke them separately.</p></div>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>New key</h2>
+    <form method="post" action="/settings/api-keys" class="stack">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label>Which app is it for? <input name="name" maxlength="60" placeholder="e.g. Claude Desktop on my laptop" required></label>
+      <p><button type="submit" class="primary">{{ icon("i-plus") }} Create key</button></p>
+    </form>
+  </section>
+</div>
+
+<section class="card">
+  <h2>Connect an AI app</h2>
+  <p>Server address: <code class="hash">{{ mcp_url }}</code></p>
+  <h3>Claude Code</h3>
+  <pre class="code">claude mcp add --transport http grc-flow {{ mcp_url }} --header "Authorization: Bearer YOUR_KEY"</pre>
+  <h3>Claude Desktop, Cursor and other apps</h3>
+  <p class="small">Add this to the app's MCP settings (in Claude Desktop: Settings → Developer → Edit config). It needs Node.js installed.</p>
+  <pre class="code">{
+  "mcpServers": {
+    "grc-flow": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "{{ mcp_url }}", "--header", "Authorization:Bearer ${GRC_FLOW_KEY}"],
+      "env": { "GRC_FLOW_KEY": "YOUR_KEY" }
+    }
+  }
+}</pre>
+  <p class="muted small">Then ask, for example: “Using GRC Flow, which clients have open breach-notification gaps, and what's the next step for each?” Every tool call is recorded in the <a href="/audit?action=mcp_tool_called">audit log</a> under your name.</p>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+document.querySelectorAll("[data-copy]").forEach(b => b.addEventListener("click", () => {
+  const text = document.getElementById(b.dataset.copy).textContent;
+  navigator.clipboard.writeText(text).then(() => { b.textContent = "Copied"; });
+}));
+</script>
+{% endblock %}

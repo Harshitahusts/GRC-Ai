@@ -84,7 +84,8 @@ def test_claude_assessment_end_to_end(with_corpus):
     eid = submitted(client)
     page = post(client, f"/engagements/{eid}/assess", {"mode": "claude"}).text
     assert fake.calls, "Claude was never called"
-    assert "Drafted by Claude" in page and "high confidence" in page
+    assert "AI draft · Claude" in page and "high confidence" in page
+    assert "Human review required" in page
     assert 'href="/corpus/provision?ref=' in page
     record = client.get(f"/engagements/{eid}/export.json").json()
     assert all(f["citations"] for f in record["findings"])

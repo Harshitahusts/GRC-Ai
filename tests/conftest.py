@@ -54,8 +54,10 @@ def _api_mode(monkeypatch):
         "GRC_TLS_KEY",
     ):
         monkeypatch.delenv(name, raising=False)
+    # No test may reach a real AI provider (evidence checks start on their own after an
+    # upload when a key is set), so a developer's keys are hidden here too.
     for provider in PROVIDERS.values():
-        if provider.key_env and provider.key != "anthropic":
+        if provider.key_env:
             monkeypatch.delenv(provider.key_env, raising=False)
 
 

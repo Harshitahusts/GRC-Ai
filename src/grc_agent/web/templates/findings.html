@@ -11,7 +11,7 @@
   <div class="card-head">
     <div>
       <h2>Assessment</h2>
-      <p class="muted small" style="margin:0">One finding per obligation in register {{ register.version }}. Status and severity always come from rules. Citations are checked against the {{ index_source }}.</p>
+      <p class="muted small" style="margin:0">One finding per obligation in register {{ register.version }}. Status and severity always come from rules, never the AI. The AI only drafts the wording, every citation is checked against the {{ index_source }}, and each AI draft needs a person's review before delivery.</p>
     </div>
   </div>
   {% if not eng.delivered_at %}
@@ -55,12 +55,29 @@
         <span class="badge status-badge-{{ f.status }}">{{ f.status.replace("_", " ") }}</span>
         <span class="badge sev-{{ f.severity }}">{{ f.severity }}</span>
         {% if f.drafted_by == "demo" %}<span class="badge badge-fail">Demo placeholder</span>{% endif %}
-        {% if f.drafted_by not in ("demo", "rules") %}<span class="badge badge-none">{{ icon("i-spark") }} Drafted by {{ ai_names.get(f.drafted_by, f.drafted_by) }} · {{ f.confidence }} confidence</span>{% endif %}
+        {% if f.drafted_by not in ("demo", "rules") %}<span class="badge badge-none">{{ icon("i-spark") }} AI draft · {{ ai_names.get(f.drafted_by, f.drafted_by) }} · {{ f.confidence }} confidence</span>
+          {% if f.verdict == "wrong" and not f.edited_at %}<span class="badge badge-fail" title="The reviewer marked this draft wrong. Rewrite it before delivery.">Rewrite required</span>
+          {% elif f.verdict %}<span class="badge badge-pass" title="Reviewed {{ (f.reviewed_at or '')[:10] }}">Reviewed by {{ f.reviewed_by or "a consultant" }}</span>
+          {% else %}<span class="badge badge-warn" title="Nothing an AI wrote reaches a client until a person reviews it.">Human review required</span>{% endif %}
+        {% elif f.drafted_by == "rules" %}<span class="badge badge-none" title="Written from the register's standard text by the rules engine; no AI involved.">Rules</span>{% endif %}
+        {% if f.edited_at %}<span class="badge badge-none" title="{{ f.edited_at[:10] }}">Rewritten by {{ f.edited_by }}</span>{% endif %}
         {% if f.needs_legal_review %}<span class="badge badge-fail">Legal review</span>{% endif %}
       </div>
       <h3>{{ o.obligation if o else f.obligation_id }}</h3>
       <p class="text-2">{{ f.summary }}</p>
       {% if f.remediation %}<p class="next-step"><strong>Next step:</strong> {{ f.remediation }}</p>{% endif %}
+      {% if not eng.delivered_at %}
+      <details class="finding-edit" {% if f.verdict == "wrong" and not f.edited_at %}open{% endif %}>
+        <summary class="small">Rewrite this finding</summary>
+        <form method="post" action="/engagements/{{ eng.id }}/findings/{{ f.id }}/edit" class="stack">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <label class="small">Finding<textarea name="summary" rows="4" maxlength="2000" required>{{ f.summary }}</textarea></label>
+          {% if f.status != "compliant" %}<label class="small">Next step<textarea name="remediation" rows="3" maxlength="2000">{{ f.remediation }}</textarea></label>{% endif %}
+          <p class="muted small">Status, severity and citations stay as the rules and the citation check set them. Saving clears the draft pack, so it's regenerated from your wording.</p>
+          <button class="small primary">Save rewrite</button>
+        </form>
+      </details>
+      {% endif %}
       {% if o and f.status in ("gap", "open_item") %}<p class="small muted">Evidence to ask for: {{ o.evidence }}{% if not eng.delivered_at %} · <a href="/engagements/{{ eng.id }}/r/tasks/new?title={{ ('Close gap: ' ~ o.source)|urlencode }}&details={{ (f.remediation or o.remediation)|urlencode }}&obligation={{ f.obligation_id }}&priority={{ 'urgent' if f.severity == 'critical' else 'high' if f.severity == 'high' else 'medium' }}&source={{ ('Finding ' ~ f.obligation_id)|urlencode }}">Create task</a>{% endif %}</p>{% endif %}
       {% set ev = f.evidence %}
       {% if ev.pass or ev.fail or ev.warn %}
@@ -81,10 +98,11 @@
       {% if f.drafted_by not in ("demo", "rules") and f.provisions %}<details class="small"><summary>Provisions shown</summary>{{ f.provisions|join(", ") }}</details>{% endif %}
       <form method="post" action="/engagements/{{ eng.id }}/findings/{{ f.id }}" class="verdict">
         <input type="hidden" name="csrf" value="{{ csrf }}">
-        <p class="tile-label">Accuracy scoring</p>
+        <p class="tile-label">{{ "Your review" if f.drafted_by not in ("demo", "rules") else "Accuracy scoring" }}</p>
+        {% set verdict_labels = {"correct": "Correct: approve", "incomplete": "Incomplete: approve with gaps", "wrong": "Wrong: must be rewritten"} %}
         <select name="verdict" aria-label="Verdict for {{ f.obligation_id }}">
-          <option value="">Unscored</option>
-          {% for v in verdicts %}<option value="{{ v }}" {% if f.verdict == v %}selected{% endif %}>{{ v|capitalize }}</option>{% endfor %}
+          <option value="">Not reviewed</option>
+          {% for v in verdicts %}<option value="{{ v }}" {% if f.verdict == v %}selected{% endif %}>{{ verdict_labels.get(v, v|capitalize) }}</option>{% endfor %}
         </select>
         <label class="inline small"><input type="checkbox" name="hallucination" {% if f.hallucination %}checked{% endif %}> Hallucination</label>
         <button class="small">Save</button>

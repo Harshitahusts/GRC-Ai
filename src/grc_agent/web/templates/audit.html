@@ -4,9 +4,26 @@
 <div class="page-head">
   <div>
     <h1>Audit log</h1>
-    <p class="muted">Every change anyone made, and when. It can't be edited from the app.</p>
+    <p class="muted">Every change anyone made, and when. It can't be edited from the app, and each entry is sealed with the hash of the one before it, so an edit made directly in the database shows up below.</p>
+  </div>
+  <div class="head-actions">
+    <a class="button small primary" href="/audit?verify=1">Check integrity</a>
+    <a class="button small" href="/audit.csv">Download CSV</a>
   </div>
 </div>
+{% if chain %}
+<section class="card chain-report {{ 'chain-ok' if chain.ok else 'chain-bad' }}" role="status">
+  {% if chain.ok %}
+  <h2>Intact: {{ "{:,}".format(chain.checked) }} entries checked</h2>
+  <p>Every hash was recomputed and every entry points at the one before it. Nothing in the log was changed, removed or reordered{% if chain.first_id %} since entry #{{ chain.first_id }}{% endif %}.</p>
+  {% else %}
+  <h2>Problem at entry #{{ chain.broken_id }}</h2>
+  <p>{{ chain.problem }} {{ "{:,}".format(chain.checked) }} entries before it check out. Tell your administrator: the log was altered outside GRC Flow.</p>
+  {% endif %}
+  {% if chain.before_chain %}<p class="muted small">{{ chain.before_chain }} older entries were recorded before sealing was added and can't be checked.</p>{% endif %}
+  {% if chain.last_hash %}<p class="muted small">Latest seal: <code class="hash">{{ chain.last_hash }}</code>. Note it down (or keep the CSV): if recent entries were ever deleted, this value would no longer appear in the log.</p>{% endif %}
+</section>
+{% endif %}
 <section class="card">
   <form method="get" class="register-filter">
     <select name="client" aria-label="Client"><option value="">All clients</option>{% for c in clients %}<option value="{{ c.id }}" {% if client == c.id|string %}selected{% endif %}>{{ c.client }}</option>{% endfor %}</select>

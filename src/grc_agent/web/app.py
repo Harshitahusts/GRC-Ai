@@ -59,6 +59,7 @@ from grc_agent.web import (
     demo_tenant,
     discovery_views,
     https,
+    mcp_views,
     notification_views,
     notify,
     ops_views,
@@ -151,6 +152,7 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
     register_views.register(app)
     ops_views.register(app)
     ai_views.register(app)
+    mcp_views.register(app)
     return app
 
 
@@ -257,7 +259,8 @@ def current_user(request: Request) -> str:
 
 
 # Paths a read-only (viewer) account may still post to.
-VIEWER_POSTS = ("/login", "/logout", "/notifications")
+# A read-only key (MCP tools only read) is fine for a viewer too.
+VIEWER_POSTS = ("/login", "/logout", "/notifications", "/settings/api-keys")
 
 
 def user_role(request: Request, username: str | None = None) -> str:
@@ -350,6 +353,11 @@ def documents_of(conn: sqlite3.Connection, engagement_id: int) -> list[sqlite3.R
     return sorted(rows.fetchall(), key=lambda d: order.index(d["type"]))
 
 
+def is_ai_drafted(finding) -> bool:
+    """Written by a language model (not the rules engine, not demo placeholder text)."""
+    return finding["drafted_by"] not in ("rules", "demo")
+
+
 def delivery_checks(conn: sqlite3.Connection, eng: sqlite3.Row) -> list[tuple[str, bool]]:
     """The hard stop. Every check must pass before delivery; there is no override."""
     findings = findings_of(conn, eng["id"])
@@ -369,6 +377,16 @@ def delivery_checks(conn: sqlite3.Connection, eng: sqlite3.Row) -> list[tuple[st
         (
             "Intake answers match connector evidence",
             not connector_views.conflicts(conn, eng["id"], answers_of(conn, eng["id"]), {}),
+        ),
+        # AI drafts, people decide: nothing an AI wrote reaches a client unreviewed, and a
+        # draft the reviewer called wrong must be rewritten by a person first.
+        (
+            "Every AI-drafted finding reviewed by a person",
+            all(f["verdict"] for f in findings if is_ai_drafted(f)),
+        ),
+        (
+            "Every finding marked wrong has been rewritten",
+            all(f["edited_at"] for f in findings if f["verdict"] == "wrong"),
         ),
         # Demo-mode text is a placeholder, never AI output, so it can't go to a client.
         (
@@ -897,9 +915,11 @@ def _routes(app: FastAPI) -> None:
                 "warn",
             )
             verdict = "wrong"
+        reviewed = (user, db.now()) if verdict else (None, None)
         updated = conn.execute(
-            "UPDATE findings SET verdict = ?, hallucination = ? WHERE id = ? AND engagement_id = ?",
-            (verdict, hallucination, fid, eid),
+            "UPDATE findings SET verdict = ?, hallucination = ?, reviewed_by = ?, reviewed_at = ? "
+            "WHERE id = ? AND engagement_id = ?",
+            (verdict, hallucination, *reviewed, fid, eid),
         ).rowcount
         if not updated:
             raise HTTPException(status_code=404, detail="Finding not found")
@@ -909,6 +929,45 @@ def _routes(app: FastAPI) -> None:
             "finding_scored",
             eid,
             {"finding": fid, "verdict": verdict, "hallucination": hallucination},
+        )
+        return redirect(f"/engagements/{eid}/findings#f{fid}")
+
+    @app.post("/engagements/{eid}/findings/{fid}/edit")
+    async def edit_finding(
+        eid: int,
+        fid: int,
+        request: Request,
+        user: User,
+        conn: Conn,
+    ):
+        """A person rewrites a finding's text. Status, severity and citations stay as the
+        rules and the citation check set them."""
+        form = await form_with_csrf(request)
+        eng = get_engagement(conn, eid)
+        require_open_agent_engagement(eng)
+        summary = str(form.get("summary", "")).strip()[:2000]
+        remediation = str(form.get("remediation", "")).strip()[:2000]
+        if not summary:
+            flash(request, "The finding can't be empty.", "error")
+            return redirect(f"/engagements/{eid}/findings#f{fid}")
+        row = conn.execute(
+            "SELECT status FROM findings WHERE id = ? AND engagement_id = ?", (fid, eid)
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Finding not found")
+        conn.execute(
+            "UPDATE findings SET summary = ?, remediation = ?, edited_by = ?, edited_at = ? "
+            "WHERE id = ?",
+            (summary, remediation if row["status"] != "compliant" else "", user, db.now(), fid),
+        )
+        # The draft pack quotes findings, so it has to be regenerated and reviewed again.
+        removed = conn.execute("DELETE FROM documents WHERE engagement_id = ?", (eid,)).rowcount
+        db.audit(conn, user, "finding_edited", eid, {"finding": fid, "documents_cleared": removed})
+        flash(
+            request,
+            "Finding updated."
+            + (" Documents were cleared: generate and review them again." if removed else ""),
+            "warn" if removed else "info",
         )
         return redirect(f"/engagements/{eid}/findings#f{fid}")
 
@@ -1094,7 +1153,10 @@ def _routes(app: FastAPI) -> None:
             agents[user] = Agent(
                 client=client,
                 settings=settings,
-                tools=analyst.analyst_tools(request.app),
+                # Viewers get the read-only tools; everyone else may also draft tasks.
+                tools=analyst.analyst_tools(
+                    request.app, user=user, can_act=user_role(request) != "viewer"
+                ),
                 system_prompt=ANALYST_PROMPT,
             )
         return agents[user]

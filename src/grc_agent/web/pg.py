@@ -39,6 +39,7 @@ ID_TABLES = {
     "records",
     "record_events",
     "evidence_files",
+    "api_keys",
     "audit_log",
 }
 
@@ -47,6 +48,10 @@ _INSERT = re.compile(r"^\s*INSERT\s+(OR\s+IGNORE\s+)?INTO\s+([A-Za-z_]+)", re.I)
 
 def is_postgres(target: object) -> bool:
     return isinstance(target, str) and target.startswith(("postgres://", "postgresql://"))
+
+
+def is_postgres_conn(conn: object) -> bool:
+    return isinstance(conn, Connection)
 
 
 def with_schema(url: str, schema: str) -> str:

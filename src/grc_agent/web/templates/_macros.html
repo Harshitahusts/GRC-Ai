@@ -43,6 +43,7 @@
     ("breaches", "/engagements/%d/r/breaches" % eng.id, "Breaches", (o.breaches or {}).open or 0, (o.breaches or {}).overdue or 0),
   ]),
   ("Compliance", [
+    ("plan", "/engagements/%d/plan" % eng.id, "Readiness plan", 0, 0),
     ("controls", "/engagements/%d/controls" % eng.id, "Controls", 0, 0),
     ("tasks", "/engagements/%d/r/tasks" % eng.id, "Tasks", (o.tasks or {}).open or 0, (o.tasks or {}).overdue or 0),
     ("evidence", "/engagements/%d/evidence" % eng.id, "Evidence", 0, 0),

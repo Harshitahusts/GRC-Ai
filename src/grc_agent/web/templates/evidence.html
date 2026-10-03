@@ -6,7 +6,7 @@
 {% set locked = eng.delivered_at is not none %}
 {% set ob_by_id = {} %}{% for o in obligations %}{% set _ = ob_by_id.update({o.id: o}) %}{% endfor %}
 
-{{ page_intro("Evidence", "Files that prove a control works: policies, screenshots, contracts, training records, exports. Link each to the obligation it supports. Connector checks are collected automatically on the Connectors tab.") }}
+{{ page_intro("Evidence", "Files that prove a control works: policies, screenshots, contracts, training records, exports. Link each to the obligation it supports. With an AI provider set up, the AI reads each linked file and flags one that isn't about its obligation, so it doesn't count by mistake; a person decides in the end. Connector checks are collected automatically on the Connectors tab.") }}
 
 <div class="grid-2 wide-left">
   <section class="card">
@@ -25,9 +25,20 @@
       <thead><tr><th>File</th><th class="hide-sm">Supports</th><th class="hide-sm">Uploaded</th><th></th></tr></thead>
       <tbody>
         {% for f in items %}
-        <tr class="{{ 'is-closed' if f.status == 'superseded' }}">
+        <tr id="ev{{ f.id }}" class="{{ 'is-closed' if f.status == 'superseded' }}">
           <td><a class="strong-link" href="/engagements/{{ eng.id }}/evidence/{{ f.id }}/download">{{ f.title }}</a>
-            <br><span class="muted small">{{ f.filename }} · {{ human_size(f.size_bytes) }} · v{{ f.version }}{% if f.status == "superseded" %} · replaced{% endif %}</span></td>
+            <br><span class="muted small">{{ f.filename }} · {{ human_size(f.size_bytes) }} · v{{ f.version }}{% if f.status == "superseded" %} · replaced{% endif %}</span>
+            {% if f.ai_check %}
+            {% set flagged = f.ai_check in rejected and not f.check_overruled_by %}
+            <div class="ai-check small">
+              <span class="badge {{ 'badge-fail' if flagged else 'badge-warn' if f.ai_check == 'partly_relevant' or f.ai_check in rejected else 'badge-pass' }}"
+                title="Checked {{ (f.ai_checked_at or '')[:10] }} by {{ f.ai_checked_by }}. The AI judges only what the file is about, not whether the control works.">{{ icon("i-spark") }} AI check: {{ check_labels.get(f.ai_check, f.ai_check) }}</span>
+              {% if f.check_overruled_by %}<span class="badge badge-none">Counted anyway by {{ f.check_overruled_by }}</span>{% endif %}
+              <span class="muted">{{ f.ai_check_reason }}</span>
+              {% if f.missing %}<span class="muted">Not shown: {{ f.missing|join("; ") }}.</span>{% endif %}
+              {% if flagged %}<span class="ai-check-note">Doesn't count as evidence. Upload the right document, or overrule if the AI got it wrong.</span>{% endif %}
+            </div>
+            {% endif %}</td>
           <td class="hide-sm small">{{ f.category }}{% if f.obligation_id in ob_by_id %}<br><a href="?obligation={{ f.obligation_id }}">{{ ob_by_id[f.obligation_id].source }}</a>{% endif %}{% if f.record_ref %}<br><a href="/engagements/{{ eng.id }}/r/{{ f.record_register }}/{{ f.record_id }}">{{ f.record_ref }}</a>{% endif %}</td>
           <td class="hide-sm small muted nowrap">{{ f.uploaded_at[:10] }}<br>{{ f.uploaded_by }}{% if f.review_date %}<br>review {{ f.review_date }}{% endif %}</td>
           <td class="nowrap">
@@ -40,6 +51,16 @@
                 <input type="file" name="file" required aria-label="New version of {{ f.title }}">
                 <button type="submit" class="button small">Upload new version</button>
               </form>
+              {% if f.obligation_id %}
+              <form method="post" action="/engagements/{{ eng.id }}/evidence/{{ f.id }}/check">
+                <input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="link small" {% if not ai_ready %}disabled title="Set up an AI provider first"{% endif %}>{{ "Check again with AI" if f.ai_check else "Check with AI" }}</button>
+              </form>
+              {% endif %}
+              {% if f.ai_check in rejected and not f.check_overruled_by %}
+              <form method="post" action="/engagements/{{ eng.id }}/evidence/{{ f.id }}/overrule">
+                <input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="link small">Count it anyway</button>
+              </form>
+              {% endif %}
               <form method="post" action="/engagements/{{ eng.id }}/evidence/{{ f.id }}/delete" onsubmit="return confirm('Delete {{ f.title }}? This can\'t be undone.')">
                 <input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="link small danger">Delete</button>
               </form>

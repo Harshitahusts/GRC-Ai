@@ -21,7 +21,7 @@
     {% for c in items %}
     <li id="{{ c.o.id }}" class="control-row">
       <div class="control-main">
-        <p class="control-title"><a href="/provision?ref={{ c.o.source|urlencode }}"><strong>{{ c.o.source }}</strong></a> <span class="badge {{ c.badge }}">{{ c.label }}</span> <span class="badge sev-{{ c.o.severity }}">{{ c.o.severity|capitalize }}</span></p>
+        <p class="control-title"><a href="/corpus/provision?ref={{ c.o.source|urlencode }}"><strong>{{ c.o.source }}</strong></a> <span class="badge {{ c.badge }}">{{ c.label }}</span> <span class="badge sev-{{ c.o.severity }}">{{ c.o.severity|capitalize }}</span></p>
         <p>{{ c.o.obligation }}</p>
         <p class="small muted">
           {% if c.assessment %}Assessment: {{ assess_label.get(c.assessment, c.assessment) }} · {% endif %}
