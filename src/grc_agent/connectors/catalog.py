@@ -41,6 +41,17 @@ class Connector:
     test: Callable | None = field(default=None, compare=False)
     collect: Callable | None = field(default=None, compare=False)
     send: Callable | None = field(default=None, compare=False)
+    # The quick way, for connectors whose main flow needs a one-time firm setup (a GitHub
+    # App, the firm's own AWS account): paste a read-only key. Shown first when present.
+    key_fields: tuple[Field, ...] = ()
+    key_setup: tuple[str, ...] = ()
+    key_permissions: str = ""
+    key_test: Callable | None = field(default=None, compare=False)
+    key_collect: Callable | None = field(default=None, compare=False)
+
+    @property
+    def has_keys(self) -> bool:
+        return bool(self.key_fields)
 
 
 CATEGORIES = [
@@ -73,6 +84,30 @@ CONNECTORS: tuple[Connector, ...] = (
             "They can remove the app at any time in their GitHub settings under Applications.",
         ),
         permissions="Read-only: Metadata and Administration (read), on the repositories the client chooses.",
+        key_fields=(
+            Field(
+                "owner",
+                "GitHub user or organisation to check",
+                required=False,
+                placeholder="acme-labs",
+                help="Leave blank to check the token owner's own repositories.",
+            ),
+            Field("token", "Personal access token", secret=True, placeholder="github_pat_…"),
+        ),
+        key_setup=(
+            "On GitHub: your picture → Settings → Developer settings → Personal access tokens "
+            "→ Fine-grained tokens → Generate new token.",
+            "Resource owner: the user or organisation to check. Expiration: 90 days or less.",
+            "Repository access: All repositories (or pick the ones in scope).",
+            "Repository permissions: Metadata → Read-only and Administration → Read-only. "
+            "Nothing else. (Administration read lets the app see branch protection.)",
+            "Generate, copy the token (starts with github_pat_) and paste it here with the "
+            "user or organisation name.",
+        ),
+        key_permissions="Read-only: Metadata and Administration (read). A classic token "
+        "with the repo scope also works but can write, so prefer a fine-grained one.",
+        key_test=vcs.github_token_test,
+        key_collect=vcs.github_token_collect,
     ),
     Connector(
         "gitlab",
@@ -144,6 +179,31 @@ CONNECTORS: tuple[Connector, ...] = (
         permissions="Read-only: the AWS managed policy SecurityAudit, through a role the client controls.",
         test=cloud.aws_test,
         collect=cloud.aws_collect,
+        key_fields=(
+            Field("access_key_id", "Access key ID", secret=True, placeholder="AKIA…"),
+            Field("secret_access_key", "Secret access key", secret=True),
+            Field(
+                "region",
+                "Home region",
+                required=False,
+                placeholder="ap-south-1",
+                help="Where most of the client's resources are. Mumbai is ap-south-1.",
+            ),
+        ),
+        key_setup=(
+            "In the client's AWS console open IAM → Users → Create user, e.g. grc-flow-readonly. "
+            "No console access.",
+            "Permissions: Attach policies directly → tick SecurityAudit (an AWS managed, "
+            "read-only policy). Nothing else.",
+            "Open the user → Security credentials → Create access key → Third-party service.",
+            "Copy the Access key ID and the Secret access key (shown only once) and paste "
+            "them here. Never use the root account's keys.",
+            "To remove access, delete the access key or the user.",
+        ),
+        key_permissions="Read-only: the AWS managed policy SecurityAudit on an IAM user the "
+        "client creates and can delete at any time.",
+        key_test=cloud.aws_key_test,
+        key_collect=cloud.aws_key_collect,
     ),
     Connector(
         "gcp",

@@ -74,7 +74,7 @@ def test_catalog_page_shows_working_connectors_and_a_roadmap_line(authed):
 def test_aws_role_connection_collects_evidence(app_with_fakes):
     client, _ = app_with_fakes
     eid = create(client)
-    page = client.get(f"/engagements/{eid}/connectors/new?type=aws").text
+    page = client.get(f"/engagements/{eid}/connectors/new?type=aws&method=advanced").text
     assert "999999999999" in page and "grc-" in page  # firm account and external ID
     page = post(client, f"/engagements/{eid}/connectors", AWS).text
     assert "Connected to AWS account 123" in page
@@ -174,7 +174,12 @@ def test_detail_page_and_connect_flow(authed):
     response = authed.get(f"/connectors/aws/connect?engagement={eid}", follow_redirects=False)
     assert response.status_code == 303
     assert response.headers["location"] == f"/engagements/{eid}/connectors/new?type=aws"
-    assert "One-time setup first" in authed.get(response.headers["location"]).text
+    # The quick way first: paste a read-only access key; the role flow is the advanced option.
+    page = authed.get(response.headers["location"]).text
+    assert "Access key ID" in page and "SecurityAudit" in page and "method=advanced" in page
+    assert (
+        "One-time setup first" in authed.get(response.headers["location"] + "&method=advanced").text
+    )
 
 
 def test_detail_page_without_engagements_and_for_planned(authed):
@@ -188,3 +193,107 @@ def test_detail_page_without_engagements_and_for_planned(authed):
 
 def test_connect_rejects_missing_engagements(authed):
     assert authed.get("/connectors/aws/connect?engagement=999").status_code == 404
+
+
+# ---- the quick way: paste a read-only key
+
+
+def test_aws_access_key_connection(authed, monkeypatch):
+    from test_connectors import FakeAWS
+
+    from grc_agent.connectors import cloud
+
+    sessions = []
+
+    def fake_session(config, secrets):
+        sessions.append((config, secrets))
+        return FakeAWS({"crm": "us-east-1"})
+
+    monkeypatch.setattr(cloud, "aws_key_session", fake_session)
+    eid = create(authed)
+    page = post(
+        authed,
+        f"/engagements/{eid}/connectors",
+        {
+            "connector": "aws",
+            "method": "keys",
+            "access_key_id": "AKIAIOSFODNN7EXAMPLE",
+            "secret_access_key": "x" * 40,
+            "region": "ap-south-1",
+        },
+    ).text
+    assert "Connected to AWS account 123456789012" in page and "Where data is stored" in page
+    assert "pasted key" in page and "••••MPLE" in page  # only a masked hint is shown
+    assert "x" * 40 not in page
+    # Keys are kept apart from settings, and re-syncing uses them again.
+    config, secrets = sessions[-1]
+    assert config == {"region": "ap-south-1", "method": "keys"}
+    assert set(secrets) == {"access_key_id", "secret_access_key"}
+    cid = re.search(rf"/engagements/{eid}/connectors/(\d+)/sync", page).group(1)
+    post(authed, f"/engagements/{eid}/connectors/{cid}/sync")
+    assert len(sessions) >= 3
+
+
+def test_aws_keys_are_checked_before_saving(authed):
+    eid = create(authed)
+    page = post(
+        authed,
+        f"/engagements/{eid}/connectors",
+        {"connector": "aws", "method": "keys", "access_key_id": "nope", "secret_access_key": "s"},
+    ).text
+    assert "doesn&#39;t look like an AWS access key ID" in page
+    assert "Run checks again" not in authed.get(f"/engagements/{eid}/connectors").text
+
+
+def test_github_token_connection(authed, monkeypatch):
+    from test_connectors import patch_http
+
+    from grc_agent.connectors import vcs
+    from grc_agent.connectors.base import Response
+
+    patch_http(
+        monkeypatch,
+        vcs,
+        {
+            "/orgs/acme-labs/repos": Response(
+                200,
+                [{"full_name": "acme-labs/app", "private": False, "default_branch": "main"}],
+            ),
+            "/repos/acme-labs/app/branches/main": Response(200, {"protected": False}),
+            "/users/acme-labs": Response(200, {"login": "acme-labs", "type": "Organization"}),
+            "/user": Response(200, {"login": "harshit"}),
+        },
+    )
+    eid = create(authed)
+    page = authed.get(f"/engagements/{eid}/connectors/new?type=github").text
+    assert "Personal access token" in page and "Fine-grained tokens" in page
+    page = post(
+        authed,
+        f"/engagements/{eid}/connectors",
+        {
+            "connector": "github",
+            "method": "keys",
+            "owner": "acme-labs",
+            "token": "github_pat_123456",
+        },
+    ).text
+    assert "checking organization acme-labs" in page
+    assert "Public repositories" in page and "acme-labs/app" in page
+
+
+def test_github_unknown_owner_is_refused(authed, monkeypatch):
+    from test_connectors import patch_http
+
+    from grc_agent.connectors import vcs
+    from grc_agent.connectors.base import Response
+
+    patch_http(
+        monkeypatch, vcs, {"/users/": Response(404, {}), "/user": Response(200, {"login": "h"})}
+    )
+    eid = create(authed)
+    page = post(
+        authed,
+        f"/engagements/{eid}/connectors",
+        {"connector": "github", "method": "keys", "owner": "ghost-org", "token": "github_pat_1"},
+    ).text
+    assert "no GitHub user or organisation called ghost-org" in page

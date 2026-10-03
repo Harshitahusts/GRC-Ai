@@ -7,6 +7,7 @@ personal data or secrets, unprotected default branches, and secret scanning.
 
 from __future__ import annotations
 
+import re
 import urllib.parse
 
 from grc_agent.connectors.base import (
@@ -107,6 +108,56 @@ def github_test(config: dict, secrets: dict) -> str:
 def github_collect(config: dict, secrets: dict) -> list[Check]:
     token = secrets["token"]
     repos = expect_ok(_gh("/user/repos?per_page=100&sort=updated", token), "Listing repositories")
+    return github_repo_checks(repos, token)
+
+
+GITHUB_NAME = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})")
+
+
+def _github_owner(config: dict) -> str:
+    owner = (config.get("owner") or "").strip().lstrip("@")
+    if owner and not GITHUB_NAME.fullmatch(owner):
+        raise ConnectorError("Enter a GitHub user or organisation name, like acme-labs.")
+    return owner
+
+
+def github_token_test(config: dict, secrets: dict) -> str:
+    """Check a pasted personal access token, and the user or organisation to check."""
+    token = (secrets.get("token") or "").strip()
+    resp = _gh("/user", token)
+    if resp.status == 401:
+        raise ConnectorError(
+            "GitHub rejected the token. Check it was copied whole and hasn't expired."
+        )
+    user = expect_ok(resp, "GitHub sign-in")
+    owner = _github_owner(config)
+    if not owner:
+        return f"Signed in to GitHub as {user['login']}; checking that account's repositories."
+    target = _gh(f"/users/{urllib.parse.quote(owner)}", token)
+    if target.status == 404:
+        raise ConnectorError(f"There's no GitHub user or organisation called {owner}.")
+    kind = expect_ok(target, "Looking up the owner").get("type", "User")
+    return f"Signed in to GitHub as {user['login']}; checking {kind.lower()} {owner}."
+
+
+def github_token_collect(config: dict, secrets: dict) -> list[Check]:
+    token = (secrets.get("token") or "").strip()
+    owner = _github_owner(config)
+    me = expect_ok(_gh("/user", token), "GitHub sign-in")["login"]
+    if not owner or owner.lower() == me.lower():
+        path = "/user/repos?per_page=100&sort=updated&affiliation=owner"
+    else:
+        info = expect_ok(_gh(f"/users/{urllib.parse.quote(owner)}", token), "Looking up the owner")
+        if info.get("type") == "Organization":
+            path = f"/orgs/{urllib.parse.quote(owner)}/repos?per_page=100&sort=updated&type=all"
+        else:  # someone else's account: only their public repositories are visible
+            path = f"/users/{urllib.parse.quote(owner)}/repos?per_page=100&sort=updated"
+    repos = expect_ok(_gh(path, token), "Listing repositories")
+    if not repos:
+        raise ConnectorError(
+            "No repositories found. Check the token has access to them (for a fine-grained "
+            "token: Repository access → All repositories, or pick them)."
+        )
     return github_repo_checks(repos, token)
 
 

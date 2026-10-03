@@ -462,3 +462,57 @@ def test_all_storage_in_india_passes():
 def test_coming_soon_connectors_keep_their_code():
     assert BY_ID["gitlab"].status == "planned" and BY_ID["gitlab"].collect is vcs.gitlab_collect
     assert BY_ID["teams"].status == "planned" and BY_ID["teams"].send is chat.teams_send
+
+
+def test_aws_access_keys_are_validated_and_root_keys_warned():
+    with pytest.raises(ConnectorError, match="starts with AKIA"):
+        cloud.aws_key_session({}, {"access_key_id": "abc", "secret_access_key": "x" * 40})
+    with pytest.raises(ConnectorError, match="40 characters"):
+        cloud.aws_key_session(
+            {}, {"access_key_id": "AKIAIOSFODNN7EXAMPLE", "secret_access_key": "x"}
+        )
+    session = cloud.aws_key_session(
+        {"region": "ap-south-1"},
+        {"access_key_id": "AKIAIOSFODNN7EXAMPLE", "secret_access_key": "x" * 40},
+    )
+    assert session.region_name == "ap-south-1"
+    root = FakeAWS(
+        {},
+        sts={
+            "get_caller_identity": lambda: {
+                "Account": "123456789012",
+                "Arn": "arn:aws:iam::123456789012:root",
+            }
+        },
+    )
+    assert "root account" in cloud.aws_key_test({}, {}, session=root)
+    bad = FakeAWS(
+        {},
+        sts={
+            "get_caller_identity": lambda: (_ for _ in ()).throw(
+                _client_error("SignatureDoesNotMatch")
+            )
+        },
+    )
+    with pytest.raises(ConnectorError, match="secret access key doesn't match"):
+        cloud.aws_key_test({}, {}, session=bad)
+
+
+def test_github_token_checks_own_repos_without_an_owner(monkeypatch):
+    fake = patch_http(
+        monkeypatch,
+        vcs,
+        {
+            "/user/repos": Response(
+                200, [{"full_name": "h/app", "private": True, "default_branch": "main"}]
+            ),
+            "/repos/h/app/branches/main": Response(200, {"protected": True}),
+            "/user": Response(200, {"login": "h"}),
+        },
+    )
+    assert "checking that account" in vcs.github_token_test({}, {"token": "t"})
+    checks = by_key(vcs.github_token_collect({}, {"token": "t"}))
+    assert checks["branch_protection"].status == "pass"
+    assert any("affiliation=owner" in c[1] for c in fake.calls)
+    with pytest.raises(ConnectorError, match="user or organisation name"):
+        vcs.github_token_test({"owner": "bad name!"}, {"token": "t"})

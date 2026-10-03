@@ -9,7 +9,8 @@
     <p class="muted small">{{ c.summary }}</p>
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <input type="hidden" name="connector" value="{{ c.id }}">
-    {% for f in c.fields %}
+    {% if method %}<input type="hidden" name="method" value="{{ method }}">{% endif %}
+    {% for f in fields %}
     <label>{{ f.label }}{% if not f.required %} <span class="muted small">(optional)</span>{% endif %}
       {% if f.multiline %}
       <textarea name="{{ f.name }}" rows="8" class="mono" {% if f.required %}required{% endif %} spellcheck="false"></textarea>
@@ -26,9 +27,12 @@
   </form>
   <aside class="card">
     <h2>How to set it up</h2>
-    <ol class="small">{% for step in c.setup %}<li>{{ step }}</li>{% endfor %}</ol>
-    {% if c.permissions %}<p class="small"><strong>Access needed:</strong> {{ c.permissions }}</p>{% endif %}
-    <p class="small muted">The app checks the credentials before saving them, then stores them encrypted. Remove the connection when the engagement ends, and ask the client to revoke the access.</p>
+    <ol class="small">{% for step in setup %}<li>{{ step }}</li>{% endfor %}</ol>
+    {% if permissions %}<p class="small"><strong>Access needed:</strong> {{ permissions }}</p>{% endif %}
+    <p class="small muted">The app checks the credentials before saving them, then stores them encrypted; they're never shown again, only the last 4 characters. Remove the connection when the engagement ends, and ask the client to revoke the access.</p>
+    {% if method == "keys" %}
+    <p class="small">{% if c.flow == "github_app" %}No keys to share? The client can instead <a href="?type={{ c.id }}&method=advanced">install the firm's GitHub App</a> (needs a one-time setup).{% elif c.flow == "aws_role" %}Rather not share keys? The client can instead <a href="?type={{ c.id }}&method=advanced">create a read-only role</a> for your firm's AWS account (needs a one-time setup).{% endif %}</p>
+    {% endif %}
   </aside>
 </div>
 {% endblock %}

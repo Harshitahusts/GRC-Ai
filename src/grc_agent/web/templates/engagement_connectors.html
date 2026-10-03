@@ -14,7 +14,7 @@
         {% if c.status == "ok" %}<span class="badge badge-pass">OK</span>{% else %}<span class="badge badge-fail">Error</span>{% endif %}</h2>
       <p class="small {{ 'muted' if c.status == 'ok' else '' }}">{{ c.message }}</p>
       <p class="small muted">
-        {% for k, v in c.config.items() %}{{ k.replace("_", " ") }}: {{ v }} · {% endfor %}
+        {% for k, v in c.config.items() if k != "method" %}{{ k.replace("_", " ") }}: {{ v }} · {% endfor %}{% if c.config.method == "keys" %}pasted key · {% endif %}
         {% for k, v in c.hints.items() %}{{ k.replace("_", " ") }}: {{ v }} · {% endfor %}
         added by {{ c.created_by }}{% if c.last_synced_at %} · last run {{ c.last_synced_at[:16].replace("T", " ") }} UTC{% endif %}
       </p>
