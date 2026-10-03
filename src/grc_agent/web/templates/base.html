@@ -34,6 +34,7 @@
     {{ nav_link("/audit", "i-clock", "Audit log", path.startswith("/audit")) }}
     {{ nav_link("/data-manager", "i-database", "Data manager", path.startswith("/data-manager")) }}
     {{ nav_link("/settings/ai", "i-spark", "AI provider", path.startswith("/settings/ai")) }}
+    {{ nav_link("/settings/api-keys", "i-plug", "API keys & MCP", path.startswith("/settings/api-keys")) }}
   </nav>
   <div class="side-foot">
     <a href="/notifications" class="bell" {% if path.startswith("/notifications") %}aria-current="page"{% endif %}>
@@ -111,6 +112,8 @@
       ("Pages", "Notifications", "/notifications", "i-bell", "g n"),
       ("Pages", "Data manager", "/data-manager", "i-database", "g m"),
       ("Pages", "AI provider (Claude, Groq, Gemini...)", "/settings/ai", "i-spark", ""),
+      ("Pages", "API keys & MCP (connect Claude, Cursor...)", "/settings/api-keys", "i-plug", ""),
+      ("Pages", "Audit log", "/audit", "i-clock", ""),
       ("Actions", "New engagement", "/engagements#new", "i-plus", "n"),
       ("Actions", "Ask the GRC Analyst", "/assistant", "i-spark", ""),
       ("Actions", "Unread notifications", "/notifications?show=unread", "i-bell", ""),

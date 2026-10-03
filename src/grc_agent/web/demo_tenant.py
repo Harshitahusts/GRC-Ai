@@ -969,7 +969,11 @@ def _live_action(conn, user: str, rng: random.Random) -> str | None:
             ).fetchone()
             if f is None:
                 continue
-            conn.execute("UPDATE findings SET verdict = 'correct' WHERE id = ?", (f["id"],))
+            conn.execute(
+                "UPDATE findings SET verdict = 'correct', reviewed_by = ?, reviewed_at = ? "
+                "WHERE id = ?",
+                (user, db.now(), f["id"]),
+            )
             db.audit(
                 conn,
                 user,

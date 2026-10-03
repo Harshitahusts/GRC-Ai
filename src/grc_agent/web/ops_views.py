@@ -4,26 +4,34 @@
   owner, notes and a review date. "Not applicable" needs a reason and an admin.
 - Evidence: uploaded files linked to an obligation or a register record. Files are
   checked (type, size, content signature), stored outside the web root under a random
-  name, and only downloadable by signed-in users.
-- Audit log: every recorded action, filterable.
+  name, and only downloadable by signed-in users. When an AI provider is set up, the AI
+  reads each file linked to an obligation and says whether it's about that obligation;
+  a file it flags stops counting as evidence until a person overrules it.
+- Audit log: every recorded action, filterable, hash-chained so tampering shows.
 - Work queue: open tasks, requests, breaches and reviews across all clients.
 - Team: accounts and roles (admin, member, viewer).
 """
 
 # No "from __future__ import annotations": FastAPI must resolve the dependency types.
 
+import csv
 import hashlib
+import io
+import json
 import os
 import re
 import sqlite3
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse
+import anthropic
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, Response
+from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
 
-from grc_agent.web import datamanager, db, discovery_views, register_views
+from grc_agent import evidence_check, plan
+from grc_agent.web import ai_views, datamanager, db, discovery_views, register_views
 from grc_agent.web.registers import REGISTERS, TASKS
 from grc_agent.web.security import hash_password
 
@@ -73,6 +81,12 @@ EVIDENCE_TYPES = {
 }
 
 
+# A file the AI flagged as off-topic counts again once a person overrules the flag.
+COUNTS_AS_EVIDENCE = (
+    "(ai_check NOT IN ('not_relevant', 'too_little_content') OR check_overruled_by != '')"
+)
+
+
 class EvidenceError(ValueError):
     pass
 
@@ -115,7 +129,8 @@ def controls_for(conn: sqlite3.Connection, app, eid: int) -> list[dict]:
     files: dict[str, int] = {}
     for r in conn.execute(
         "SELECT obligation_id, COUNT(*) AS n FROM evidence_files WHERE engagement_id = ? "
-        "AND status = 'current' AND obligation_id != '' GROUP BY obligation_id",
+        f"AND status = 'current' AND obligation_id != '' AND {COUNTS_AS_EVIDENCE} "
+        "GROUP BY obligation_id",
         (eid,),
     ):
         files[r["obligation_id"]] = r["n"]
@@ -160,8 +175,6 @@ def controls_for(conn: sqlite3.Connection, app, eid: int) -> list[dict]:
 
 def discovery_views_connector_counts(conn, app, eid: int) -> dict[str, int]:
     """Passing connector checks per provision, e.g. {"Section 8(5)": 3}."""
-    import json
-
     out: dict[str, int] = {}
     for r in conn.execute(
         "SELECT provisions_json, status FROM evidence WHERE engagement_id = ?", (eid,)
@@ -184,6 +197,130 @@ def controls_summary(items: list[dict]) -> dict:
         "na": len(items) - len(applicable),
         "pct": round(100 * done / len(applicable)) if applicable else 0,
     }
+
+
+def readiness_plan(conn: sqlite3.Connection, app, eng) -> list[plan.Step]:
+    """The engagement's DPDPA readiness plan, worked out from its current state."""
+    from grc_agent.web.app import delivery_checks
+
+    eid = eng["id"]
+    flagged = {
+        r["obligation_id"]: r["n"]
+        for r in conn.execute(
+            "SELECT obligation_id, COUNT(*) AS n FROM evidence_files WHERE engagement_id = ? "
+            f"AND status = 'current' AND obligation_id != '' AND NOT {COUNTS_AS_EVIDENCE} "
+            "GROUP BY obligation_id",
+            (eid,),
+        )
+    }
+    inventory = conn.execute(
+        "SELECT COUNT(*) FROM data_inventory WHERE engagement_id = ?", (eid,)
+    ).fetchone()[0]
+    base = f"/engagements/{eid}"
+    scope = [
+        ("Intake submitted", bool(eng["intake_submitted_at"]), f"{base}/intake"),
+        (
+            "Assessment run on the current answers",
+            bool(eng["assessed_at"]) and not eng["stale"],
+            f"{base}/findings",
+        ),
+        (
+            f"Personal data inventory started ({inventory} fields so far)",
+            inventory > 0,
+            f"{base}/discovery",
+        ),
+    ]
+    delivery = [*delivery_checks(conn, eng), ("Delivered to the client", bool(eng["delivered_at"]))]
+    return plan.build(eid, controls_for(conn, app, eid), flagged, scope, delivery)
+
+
+# ---------------------------------------------------------------- AI relevance check
+
+
+class CheckSkipped(Exception):
+    """The file can't be checked; the message says why, in plain words."""
+
+
+def ai_ready(app) -> bool:
+    """An AI provider with a key is set up (the offline demo stand-in doesn't count)."""
+    settings = app.state.ai
+    if settings.demo:
+        return False
+    return app.state.ai_client is not None or ai_views.key_status_of(settings.provider)
+
+
+def run_check(app, row) -> evidence_check.CheckResult:
+    """Read the stored file and ask the AI. No database writes (safe in a thread)."""
+    if app.state.ai.demo:
+        raise CheckSkipped("the AI is in demo mode. Set up a provider under AI provider.")
+    obligation = next(
+        (o for o in app.state.register.obligations if o.id == row["obligation_id"]), None
+    )
+    if obligation is None:
+        raise CheckSkipped("link it to an obligation first.")
+    path = evidence_dir(app) / row["stored_name"]
+    if not path.is_file():
+        raise CheckSkipped("the file is missing from the server.")
+    try:
+        text = evidence_check.extract_text(path.read_bytes(), Path(row["stored_name"]).suffix)
+    except evidence_check.Unreadable as exc:
+        raise CheckSkipped(f"{exc}.") from None
+    settings, client = ai_views.client_for(app)
+    try:
+        return evidence_check.check(
+            client, settings, obligation, row["title"], row["category"], text
+        )
+    except anthropic.CredentialsError as exc:
+        raise CheckSkipped(str(exc)) from None
+    except TypeError as exc:  # the Anthropic client with no key at all
+        if "authentication method" not in str(exc):
+            raise
+        raise CheckSkipped("no AI provider is set up. Add one under AI provider.") from None
+    except anthropic.APIError as exc:
+        raise CheckSkipped(
+            f"the AI provider returned an error ({exc.__class__.__name__})."
+        ) from None
+    except ValueError:
+        raise CheckSkipped("the AI's answer couldn't be read. Try again.") from None
+
+
+def save_check(
+    conn, row, result: evidence_check.CheckResult, settings, actor: str = "GRC Flow AI"
+) -> None:
+    conn.execute(
+        "UPDATE evidence_files SET ai_check = ?, ai_check_reason = ?, ai_check_missing = ?, "
+        "ai_checked_by = ?, ai_checked_at = ?, check_overruled_by = '' WHERE id = ?",
+        (
+            result.verdict,
+            result.reason,
+            json.dumps(list(result.missing)),
+            f"{settings.provider_label} · {settings.model or 'auto'}",
+            db.now(),
+            row["id"],
+        ),
+    )
+    db.audit(
+        conn,
+        actor,
+        "evidence_checked",
+        row["engagement_id"],
+        {"title": row["title"], "verdict": result.verdict, "obligation": row["obligation_id"]},
+    )
+
+
+def check_in_background(app, fid: int) -> None:
+    """After an upload: check the file quietly; a missing key just leaves it unchecked."""
+    with db.connect(app.state.db_path) as conn:
+        row = conn.execute("SELECT * FROM evidence_files WHERE id = ?", (fid,)).fetchone()
+    if row is None or row["ai_check"]:
+        return
+    try:
+        result = run_check(app, row)
+    except CheckSkipped:
+        return
+    with db.connect(app.state.db_path) as conn:
+        if conn.execute("SELECT 1 FROM evidence_files WHERE id = ?", (fid,)).fetchone():
+            save_check(conn, row, result, app.state.ai)
 
 
 def register(app: FastAPI) -> None:
@@ -259,7 +396,7 @@ def register(app: FastAPI) -> None:
         if status == "implemented":
             has_evidence = conn.execute(
                 "SELECT 1 FROM evidence_files WHERE engagement_id = ? AND obligation_id = ? "
-                "AND status = 'current'",
+                f"AND status = 'current' AND {COUNTS_AS_EVIDENCE}",
                 (eid, oid),
             ).fetchone() or discovery_views_connector_counts(conn, request.app, eid).get(ob.source)
             if not has_evidence and not notes:
@@ -304,6 +441,23 @@ def register(app: FastAPI) -> None:
         flash(request, f"{ob.source}: {CONTROL_STATUSES[status]}.")
         return redirect(f"/engagements/{eid}/controls#{oid}")
 
+    # ---- readiness plan
+
+    @app.get("/engagements/{eid}/plan")
+    def plan_page(eid: int, request: Request, user: User, conn: Conn):
+        eng = agent_engagement(conn, eid)
+        steps = readiness_plan(conn, request.app, eng)
+        return render(
+            request,
+            "plan.html",
+            eng=eng,
+            s=_summary(conn, eng),
+            tab="plan",
+            steps=steps,
+            current=plan.recommended(steps),
+            done=sum(st.done for st in steps),
+        )
+
     # ---- evidence
 
     @app.get("/engagements/{eid}/evidence")
@@ -318,6 +472,8 @@ def register(app: FastAPI) -> None:
             (eid,),
         ).fetchall()
         items = [dict(r) for r in rows if show == "all" or r["status"] == "current"]
+        for i in items:
+            i["missing"] = json.loads(i.get("ai_check_missing") or "[]")
         if obligation:
             items = [i for i in items if i["obligation_id"] == obligation]
         return render(
@@ -334,10 +490,15 @@ def register(app: FastAPI) -> None:
             max_mb=EVIDENCE_MAX_BYTES // (1024 * 1024),
             obligations=request.app.state.register.obligations,
             human_size=datamanager.human_size,
+            check_labels=evidence_check.VERDICTS,
+            rejected=evidence_check.REJECTED,
+            ai_ready=ai_ready(request.app),
         )
 
     @app.post("/engagements/{eid}/evidence")
-    async def evidence_upload(eid: int, request: Request, user: User, conn: Conn):
+    async def evidence_upload(
+        eid: int, request: Request, user: User, conn: Conn, background: BackgroundTasks
+    ):
         form = await form_with_csrf(request)
         open_engagement(conn, eid)
         back = str(form.get("back", "")) or f"/engagements/{eid}/evidence"
@@ -394,7 +555,7 @@ def register(app: FastAPI) -> None:
                 )
         stored = uuid.uuid4().hex + ext
         (evidence_dir(request.app) / stored).write_bytes(data)
-        conn.execute(
+        cur = conn.execute(
             "INSERT INTO evidence_files (engagement_id, title, category, obligation_id, "
             "record_id, filename, content_type, size_bytes, sha256, stored_name, version, "
             "replaces_id, review_date, uploaded_by, uploaded_at) "
@@ -428,7 +589,18 @@ def register(app: FastAPI) -> None:
             eid,
             {"title": title, "version": version, "obligation": obligation_id},
         )
-        flash(request, f"Uploaded {title}" + (f" (version {version})." if version > 1 else "."))
+        auto = obligation_id and ai_ready(request.app)
+        if auto:
+            # The check runs after the response, on its own connection, so commit the
+            # upload first (it must see the row, and not wait on this request's lock).
+            conn.commit()
+            background.add_task(check_in_background, request.app, cur.lastrowid)
+        flash(
+            request,
+            f"Uploaded {title}"
+            + (f" (version {version})." if version > 1 else ".")
+            + (" The AI is checking that it's about the linked obligation." if auto else ""),
+        )
         return redirect(back)
 
     def get_file(conn, eid: int, fid: int) -> sqlite3.Row:
@@ -453,6 +625,42 @@ def register(app: FastAPI) -> None:
             filename=row["filename"],
             headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"},
         )
+
+    @app.post("/engagements/{eid}/evidence/{fid}/check")
+    async def evidence_check_now(eid: int, fid: int, request: Request, user: User, conn: Conn):
+        await form_with_csrf(request)
+        open_engagement(conn, eid)
+        row = get_file(conn, eid, fid)
+        try:
+            result = await run_in_threadpool(run_check, request.app, row)
+        except CheckSkipped as exc:
+            flash(request, f"Couldn't check {row['title']}: {exc}", "error")
+            return redirect(f"/engagements/{eid}/evidence#ev{fid}")
+        save_check(conn, row, result, request.app.state.ai, user)
+        flash(
+            request,
+            f"AI check of {row['title']}: {evidence_check.VERDICTS[result.verdict]}. "
+            + result.reason,
+            "warn" if result.verdict in evidence_check.REJECTED else "info",
+        )
+        return redirect(f"/engagements/{eid}/evidence#ev{fid}")
+
+    @app.post("/engagements/{eid}/evidence/{fid}/overrule")
+    async def evidence_overrule(eid: int, fid: int, request: Request, user: User, conn: Conn):
+        """A person decides the file counts as evidence after all."""
+        await form_with_csrf(request)
+        open_engagement(conn, eid)
+        row = get_file(conn, eid, fid)
+        conn.execute("UPDATE evidence_files SET check_overruled_by = ? WHERE id = ?", (user, fid))
+        db.audit(
+            conn,
+            user,
+            "evidence_check_overruled",
+            eid,
+            {"title": row["title"], "ai_check": row["ai_check"]},
+        )
+        flash(request, f"{row['title']} counts as evidence again (your decision is logged).")
+        return redirect(f"/engagements/{eid}/evidence#ev{fid}")
 
     @app.post("/engagements/{eid}/evidence/{fid}/delete")
     async def evidence_delete(eid: int, fid: int, request: Request, user: User, conn: Conn):
@@ -484,6 +692,25 @@ def register(app: FastAPI) -> None:
             registers=REGISTERS,
         )
 
+    @app.get("/audit.csv")
+    def audit_csv(request: Request, user: User, conn: Conn):
+        """The whole log with its hashes, so an auditor can recompute the chain."""
+        buf = io.StringIO()
+        out = csv.writer(buf)
+        cols = ("id", "at", "username", "engagement_id", "action", "detail", "prev_hash", "hash")
+        out.writerow(cols)
+        for r in conn.execute(f"SELECT {', '.join(cols)} FROM audit_log ORDER BY id"):
+            out.writerow(["" if r[c] is None else r[c] for c in cols])
+        db.audit(conn, user, "audit_log_exported")
+        return Response(
+            buf.getvalue(),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": 'attachment; filename="grc-flow-audit-log.csv"',
+                "Cache-Control": "no-store",
+            },
+        )
+
     @app.get("/audit")
     def audit_page(
         request: Request,
@@ -493,6 +720,7 @@ def register(app: FastAPI) -> None:
         who: str = "",
         action: str = "",
         page: int = 1,
+        verify: str = "",
     ):
         where, args = [], []
         if client.isdigit():
@@ -513,9 +741,11 @@ def register(app: FastAPI) -> None:
             f"ON e.id = a.engagement_id {sql_where} ORDER BY a.id DESC LIMIT ? OFFSET ?",
             [*args, per, (page - 1) * per],
         ).fetchall()
+        chain = db.verify_audit_chain(conn) if verify else None
         return render(
             request,
             "audit.html",
+            chain=chain,
             rows=rows,
             total=total,
             page=page,
@@ -592,6 +822,9 @@ def register(app: FastAPI) -> None:
             flash(request, "Keep at least one admin.", "error")
             return redirect("/team")
         conn.execute("UPDATE users SET role = ? WHERE LOWER(username) = LOWER(?)", (role, name))
+        # The analyst's tools depend on the role, so it starts afresh with the new one.
+        for key in [k for k in request.app.state.agents if k.lower() == name.lower()]:
+            request.app.state.agents.pop(key, None)
         db.audit(conn, user, "role_changed", None, {"username": name, "role": role})
         flash(request, f"{name} is now {role}.")
         return redirect("/team")

@@ -167,6 +167,13 @@ CATALOG: dict[str, dict] = {
         "retain_days": 90,
         "retention": "90 days",
     },
+    "api_keys": {
+        "purpose": "Keys for AI apps (MCP); only a hash of each key is stored",
+        "category": "Security",
+        "personal": True,
+        "retain_days": None,
+        "retention": "Until revoked, then 1 year",
+    },
     "audit_log": {
         "purpose": "Who did what and when, including logins",
         "category": "Security",

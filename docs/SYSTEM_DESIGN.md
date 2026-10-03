@@ -26,7 +26,11 @@ flowchart LR
   DM --> DB
   AG <-->|tool loop| CL[Claude API]
   AS <--> CL
-  AG -->|read-only tools| DB
+  AG -->|read tools + create_task| DB
+  MC([AI app: Claude Desktop, Claude Code, Cursor]) -->|"POST /mcp, Bearer API key"| MCP[MCP endpoint<br/>read-only tools]
+  MCP --> DB
+  R --> EC[Evidence relevance check]
+  EC <--> CL
   BG -->|updates| CH[Slack / Teams / Google Chat]
   R -->|read-only checks| EV[Client GitHub / AWS]
   T -->|HTML + flash message| U
@@ -39,7 +43,7 @@ flowchart LR
 1. **Call:** the browser sends a GET (page) or POST (form) request.
 2. **Gate:** the session cookie names the user. With no user, the request is redirected to `/login` (303). POSTs must also carry the CSRF token, otherwise 403.
 3. **Work:** the route reads or writes SQLite over one connection. The connection commits when the request ends.
-4. **Record:** state changes call `db.audit()`. That writes the audit log and, through `notify.from_audit()`, a notification.
+4. **Record:** state changes call `db.audit()`. That writes the audit log entry, seals it with the SHA-256 hash of the previous entry (tamper evidence; on PostgreSQL an advisory lock keeps the chain in order), and, through `notify.from_audit()`, a notification.
 5. **Side effects:** chat messages go out as `BackgroundTasks` after the response. Claude calls run in a thread pool.
 6. **Feedback:** POSTs end with a **303 redirect** and a **flash message**, which is shown on the next page. GETs render HTML. Other users see a **toast** on their next 20-second poll.
 

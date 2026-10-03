@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% from "_macros.html" import engagement_header, page_intro, icon, meter %}
+{% block title %}Readiness plan · {{ eng.client }}{% endblock %}
+{% block content %}
+{{ engagement_header(eng, s, tab) }}
+
+{{ page_intro("Readiness plan", "The client's DPDPA obligations as steps, in working order, each with one next action. Progress is worked out from the real state every time you open this page, so nothing here can be ticked off by hand. The readiness score at the top comes from the client's answers; this plan tracks the work that proves them: controls implemented with evidence.") }}
+
+<section class="card plan-summary">
+  <div>
+    <p class="tile-label">Steps done</p>
+    <p class="tile-value">{{ done }}<small class="muted">/{{ steps|length }}</small></p>
+    {{ meter(done, steps|length, "Steps done") }}
+  </div>
+  <p class="small">
+    {% if current %}{% set cur = steps|selectattr("key", "equalto", current)|first %}
+    Start here: <a href="#step-{{ current }}"><strong>{{ cur.title }}</strong></a>, {{ cur.completed }} of {{ cur.total }} done.
+    {% else %}Every step is done.{% endif %}
+    <br><span class="muted">Stuck on a step? Ask the <a href="/assistant">GRC Analyst</a>: it reads this client's data and cites the Act.</span>
+  </p>
+</section>
+
+<ol class="plan-steps">
+  {% for st in steps %}
+  <li id="step-{{ st.key }}" class="card plan-step {{ 'is-done' if st.done }} {{ 'is-current' if st.key == current }}">
+    <details {% if st.key == current %}open{% endif %}>
+      <summary>
+        <span class="step-dot">{% if st.done %}{{ icon("i-check") }}<span class="sr-only">Done:</span>{% else %}{{ loop.index }}{% endif %}</span>
+        <span class="plan-step-title"><strong>{{ st.title }}</strong>
+          <small class="muted">{{ st.completed }}/{{ st.total }} done{% if st.key == current %} · start here{% endif %}</small></span>
+        <span class="plan-meter">{{ meter(st.completed, st.total or 1, st.title) }}</span>
+      </summary>
+      <p class="muted small">{{ st.why }}{% if st.register %} Day-to-day work happens in the <a href="/engagements/{{ eng.id }}/r/{{ st.register }}">{{ st.register_label }}</a>.{% endif %}</p>
+      <ul class="plan-items">
+        {% for label, ok, href in st.parts %}
+        <li class="{{ 'is-done' if ok }}">
+          <span class="plan-check">{% if ok %}{{ icon("i-check") }}{% endif %}</span>
+          <span>{{ label }}</span>
+          {% if not ok and not eng.delivered_at %}<a class="button small" href="{{ href }}">Go</a>{% endif %}
+        </li>
+        {% endfor %}
+        {% for i in st.items %}
+        <li class="{{ 'is-done' if i.done }}">
+          <span class="plan-check">{% if i.done %}{{ icon("i-check") }}{% endif %}</span>
+          <span>
+            <a href="/corpus/provision?ref={{ i.obligation.source|urlencode }}"><strong>{{ i.obligation.source }}</strong></a>
+            <span class="badge sev-{{ i.obligation.severity }}">{{ i.obligation.severity|capitalize }}</span>
+            {{ i.obligation.obligation }}
+            <br><span class="muted small">Control: {{ i.control_label }}
+              {% if i.finding %}· Assessment: {{ {"gap": "gap", "open_item": "open item", "compliant": "met"}.get(i.finding, i.finding) }}{% endif %}
+              · {{ i.files }} evidence file{{ '' if i.files == 1 else 's' }}{% if i.checks %} + {{ i.checks }} connector check{{ '' if i.checks == 1 else 's' }}{% endif %}
+              {% if i.flagged %}· <span class="text-fail">{{ i.flagged }} flagged by the AI</span>{% endif %}
+              {% if i.open_tasks %}· {{ i.open_tasks }} open task{{ '' if i.open_tasks == 1 else 's' }}{% endif %}</span>
+          </span>
+          {% if i.done %}<span class="muted small">{{ i.action }}</span>
+          {% elif not eng.delivered_at %}<a class="button small {{ 'primary' if st.key == current and loop.first }}" href="{{ i.href }}">{{ i.action }}</a>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </details>
+  </li>
+  {% endfor %}
+</ol>
+{% endblock %}

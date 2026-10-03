@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import sqlite3
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -304,6 +305,17 @@ CREATE TABLE IF NOT EXISTS ai_providers (
     updated_by TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+-- Keys that let AI apps read the workspace over MCP (web/mcp_views.py). Only a hash is kept.
+CREATE TABLE IF NOT EXISTS api_keys (
+    id INTEGER PRIMARY KEY,
+    username TEXT NOT NULL,
+    name TEXT NOT NULL,
+    key_hash TEXT NOT NULL UNIQUE,
+    hint TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    last_used_at TEXT,
+    revoked_at TEXT
+);
 CREATE TABLE IF NOT EXISTS audit_log (
     id INTEGER PRIMARY KEY,
     at TEXT NOT NULL,
@@ -369,8 +381,24 @@ MIGRATIONS = {
         "confidence": "TEXT",
         "needs_legal_review": "INTEGER NOT NULL DEFAULT 0",
         "provisions_json": "TEXT",
+        # Human review of AI-drafted findings: who scored it, and who rewrote it.
+        "reviewed_by": "TEXT",
+        "reviewed_at": "TEXT",
+        "edited_by": "TEXT",
+        "edited_at": "TEXT",
     },
     "ai_providers": {"models_json": "TEXT NOT NULL DEFAULT '[]'"},
+    # AI relevance check of an evidence file (see grc_agent.evidence_check).
+    "evidence_files": {
+        "ai_check": "TEXT NOT NULL DEFAULT ''",
+        "ai_check_reason": "TEXT NOT NULL DEFAULT ''",
+        "ai_check_missing": "TEXT NOT NULL DEFAULT '[]'",
+        "ai_checked_by": "TEXT NOT NULL DEFAULT ''",
+        "ai_checked_at": "TEXT",
+        "check_overruled_by": "TEXT NOT NULL DEFAULT ''",
+    },
+    # Tamper evidence: each entry carries the hash of the one before it (see audit()).
+    "audit_log": {"prev_hash": "TEXT", "hash": "TEXT"},
 }
 
 
@@ -444,13 +472,119 @@ def audit(
     data = detail if isinstance(detail, dict) else {}
     if isinstance(detail, dict):
         detail = json.dumps(detail)
-    conn.execute(
+    at = now()
+    if pg.is_postgres_conn(conn):
+        # One writer at a time until commit, so two requests can't both chain onto the
+        # same previous entry. SQLite gets the same from its single write lock.
+        conn.execute("SELECT pg_advisory_xact_lock(?)", (AUDIT_LOCK,))
+    cur = conn.execute(
         "INSERT INTO audit_log (at, username, engagement_id, action, detail) VALUES (?,?,?,?,?)",
-        (now(), username, engagement_id, action, detail),
+        (at, username, engagement_id, action, detail),
+    )
+    new_id = cur.lastrowid
+    prev = conn.execute(
+        "SELECT hash FROM audit_log WHERE id < ? ORDER BY id DESC LIMIT 1", (new_id,)
+    ).fetchone()
+    prev_hash = (prev["hash"] if prev else None) or ""
+    conn.execute(
+        "UPDATE audit_log SET prev_hash = ?, hash = ? WHERE id = ?",
+        (prev_hash, entry_hash(prev_hash, at, username, engagement_id, action, detail), new_id),
     )
     from grc_agent.web import notify  # here to avoid a circular import
 
     notify.from_audit(conn, username, action, engagement_id, data, detail)
+
+
+# ---------------------------------------------------------------- tamper evidence
+
+AUDIT_LOCK = 742_001  # any fixed number; names the advisory lock for audit writes
+
+
+def entry_hash(
+    prev_hash: str, at: str, username: str, engagement_id: int | None, action: str, detail: str
+) -> str:
+    """SHA-256 over the previous entry's hash and this entry's fields.
+
+    Changing, removing or reordering any entry changes every hash after it, so an
+    edit made directly in the database (outside the app) shows up when the chain
+    is checked. Anyone can recompute it from the CSV export.
+    """
+    canonical = json.dumps(
+        [prev_hash, at, username, engagement_id, action, detail],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+@dataclass
+class ChainReport:
+    ok: bool
+    checked: int  # entries whose hash was recomputed
+    before_chain: int  # older entries written before the chain existed
+    first_id: int | None  # where the chain starts
+    last_hash: str  # the latest hash: note it down to detect removal of recent entries
+    broken_id: int | None = None
+    problem: str = ""
+
+
+def verify_audit_chain(conn: sqlite3.Connection) -> ChainReport:
+    """Recompute every hash in order and check each entry points at the one before."""
+    checked = before = 0
+    first_id: int | None = None
+    prev_hash: str | None = None
+    for r in conn.execute(
+        "SELECT id, at, username, engagement_id, action, detail, prev_hash, hash "
+        "FROM audit_log ORDER BY id"
+    ):
+        if prev_hash is None:
+            if not r["hash"]:
+                before += 1  # written before chaining; nothing to check
+                continue
+            first_id = r["id"]  # the chain starts here (older entries may be purged)
+        else:
+            if not r["hash"]:
+                return ChainReport(
+                    False,
+                    checked,
+                    before,
+                    first_id,
+                    prev_hash,
+                    r["id"],
+                    "This entry has no hash: it was added outside the app.",
+                )
+            if r["prev_hash"] != prev_hash:
+                return ChainReport(
+                    False,
+                    checked,
+                    before,
+                    first_id,
+                    prev_hash,
+                    r["id"],
+                    "This entry doesn't point at the one before it: an entry was removed "
+                    "or the order changed.",
+                )
+        expected = entry_hash(
+            r["prev_hash"] or "",
+            r["at"],
+            r["username"],
+            r["engagement_id"],
+            r["action"],
+            r["detail"],
+        )
+        if expected != r["hash"]:
+            return ChainReport(
+                False,
+                checked,
+                before,
+                first_id,
+                prev_hash or "",
+                r["id"],
+                "This entry was changed after it was recorded.",
+            )
+        prev_hash = r["hash"]
+        checked += 1
+    return ChainReport(True, checked, before, first_id, prev_hash or "")
 
 
 # Tables in an order that satisfies their foreign keys, for copying between databases.
@@ -476,6 +610,7 @@ COPY_ORDER = (
     "controls",
     "evidence_files",
     "ai_providers",
+    "api_keys",
     "audit_log",
 )
 

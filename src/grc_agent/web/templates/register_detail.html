@@ -14,7 +14,7 @@
       <span class="badge {{ item.status_badge }}">{{ item.status_label }}</span>
       {% if item.owner %}· Owner <strong>{{ item.owner }}</strong>{% else %}· <span class="overdue">No owner</span>{% endif %}
       {% if item.due %}· {{ spec.due_label }} <strong class="{{ 'overdue' if item.overdue }}">{{ item.due.replace("T", " ") }}{{ " (overdue)" if item.overdue }}</strong>{% endif %}
-      {% if ob %}· <a href="/provision?ref={{ ob.source|urlencode }}" title="{{ ob.obligation }}">{{ ob.source }}</a>{% endif %}
+      {% if ob %}· <a href="/corpus/provision?ref={{ ob.source|urlencode }}" title="{{ ob.obligation }}">{{ ob.source }}</a>{% endif %}
     </p>
   </div>
 </div>

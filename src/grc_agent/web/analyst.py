@@ -1,9 +1,13 @@
-"""The GRC Analyst's view of the workspace: read-only tools over the app's own data.
+"""The GRC Analyst's view of the workspace: tools over the app's own data.
 
 Each tool opens its own short database connection (the agent runs in a worker
 thread) and returns plain JSON, so the analyst reasons over the same
 engagements, findings, risks, evidence and data flows the consultant sees.
-Nothing here writes to the database.
+
+Every tool reads, except one action: create_task, offered only to people who may edit
+(not viewers). It drafts a task in the Tasks register for a person to check, labelled
+as drafted by the analyst, recorded under the person who asked, and never touches a
+finding, a control or a delivery decision. Those stay with people.
 """
 
 from __future__ import annotations
@@ -57,7 +61,7 @@ def _engagement(conn: sqlite3.Connection, eid: int) -> sqlite3.Row:
     return row
 
 
-def analyst_tools(app: FastAPI) -> list[Tool]:
+def analyst_tools(app: FastAPI, user: str = "", can_act: bool = False) -> list[Tool]:
     from grc_agent.web.app import _summary, answers_of, documents_of, findings_of
 
     obligations = {o.id: o for o in app.state.register.obligations}
@@ -191,10 +195,19 @@ def analyst_tools(app: FastAPI) -> list[Tool]:
         }
 
     def get_evidence(engagement_id: int) -> dict[str, Any]:
+        from grc_agent.web.ops_views import COUNTS_AS_EVIDENCE
+
         with connect() as conn:
             e = _engagement(conn, engagement_id)
             rows = connector_views.evidence_rows(conn, engagement_id)
             findings = [dict(f) for f in findings_of(conn, engagement_id)]
+            files = conn.execute(
+                f"SELECT title, category, obligation_id, version, uploaded_at, ai_check, "
+                f"ai_check_reason, check_overruled_by, {COUNTS_AS_EVIDENCE} AS counts "
+                "FROM evidence_files WHERE engagement_id = ? AND status = 'current' "
+                "ORDER BY id",
+                (engagement_id,),
+            ).fetchall()
         requests = []
         for f in findings:
             o = obligations.get(f["obligation_id"])
@@ -221,11 +234,130 @@ def analyst_tools(app: FastAPI) -> list[Tool]:
                 }
                 for r in rows
             ],
+            "uploaded_files": [
+                {
+                    "title": f["title"],
+                    "kind": f["category"],
+                    "supports": obligations[f["obligation_id"]].source
+                    if f["obligation_id"] in obligations
+                    else None,
+                    "version": f["version"],
+                    "uploaded": f["uploaded_at"][:10],
+                    # The AI's view of whether the file is on topic; people decide.
+                    "ai_relevance_check": f["ai_check"] or "not checked",
+                    "ai_check_reason": f["ai_check_reason"] or None,
+                    "counts_as_evidence": bool(f["counts"]),
+                    "overruled_by": f["check_overruled_by"] or None,
+                }
+                for f in files
+            ],
             "still_to_request": requests,
         }
 
+    def get_readiness_plan(engagement_id: int) -> dict[str, Any]:
+        from grc_agent import plan
+        from grc_agent.web.ops_views import readiness_plan
+
+        with connect() as conn:
+            e = _engagement(conn, engagement_id)
+            steps = readiness_plan(conn, app, e)
+        return {
+            "kind": "plan",
+            "client": e["client"],
+            "start_here": plan.recommended(steps),
+            "steps": [
+                {
+                    "step": st.key,
+                    "title": st.title,
+                    "done": f"{st.completed}/{st.total}",
+                    "checks": [{"check": label, "done": ok} for label, ok, _ in st.parts],
+                    "obligations": [
+                        {
+                            "obligation_id": i.obligation.id,
+                            "provision": i.obligation.source,
+                            "control": i.control_label,
+                            "assessment": i.finding,
+                            "evidence_files": i.files,
+                            "flagged_by_ai": i.flagged,
+                            "open_tasks": i.open_tasks,
+                            "done": i.done,
+                            "next_action": i.action,
+                        }
+                        for i in st.items
+                    ],
+                }
+                for st in steps
+            ],
+        }
+
+    def create_task(
+        engagement_id: int, obligation_id: str, title: str, details: str, priority: str
+    ) -> dict[str, Any]:
+        from grc_agent.web import register_views
+        from grc_agent.web.registers import PRIORITIES, TASKS
+
+        title, details = title.strip()[:160], details.strip()[:2000]
+        if not title:
+            raise ToolError("Give the task a title.")
+        if priority not in {k for k, _ in PRIORITIES}:
+            raise ToolError("priority must be low, medium, high or urgent.")
+        if obligation_id and obligation_id not in obligations:
+            raise ToolError(f"Unknown obligation {obligation_id}; use search_obligations.")
+        with connect() as conn:
+            e = _engagement(conn, engagement_id)
+            if e["delivered_at"]:
+                raise ToolError("This engagement is delivered and locked; no new tasks.")
+            for r in conn.execute(
+                "SELECT id, ref, title, status FROM records WHERE engagement_id = ? "
+                "AND register = 'tasks'",
+                (engagement_id,),
+            ).fetchall():
+                if r["title"].lower() == title.lower() and r["status"] in TASKS.open_statuses:
+                    return {
+                        "kind": "task",
+                        "created": False,
+                        "ref": r["ref"],
+                        "note": "An open task with this title already exists; nothing new made.",
+                        "link": f"/engagements/{engagement_id}/r/tasks/{r['id']}",
+                    }
+            rid = register_views.create_record(
+                conn,
+                engagement_id,
+                TASKS,
+                {"title": title, "details": details, "priority": priority},
+                user,
+                obligation_id=obligation_id,
+            )
+            ref = conn.execute("SELECT ref FROM records WHERE id = ?", (rid,)).fetchone()[0]
+            register_views.add_event(
+                conn,
+                rid,
+                engagement_id,
+                user,
+                "comment",
+                {
+                    "text": f"Drafted by the GRC Analyst (AI) when {user} asked. "
+                    "Check the wording, owner and due date before relying on it."
+                },
+            )
+            db.audit(
+                conn,
+                user,
+                "analyst_created_task",
+                engagement_id,
+                {"ref": ref, "title": title, "obligation": obligation_id},
+            )
+        return {
+            "kind": "task",
+            "created": True,
+            "ref": ref,
+            "client": e["client"],
+            "link": f"/engagements/{engagement_id}/r/tasks/{rid}",
+            "note": "Created as a draft for a person to check. Tell the user the reference.",
+        }
+
     eid_schema = {"type": "integer", "description": "From list_engagements."}
-    return [
+    tools = [
         *BASE_TOOLS,
         Tool(
             name="list_engagements",
@@ -322,7 +454,58 @@ def analyst_tools(app: FastAPI) -> list[Tool]:
             },
             handler=get_evidence,
         ),
+        Tool(
+            name="get_readiness_plan",
+            description=(
+                "An engagement's DPDPA readiness plan: its obligations grouped into steps "
+                "(scope, notice and consent, security and breaches, rights, retention, "
+                "processors, transfers, accountability, delivery), what is done, where to "
+                "start and the next action for each obligation. Worked out from live data."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {"engagement_id": eid_schema},
+                "required": ["engagement_id"],
+                "additionalProperties": False,
+            },
+            handler=get_readiness_plan,
+        ),
     ]
+    if can_act:
+        tools.append(
+            Tool(
+                name="create_task",
+                description=(
+                    "ACTION: add a task to an engagement's Tasks register, as a draft for a "
+                    "person to check. Only when the user asks you to create or add tasks. "
+                    "One task per call; give the obligation id it serves when there is one "
+                    "(empty string otherwise). Never use it to mark anything done."
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "engagement_id": eid_schema,
+                        "obligation_id": {
+                            "type": "string",
+                            "description": "e.g. OBL-005, or empty.",
+                        },
+                        "title": {"type": "string", "description": "What needs doing, short."},
+                        "details": {
+                            "type": "string",
+                            "description": "Steps, citing the provision.",
+                        },
+                        "priority": {
+                            "type": "string",
+                            "enum": ["low", "medium", "high", "urgent"],
+                        },
+                    },
+                    "required": ["engagement_id", "obligation_id", "title", "details", "priority"],
+                    "additionalProperties": False,
+                },
+                handler=create_task,
+            )
+        )
+    return tools
 
 
 def queue(conn: sqlite3.Connection, app: FastAPI) -> list[dict[str, Any]]:
