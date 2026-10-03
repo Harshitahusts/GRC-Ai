@@ -134,7 +134,7 @@ def with_app(authed, gh):
 
 def test_setup_page_without_app(authed):
     eid = create(authed)
-    page = authed.get(f"/engagements/{eid}/connectors/new?type=github").text
+    page = authed.get(f"/engagements/{eid}/connectors/new?type=github&method=advanced").text
     assert "One-time setup first" in page
     page = authed.get("/settings/github-app").text
     assert "https://github.com/settings/apps/new" in page
@@ -143,7 +143,9 @@ def test_setup_page_without_app(authed):
 
 def test_github_page_links_to_app_setup(authed, gh):
     page = authed.get("/connectors/github").text
-    assert "Set up the GitHub App" in page and "Agent-assisted" in page
+    # The token way comes first; the app is the "without sharing keys" option.
+    assert "Fine-grained tokens" in page and "without sharing keys" in page
+    assert "Agent-assisted" in page
     app = authed.app
     github_app.save_config(app.state.data_dir, app.state.secret_box, CONFIG)
     page = authed.get("/connectors/github").text
@@ -176,7 +178,7 @@ def test_manifest_callback_saves_app(authed, gh):
 
 
 def _install_state(client, eid):
-    page = client.get(f"/engagements/{eid}/connectors/new?type=github").text
+    page = client.get(f"/engagements/{eid}/connectors/new?type=github&method=advanced").text
     assert "Authorize on GitHub" in page
     return page.split("installations/new?state=")[1].split('"')[0]
 
@@ -306,5 +308,5 @@ def test_assume_role_errors(monkeypatch):
 
 def test_aws_page_without_firm_credentials(authed):
     eid = create(authed)
-    page = authed.get(f"/engagements/{eid}/connectors/new?type=aws").text
+    page = authed.get(f"/engagements/{eid}/connectors/new?type=aws&method=advanced").text
     assert "One-time setup first" in page and "sts:AssumeRole" in page

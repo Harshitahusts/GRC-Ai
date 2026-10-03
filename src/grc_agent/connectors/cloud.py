@@ -85,6 +85,54 @@ def _aws_session(config: dict, secrets: dict) -> Any:
     return _session_from(result["Credentials"], config.get("region") or "ap-south-1")
 
 
+ACCESS_KEY_ID = re.compile(r"(AKIA|ASIA)[A-Z0-9]{16}")
+
+
+def aws_key_session(config: dict, secrets: dict) -> Any:
+    """A session from an access key the client pasted (an IAM user with SecurityAudit)."""
+    import boto3
+
+    key_id = (secrets.get("access_key_id") or "").strip()
+    secret = (secrets.get("secret_access_key") or "").strip()
+    if not ACCESS_KEY_ID.fullmatch(key_id):
+        raise ConnectorError(
+            "That doesn't look like an AWS access key ID. It's 20 characters and starts "
+            "with AKIA, e.g. AKIAIOSFODNN7EXAMPLE."
+        )
+    if len(secret) != 40:
+        raise ConnectorError(
+            "The secret access key should be 40 characters. Copy it again from the IAM "
+            "console (it's only shown when the key is created)."
+        )
+    return boto3.session.Session(
+        aws_access_key_id=key_id,
+        aws_secret_access_key=secret,
+        region_name=(config.get("region") or "ap-south-1").strip(),
+    )
+
+
+def aws_key_test(config: dict, secrets: dict, session: Any = None) -> str:
+    session = session or aws_key_session(config, secrets)
+    ident, err = _aws_call(session.client("sts").get_caller_identity)
+    if err:
+        hint = {
+            "InvalidClientTokenId": "The access key ID isn't valid, or the key was deleted.",
+            "SignatureDoesNotMatch": "The secret access key doesn't match the access key ID.",
+        }.get(err, "")
+        raise ConnectorError(f"AWS rejected the keys ({err}). {hint}".strip())
+    message = f"Connected to AWS account {ident['Account']}"
+    if ident.get("Arn", "").endswith(":root"):
+        message += (
+            ". Warning: these are the root account's keys. Ask the client for an IAM user "
+            "with only the SecurityAudit policy instead, and to delete the root keys"
+        )
+    return message + "."
+
+
+def aws_key_collect(config: dict, secrets: dict, session: Any = None) -> list[Check]:
+    return aws_collect(config, secrets, session=session or aws_key_session(config, secrets))
+
+
 def cloudformation_template(firm_account: str, external_id: str) -> str:
     """What the client runs in CloudFormation: a read-only role only this firm can use."""
     return f"""AWSTemplateFormatVersion: "2010-09-09"

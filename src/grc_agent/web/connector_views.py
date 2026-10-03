@@ -211,6 +211,9 @@ def register(app: FastAPI) -> None:
                     c.send, config, secrets, "[GRC Flow] Test message: this channel is connected."
                 )
                 message, checks = "Test message sent.", None
+            elif config.get("method") == "keys":
+                checks = await run_in_threadpool(c.key_collect, config, secrets)
+                message = f"{len(checks)} checks collected."
             elif c.flow == "github_app":
                 app_config = github_config(request.app)
                 if app_config is None:
@@ -394,10 +397,23 @@ def register(app: FastAPI) -> None:
         )
 
     @app.get("/engagements/{eid}/connectors/new")
-    def connector_new(eid: int, request: Request, user: User, conn: Conn, type: str = ""):
+    def connector_new(
+        eid: int, request: Request, user: User, conn: Conn, type: str = "", method: str = ""
+    ):
         eng = get_engagement(conn, eid)
         c = _connector(request, type)
         ctx: dict[str, Any] = {"eng": eng, "s": _summary(conn, eng), "tab": "connectors", "c": c}
+        if c.has_keys and method != "advanced":
+            # Paste a read-only key: works straight away, no firm-side setup.
+            return render(
+                request,
+                "connector_new.html",
+                **ctx,
+                fields=c.key_fields,
+                setup=c.key_setup,
+                permissions=c.key_permissions,
+                method="keys",
+            )
         if c.flow == "github_app":
             config = github_config(request.app)
             state = _signer(request.app, "github-install").dumps({"eid": eid, "user": user})
@@ -413,19 +429,28 @@ def register(app: FastAPI) -> None:
                 ctx["firm_error"] = str(exc)
             ctx["external_id"] = external_id(request.app, eid)
             return render(request, "connector_aws.html", **ctx)
-        return render(request, "connector_new.html", **ctx)
+        return render(
+            request,
+            "connector_new.html",
+            **ctx,
+            fields=c.fields,
+            setup=c.setup,
+            permissions=c.permissions,
+            method="",
+        )
 
     @app.post("/engagements/{eid}/connectors")
     async def connector_create(eid: int, request: Request, user: User, conn: Conn):
         form = await form_with_csrf(request)
         eng = get_engagement(conn, eid)
         c = _connector(request, str(form.get("connector", "")))
-        if c.flow == "github_app":
+        keys = form.get("method") == "keys" and c.has_keys
+        if c.flow == "github_app" and not keys:
             raise HTTPException(
                 status_code=400, detail="GitHub is connected by authorising the app."
             )
         config, secrets, missing = {}, {}, []
-        for f in c.fields:
+        for f in c.key_fields if keys else c.fields:
             raw = str(form.get(f.name, ""))
             value = raw.strip() if not f.multiline else raw.strip("\n")
             if not value.strip():
@@ -433,9 +458,13 @@ def register(app: FastAPI) -> None:
                     missing.append(f.label)
                 continue
             (secrets if f.secret else config)[f.name] = value[:20_000]
-        if c.flow == "aws_role":
+        if keys:
+            config["method"] = "keys"
+        elif c.flow == "aws_role":
             config["external_id"] = external_id(request.app, eid)
-        back = f"/engagements/{eid}/connectors/new?type={c.id}"
+        back = f"/engagements/{eid}/connectors/new?type={c.id}" + (
+            "" if keys else "&method=advanced"
+        )
         if missing:
             flash(request, "Fill in: " + ", ".join(missing) + ".", "error")
             return redirect(back)
@@ -450,7 +479,7 @@ def register(app: FastAPI) -> None:
                 )
                 message = "Connected. A test message was sent."
             else:
-                message = await run_in_threadpool(c.test, config, secrets)
+                message = await run_in_threadpool(c.key_test if keys else c.test, config, secrets)
         except ConnectorError as exc:
             flash(request, f"Couldn't connect to {c.name}: {exc}", "error")
             return redirect(back)

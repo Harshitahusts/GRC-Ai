@@ -355,19 +355,32 @@ Put the DPDP Act and Rules PDFs from meity.gov.in in `corpus/`, list them in
 
 ### Connectors
 
-Each engagement has a **Connectors** tab for linking the client's systems. The client
-**authorises read-only access** on their side; nobody pastes passwords or long-lived keys.
+Each engagement has a **Connectors** tab for linking the client's systems. There are two
+ways to connect each one:
 
-| Connector | How the client authorises | What it checks |
+**Quick: paste a read-only key** (the default; works straight away, no firm setup)
+
+| Connector | What the client creates and you paste | What it checks |
 |---|---|---|
-| GitHub | Installs the firm's GitHub App, picks which repositories to share, approves read-only access on GitHub | Public repositories, default branch protection, secret scanning |
-| AWS | Runs a CloudFormation template that creates a read-only role (AWS `SecurityAudit`) only the firm can use, then sends back the role ARN | **Where data is stored (India or not)**, S3 public access, root MFA, password policy, CloudTrail |
+| GitHub | A fine-grained personal access token with only *Metadata* and *Administration* read-only, plus the user or organisation name to check | Public repositories, default branch protection, secret scanning |
+| AWS | An IAM user with only the AWS managed policy **SecurityAudit** (read-only) and an access key: the access key ID, the secret access key and the home region | **Where data is stored (India or not)**, S3 public access, root MFA, password policy, CloudTrail |
+
+The keys are checked before they're saved, stored encrypted, and never shown again (only
+the last four characters). Root account keys still work but are flagged with a warning.
+The client removes access by deleting the token, or the access key or IAM user.
+
+**Advanced: no keys shared** ("Or, without sharing keys" on each connector)
+
+| Connector | How the client authorises |
+|---|---|
+| GitHub | Installs the firm's GitHub App, picks which repositories to share, approves read-only access on GitHub |
+| AWS | Runs a CloudFormation template that creates a read-only role (AWS `SecurityAudit`) only the firm can use, then sends back the role ARN |
 
 Other connectors (GitLab, Bitbucket, Google Cloud, Azure, Slack, Teams, Google Chat, and
 identity, HR, ticketing, device and data-store systems) are on the roadmap and listed in
 one line on the Connectors page. Until then, collect that evidence by hand and upload it.
 
-One-time setup for the firm:
+One-time setup for the firm (advanced way only):
 
 - **GitHub:** Connectors → GitHub → Connect → **Set up the GitHub App**. One click creates
   the app on GitHub; its private key is saved encrypted in `var/`. Back up `var/`. The app
@@ -382,8 +395,8 @@ One-time setup for the firm:
   shows under the matching findings.
 - If AWS finds data outside India but the client answered "No" to using services outside
   India, the app flags the contradiction and blocks delivery until the answer is corrected.
-- Clients remove access at any time: uninstall the GitHub App, or delete the CloudFormation
-  stack.
+- Clients remove access at any time: delete the token or access key, uninstall the GitHub
+  App, or delete the CloudFormation stack.
 
 ### Data-flow map
 

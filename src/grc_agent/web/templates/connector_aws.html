@@ -3,6 +3,7 @@
 {% block title %}Connect AWS · {{ eng.client }}{% endblock %}
 {% block content %}
 {{ engagement_header(eng, s, tab) }}
+<p class="flash flash-info small">Quicker: <a href="/engagements/{{ eng.id }}/connectors/new?type={{ c.id }}">paste a read-only AWS access key instead</a>. No one-time setup needed.</p>
 {% if firm_error %}
 <section class="card">
   <h2>One-time setup first</h2>
