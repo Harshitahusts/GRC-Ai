@@ -168,6 +168,22 @@ run the update command below: it rebuilds the website from the latest `main`.
 cd ~/grc-flow && bash deploy/setup-server.sh
 ```
 
+**Automatic deploys from GitHub (CI/CD).** Once set up, you don't need to log in to
+update: every merge to `main` in either repository is tested by GitHub and then deployed
+to the server, and the live site is checked afterwards.
+
+1. On the server, once: `cd ~/grc-flow && git pull && bash deploy/enable-ci.sh`. It makes
+   a key that can only run the deploy (no shell access) and prints four values.
+2. In GitHub, add them as repository secrets in **both** Harshitahusts/GRC-Ai and
+   Harshitahusts/GRC-WEBSITE: *Settings → Secrets and variables → Actions → New repository
+   secret*: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_KNOWN_HOSTS`, `DEPLOY_SSH_KEY`.
+3. That's it. Watch a deploy under *Actions* (GRC-Ai: **Deploy**; GRC-WEBSITE: **CI and
+   deploy**). To deploy by hand, open that workflow and click **Run workflow**; type `all`
+   or branch names in the box to include branches that aren't merged yet.
+
+Only one deploy runs at a time; a second one waits for the first. A deploy keeps the site
+running while it builds, and swaps to the new version at the end.
+
 **Also deploy branches that aren't merged yet** (for example to try a change on the
 real server before merging its pull request):
 

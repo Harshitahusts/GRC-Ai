@@ -105,6 +105,10 @@ cd "$DIR"
 say "5/6 Settings (.env)"
 if [ -f .env ] && grep -q '^GRC_DOMAIN=' .env; then
   echo "Keeping the existing .env."
+elif [ ! -t 0 ]; then
+  echo "No .env yet. Run this script once yourself on the server (it asks a few questions)," >&2
+  echo "before deploying from GitHub." >&2
+  exit 1
 else
   read -rp "Subdomain for the app, e.g. app.grc-flow.com: " domain
   read -rp "Also host the website here? Enter its domain (e.g. grc-flow.com) or press Enter to skip: " site
