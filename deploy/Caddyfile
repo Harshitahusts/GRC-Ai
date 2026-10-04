@@ -3,7 +3,6 @@
 #
 #   app.grc-flow.com           -> the GRC Flow app (container "web")
 #   grc-flow.com, www.         -> the website (container "website", compose.site.yaml)
-#   demo.grc-flow.com          -> the public demo workspace (container "demo", compose.site.yaml)
 #
 # The addresses come from .env (GRC_DOMAIN, GRC_SITE_DOMAIN); see compose.caddy.yaml and
 # compose.site.yaml. The app sets its own security headers; Caddy adds them for the website.
@@ -32,15 +31,5 @@
 		X-Frame-Options "DENY"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
-	}
-}
-
-# The demo workspace, shown inside the website's Live demo page. The app itself allows
-# that framing for the website only (GRC_FRAME_ANCESTORS in compose.site.yaml).
-{$GRC_DEMO_ADDRESS} {
-	encode zstd gzip
-	reverse_proxy demo:8001
-	header {
-		-Server
 	}
 }

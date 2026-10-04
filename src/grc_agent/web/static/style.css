@@ -799,7 +799,7 @@ dialog::backdrop { background: rgba(10, 12, 16, .45); backdrop-filter: blur(2px)
 .caps[hidden] { display: none; }
 .login-error { display: flex; align-items: center; gap: .45rem; animation: shake .35s; }
 @keyframes shake { 20%, 60% { transform: translateX(-5px); } 40%, 80% { transform: translateX(5px); } }
-.login-alt { margin: .9rem 0 0; }
+.login-alt, .login-site { margin: .9rem 0 0; }
 .spinner { display: none; width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; }
 button.busy .spinner { display: inline-block; }
 @keyframes spin { to { transform: rotate(360deg); } }
