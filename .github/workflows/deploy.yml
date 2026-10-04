@@ -1,0 +1,79 @@
+name: Deploy
+
+# Puts the latest main on the Oracle server (app.grc-flow.com and grc-flow.com):
+# - automatically after CI passes on a push to main;
+# - by hand from Actions > Deploy > Run workflow, optionally with branches on top of main.
+# The website repository (GRC-WEBSITE) has the same deploy step for its own merges.
+#
+# Needs four repository secrets, printed by `bash deploy/enable-ci.sh` on the server:
+# DEPLOY_HOST, DEPLOY_USER, DEPLOY_KNOWN_HOSTS and DEPLOY_SSH_KEY. Until they're added,
+# this workflow skips the deploy instead of failing.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      branches:
+        description: "Also deploy branches on top of main: all, or names separated by commas. Leave empty for main only."
+        required: false
+        default: ""
+
+# One deploy at a time from this repository; the server also queues deploys from both.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      BRANCHES: ${{ github.event.inputs.branches }}
+      SITE_URL: ${{ vars.SITE_URL || 'https://grc-flow.com' }}
+      APP_URL: ${{ vars.APP_URL || 'https://app.grc-flow.com' }}
+    steps:
+      - name: Check the deploy settings
+        id: ready
+        run: |
+          if [ -z "$DEPLOY_HOST" ] || [ -z "$DEPLOY_USER" ] || [ -z "$DEPLOY_KNOWN_HOSTS" ] || [ -z "$DEPLOY_SSH_KEY" ]; then
+            echo "::notice::Deploy skipped: add DEPLOY_HOST, DEPLOY_USER, DEPLOY_KNOWN_HOSTS and DEPLOY_SSH_KEY (run deploy/enable-ci.sh on the server)."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy to the server
+        if: steps.ready.outputs.ok == 'true'
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          request="deploy"
+          if [ -n "$BRANCHES" ]; then request="deploy branches $BRANCHES"; fi
+          echo "Asking the server to: $request"
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes -o ServerAliveInterval=30 \
+            "$DEPLOY_USER@$DEPLOY_HOST" "$request"
+
+      - name: Check the live site
+        if: steps.ready.outputs.ok == 'true'
+        run: |
+          for url in "$SITE_URL" "$APP_URL/healthz"; do
+            for i in $(seq 1 30); do
+              code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$url" || true)
+              if [ "$code" = "200" ]; then echo "$url: OK"; continue 2; fi
+              sleep 10
+            done
+            echo "::error::$url didn't answer 200 within 5 minutes (last: $code)."
+            exit 1
+          done

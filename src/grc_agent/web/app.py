@@ -9,6 +9,7 @@ to resolve, the assessment is stale, or any document is unreviewed.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -209,6 +210,20 @@ def _demo_lifespan(data_dir: Path, db_path: Path):
 
 
 templates = Jinja2Templates(directory=HERE / "templates")
+
+
+def _asset_version() -> str:
+    """A short fingerprint of the static files. Page links add it as ?v=..., so after an
+    update browsers fetch the new CSS and JavaScript on a normal reload (no Ctrl+F5)."""
+    digest = hashlib.sha256()
+    for path in sorted((HERE / "static").rglob("*")):
+        if path.is_file():
+            digest.update(path.name.encode())
+            digest.update(path.read_bytes())
+    return digest.hexdigest()[:10]
+
+
+templates.env.globals["asset_v"] = _asset_version()
 
 
 def describe_action(row: Any) -> str:

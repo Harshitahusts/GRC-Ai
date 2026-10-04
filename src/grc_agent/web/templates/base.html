@@ -6,7 +6,7 @@
   <title>{% block title %}GRC Flow{% endblock %} · GRC Flow</title>
   <script>try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%231f63b8'/%3E%3Cpath d='M12 5l6 2.3v4.5c0 3.7-2.6 6-6 6.7-3.4-.7-6-3-6-6.7V7.3z' fill='none' stroke='white' stroke-width='1.8'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css?v={{ asset_v }}">
 </head>
 <body class="{% if user %}app{% endif %}">
 {% include "_icons.html" %}
@@ -144,7 +144,7 @@
   </dl>
 </dialog>
 {% endif %}
-<script src="/static/app.js" defer></script>
+<script src="/static/app.js?v={{ asset_v }}" defer></script>
 <script>
 (() => {
   window.toggleTheme = () => {

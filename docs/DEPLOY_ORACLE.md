@@ -168,6 +168,40 @@ run the update command below: it rebuilds the website from the latest `main`.
 cd ~/grc-flow && bash deploy/setup-server.sh
 ```
 
+**Automatic deploys from GitHub (CI/CD).** Once set up, you don't need to log in to
+update: every merge to `main` in either repository is tested by GitHub and then deployed
+to the server, and the live site is checked afterwards.
+
+1. On the server, once: `cd ~/grc-flow && git pull && bash deploy/enable-ci.sh`. It makes
+   a key that can only run the deploy (no shell access) and prints four values.
+2. In GitHub, add them as repository secrets in **both** Harshitahusts/GRC-Ai and
+   Harshitahusts/GRC-WEBSITE: *Settings → Secrets and variables → Actions → New repository
+   secret*: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_KNOWN_HOSTS`, `DEPLOY_SSH_KEY`.
+3. That's it. Watch a deploy under *Actions* (GRC-Ai: **Deploy**; GRC-WEBSITE: **CI and
+   deploy**). To deploy by hand, open that workflow and click **Run workflow**; type `all`
+   or branch names in the box to include branches that aren't merged yet.
+
+Only one deploy runs at a time; a second one waits for the first. A deploy keeps the site
+running while it builds, and swaps to the new version at the end.
+
+**Also deploy branches that aren't merged yet** (for example to try a change on the
+real server before merging its pull request):
+
+```bash
+cd ~/grc-flow && bash deploy/setup-server.sh --branches            # every open branch
+cd ~/grc-flow && bash deploy/setup-server.sh --branches my-branch  # only these (comma-separated)
+```
+
+The server builds a copy of `main` with those branches merged on top, for both the app and
+the website. Nothing is merged or pushed on GitHub. A branch that conflicts with `main` is
+skipped with a warning. To do this on every update, add `GRC_DEPLOY_BRANCHES=all` to
+`~/grc-flow/.env`; `--main-only` goes back to `main` alone. Unreviewed branches can break
+the live site, so prefer merging pull requests once they're ready.
+
+**After an update** a normal reload shows the new version; Ctrl+F5 isn't needed. Pages are
+always checked for a newer version, and the app's styles and scripts change their address
+whenever they change.
+
 **See what's happening (logs):** the script prints the exact command at the end. With the
 website it's:
 
