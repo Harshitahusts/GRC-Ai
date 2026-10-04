@@ -30,6 +30,15 @@ def test_hsts_and_secure_cookie_over_https(tmp_path, monkeypatch):
     assert "grc_session=" in cookie and "secure" in cookie and "samesite=strict" in cookie
 
 
+def test_frame_ancestors_lets_named_sites_frame_the_app(tmp_path, monkeypatch):
+    monkeypatch.setenv("GRC_FRAME_ANCESTORS", "https://grc-flow.com, https://www.grc-flow.com")
+    r = TestClient(create_app(tmp_path)).get("/login")
+    csp = r.headers["content-security-policy"]
+    assert "frame-ancestors https://grc-flow.com https://www.grc-flow.com" in csp
+    assert "'none'" not in csp.split("frame-ancestors")[1].split(";")[0]
+    assert "x-frame-options" not in r.headers
+
+
 def test_force_https_redirects_remote_plain_http(tmp_path, monkeypatch):
     monkeypatch.setenv("GRC_FORCE_HTTPS", "1")
     app = create_app(tmp_path)
