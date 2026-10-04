@@ -54,6 +54,7 @@ from grc_agent.risk import summary as risk_summary
 from grc_agent.web import (
     ai_views,
     analyst,
+    auth_views,
     connector_views,
     dataflow_views,
     datamanager,
@@ -64,6 +65,7 @@ from grc_agent.web import (
     mcp_views,
     notification_views,
     notify,
+    oauth,
     ops_views,
     register_views,
     risk_views,
@@ -155,6 +157,7 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
     ops_views.register(app)
     ai_views.register(app)
     mcp_views.register(app)
+    auth_views.register(app)
     return app
 
 
@@ -262,6 +265,8 @@ def site_url() -> str:
 
 
 templates.env.globals["site_url"] = site_url
+# Google / Microsoft buttons on the sign-in page, for the providers set up in .env.
+templates.env.globals["sign_in_options"] = oauth.enabled
 
 
 # ---------------------------------------------------------------- helpers
@@ -288,7 +293,7 @@ def current_user(request: Request) -> str:
 # is switched off there: the AI provider, team and roles, API keys, the GitHub App, and
 # connecting real systems (which would make this server call addresses visitors choose).
 PUBLIC_DEMO_BLOCKED = re.compile(
-    r"^/(settings/|team(/|$)|mcp$|engagements/\d+/connectors(/github/find)?$)"
+    r"^/(settings/|team(/|$)|account(/|$)|mcp$|engagements/\d+/connectors(/github/find)?$)"
 )
 
 
@@ -313,7 +318,17 @@ def _refuse_in_public_demo(request: Request) -> None:
 
 # Paths a read-only (viewer) account may still post to.
 # A read-only key (MCP tools only read) is fine for a viewer too.
-VIEWER_POSTS = ("/login", "/logout", "/notifications", "/settings/api-keys")
+# Signing in from an emailed link, and one's own Account page, are fine for a viewer too.
+VIEWER_POSTS = (
+    "/login",
+    "/logout",
+    "/notifications",
+    "/settings/api-keys",
+    "/account",
+    "/forgot",
+    "/reset/",
+    "/invite/",
+)
 
 
 def user_role(request: Request, username: str | None = None) -> str:

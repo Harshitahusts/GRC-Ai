@@ -70,6 +70,7 @@
         <summary aria-label="Account menu"><span class="avatar" aria-hidden="true">{{ user[:1]|upper }}</span><span class="hide-sm">{{ user }}</span></summary>
         <div class="menu" role="menu">
           <p class="menu-head">Signed in as <strong>{{ user }}</strong></p>
+          <a role="menuitem" href="/account"><svg class="icon" aria-hidden="true"><use href="#i-user"/></svg>Account</a>
           <a role="menuitem" href="/notifications"><svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg>Notifications</a>
           <form method="post" action="/logout">
             <input type="hidden" name="csrf" value="{{ csrf }}">

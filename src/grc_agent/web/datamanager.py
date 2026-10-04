@@ -174,6 +174,20 @@ CATALOG: dict[str, dict] = {
         "retain_days": None,
         "retention": "Until revoked, then 1 year",
     },
+    "login_identities": {
+        "purpose": "Google / Microsoft accounts connected for sign-in (provider id and email)",
+        "category": "Security",
+        "personal": True,
+        "retain_days": None,
+        "retention": "Until disconnected or the account is removed",
+    },
+    "auth_tokens": {
+        "purpose": "Emailed invite and password-reset links; only a hash of each is stored",
+        "category": "Security",
+        "personal": True,
+        "retain_days": 30,
+        "retention": "30 days (links expire within 7 days)",
+    },
     "audit_log": {
         "purpose": "Who did what and when, including logins",
         "category": "Security",

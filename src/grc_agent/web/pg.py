@@ -40,6 +40,8 @@ ID_TABLES = {
     "record_events",
     "evidence_files",
     "api_keys",
+    "login_identities",
+    "auth_tokens",
     "audit_log",
 }
 

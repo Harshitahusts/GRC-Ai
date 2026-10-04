@@ -1034,3 +1034,18 @@ pre.code { background: var(--hover); border: 1px solid var(--border); border-rad
 
 /* Text read from an evidence file */
 .evidence-text { font-family: inherit; white-space: pre-wrap; word-break: break-word; max-height: 70vh; overflow: auto; background: var(--hover); border: 1px solid var(--border); border-radius: 8px; padding: .9rem 1rem; font-size: .88rem; line-height: 1.55; }
+
+/* Sign in with Google / Microsoft, forgot password, account page */
+.login-forgot { margin: .7rem 0 0; text-align: right; }
+.sso { display: grid; gap: .55rem; margin-top: .4rem; }
+.sso-or { display: flex; align-items: center; gap: .7rem; margin: .4rem 0 .2rem; }
+.sso-or::before, .sso-or::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
+.sso-button { display: flex; justify-content: center; align-items: center; gap: .6rem; width: 100%; padding: .6rem 1rem; font-weight: 600; }
+.sso-button .icon { width: 18px; height: 18px; }
+.sign-ins { list-style: none; padding: 0; margin: 0 0 1rem; display: grid; gap: .5rem; }
+.sign-ins li { display: flex; align-items: center; gap: .6rem; justify-content: space-between; padding: .55rem .7rem; border: 1px solid var(--border); border-radius: 8px; }
+.sign-ins li > span { display: flex; align-items: center; gap: .55rem; min-width: 0; overflow-wrap: anywhere; }
+.connect-row { display: flex; flex-wrap: wrap; gap: .5rem; }
+.connect-row .sso-button { width: auto; }
+.inline-email { display: flex; gap: .35rem; align-items: center; margin-top: .3rem; }
+.inline-email input { max-width: 15rem; padding: .25rem .45rem; font-size: .85rem; }
