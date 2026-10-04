@@ -82,9 +82,28 @@ def is_local_host(host: str) -> bool:
     return ip.is_loopback or ip.is_private or ip.is_link_local
 
 
+def response_headers() -> dict[str, str]:
+    """SECURITY_HEADERS, with framing opened to GRC_FRAME_ANCESTORS when it's set.
+
+    GRC_FRAME_ANCESTORS lists the sites allowed to show the app inside a page, for
+    example the website's live demo: "https://grc-flow.com https://www.grc-flow.com".
+    Unset, nobody can frame the app. X-Frame-Options can't name a site, so it's dropped
+    when framing is allowed and the CSP rule does the work.
+    """
+    allowed = " ".join(os.getenv("GRC_FRAME_ANCESTORS", "").replace(",", " ").split())
+    if not allowed:
+        return dict(SECURITY_HEADERS)
+    headers = {k: v for k, v in SECURITY_HEADERS.items() if k != "X-Frame-Options"}
+    headers["Content-Security-Policy"] = CSP.replace(
+        "frame-ancestors 'none'", f"frame-ancestors {allowed}"
+    )
+    return headers
+
+
 def install(app: FastAPI) -> None:
     """Security headers on every response; HTTPS redirect and HSTS when HTTPS is on."""
     force = _on("GRC_FORCE_HTTPS")
+    headers = response_headers()
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next):
@@ -93,7 +112,7 @@ def install(app: FastAPI) -> None:
             # 308 keeps the method and body, so a POST is retried as a POST.
             return RedirectResponse(str(request.url.replace(scheme="https")), status_code=308)
         response = await call_next(request)
-        for name, value in SECURITY_HEADERS.items():
+        for name, value in headers.items():
             response.headers.setdefault(name, value)
         if secure:
             response.headers.setdefault("Strict-Transport-Security", HSTS)

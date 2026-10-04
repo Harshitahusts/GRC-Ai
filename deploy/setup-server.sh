@@ -6,8 +6,9 @@
 #
 # It installs Docker, opens ports 80 and 443 in the server's own firewall (Oracle's Ubuntu
 # images block them by default), downloads GRC Flow, writes .env with a random database
-# password, and starts the app, PostgreSQL and Caddy (HTTPS). Safe to run again: it keeps an
-# existing .env and only updates and restarts the app.
+# password, and starts the app, PostgreSQL and Caddy (HTTPS). With a website domain it also
+# runs the website (grc-flow.com, www.) and the public demo workspace (demo.grc-flow.com).
+# Safe to run again: it keeps an existing .env and only updates and restarts everything.
 set -euo pipefail
 
 REPO="https://github.com/Harshitahusts/GRC-Ai.git"
@@ -87,7 +88,7 @@ if [ -f .env ] && grep -q '^GRC_DOMAIN=' .env; then
   echo "Keeping the existing .env."
 else
   read -rp "Subdomain for the app, e.g. app.grc-flow.com: " domain
-  read -rp "Also host the website here? Enter its domain (e.g. grc-flow.com) or press Enter to skip: " site
+  read -rp "Also host the website and the public demo here? Enter the website's domain (e.g. grc-flow.com) or press Enter to skip: " site
   read -rsp "Groq API key (optional, press Enter to add it later in the app): " groq
   echo
   cp .env.example .env
@@ -95,7 +96,7 @@ else
     echo ""
     echo "# Written by deploy/setup-server.sh on $(date -u +%Y-%m-%d)"
     echo "GRC_DOMAIN=$domain"
-    if [ -n "$site" ]; then echo "GRC_SITE_ADDRESS=$site, www.$site"; fi
+    if [ -n "$site" ]; then echo "GRC_SITE_DOMAIN=$site"; fi
     echo "POSTGRES_PASSWORD=$(openssl rand -hex 24)"
     if [ -n "$groq" ]; then echo "GROQ_API_KEY=$groq"; fi
   } >> .env
@@ -103,11 +104,21 @@ else
   echo "Saved .env (readable only by you). The database password was generated for you."
 fi
 
+# .env files from before the website and demo moved here name the website as
+# GRC_SITE_ADDRESS="grc-flow.com, www.grc-flow.com"; carry that over.
+if ! grep -q '^GRC_SITE_DOMAIN=' .env && grep -q '^GRC_SITE_ADDRESS=' .env; then
+  old=$(grep '^GRC_SITE_ADDRESS=' .env | tail -1 | cut -d= -f2 | cut -d, -f1 | tr -d ' "')
+  if [ -n "$old" ]; then echo "GRC_SITE_DOMAIN=$old" >> .env; fi
+fi
+
 domain=$(grep '^GRC_DOMAIN=' .env | tail -1 | cut -d= -f2)
-site=$(grep '^GRC_SITE_ADDRESS=' .env | tail -1 | cut -d= -f2 | cut -d, -f1 || true)
+site=$(grep '^GRC_SITE_DOMAIN=' .env | tail -1 | cut -d= -f2 || true)
+if [ -n "$site" ]; then
+  COMPOSE+=(-f compose.site.yaml)
+fi
 public_ip=$(curl -fsS --max-time 5 https://api.ipify.org || true)
 echo "This server's public IP: ${public_ip:-unknown}"
-for name in "$domain" ${site:+"$site" "www.$site"}; do
+for name in "$domain" ${site:+"$site" "www.$site" "demo.$site"}; do
   resolved=$(getent ahostsv4 "$name" 2>/dev/null | awk 'NR==1 {print $1}' || true)
   echo "$name points to: ${resolved:-nothing yet}"
   if [ -z "$resolved" ] || [ "$resolved" != "$public_ip" ]; then
@@ -116,7 +127,7 @@ for name in "$domain" ${site:+"$site" "www.$site"}; do
 done
 echo "Caddy keeps retrying certificates, so HTTPS starts a few minutes after DNS is right."
 
-say "6/6 Starting GRC Flow (the first build takes a few minutes)"
+say "6/6 Starting GRC Flow (the first build takes 5 to 10 minutes)"
 $DOCKER "${COMPOSE[@]}" up -d --build
 $DOCKER "${COMPOSE[@]}" ps
 
@@ -126,8 +137,9 @@ cat <<EOF
 Done. Next:
   1. Create your login (asks for a password):
        cd $DIR && $run exec web grc-web adduser yourname
-  2. Open https://$domain${site:+   (website: https://$site)}
-     (the first visit can take a minute while the certificate is issued)
+  2. Open https://$domain${site:+
+     Website: https://$site   Live demo: https://$site/demo (sign-in: demo / grc-demo-2026)}
+     (the first visit can take a minute while the certificates are issued)
 
 Update later:   cd $DIR && bash deploy/setup-server.sh
 Logs:           cd $DIR && ${DOCKER:+$DOCKER }${COMPOSE[*]} logs -f web caddy

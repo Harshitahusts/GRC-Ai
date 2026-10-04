@@ -2,9 +2,11 @@
 # Let's Encrypt certificates by itself and sends each address to the right place:
 #
 #   app.grc-flow.com           -> the GRC Flow app (container "web")
-#   grc-flow.com, www.         -> the website: plain files from deploy/site (optional)
+#   grc-flow.com, www.         -> the website (container "website", compose.site.yaml)
+#   demo.grc-flow.com          -> the public demo workspace (container "demo", compose.site.yaml)
 #
-# Both addresses come from .env (GRC_DOMAIN and GRC_SITE_ADDRESS); see compose.caddy.yaml.
+# The addresses come from .env (GRC_DOMAIN, GRC_SITE_DOMAIN); see compose.caddy.yaml and
+# compose.site.yaml. The app sets its own security headers; Caddy adds them for the website.
 
 {$GRC_DOMAIN} {
 	encode zstd gzip
@@ -14,18 +16,31 @@
 	}
 }
 
-# The website. With GRC_SITE_ADDRESS unset this block listens on a local-only address that
+# The website. Without compose.site.yaml this block listens on a local-only address that
 # never asks for a certificate, so a server that hosts only the app needs no extra DNS.
 {$GRC_SITE_ADDRESS} {
-	root * /srv/site
 	encode zstd gzip
-	file_server
+	# www.grc-flow.com -> grc-flow.com, keeping the page.
+	@www expression {host}.startsWith("www.")
+	redir @www https://{http.request.host.labels.1}.{http.request.host.labels.0}{uri} 308
+	reverse_proxy website:3000
 	header {
 		-Server
+		-X-Powered-By
 		Strict-Transport-Security "max-age=15552000"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
 		Referrer-Policy "strict-origin-when-cross-origin"
-		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'self'"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+	}
+}
+
+# The demo workspace, shown inside the website's Live demo page. The app itself allows
+# that framing for the website only (GRC_FRAME_ANCESTORS in compose.site.yaml).
+{$GRC_DEMO_ADDRESS} {
+	encode zstd gzip
+	reverse_proxy demo:8001
+	header {
+		-Server
 	}
 }
