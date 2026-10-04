@@ -17,6 +17,7 @@ real data: the same findings engine, documents, audit log and notifications.
 from __future__ import annotations
 
 import asyncio
+import gc
 import json
 import logging
 import random
@@ -391,7 +392,9 @@ def seed(data_dir: Path, reset: bool = False) -> Path:
         if not reset:
             return data_dir
         # Empty the folder rather than deleting it: in Docker it is a mounted volume,
-        # which can't be removed.
+        # which can't be removed. Database connections from an earlier seed in this
+        # process are released first; Windows won't delete a file that's still open.
+        gc.collect()
         for child in data_dir.iterdir():
             if child.is_dir() and not child.is_symlink():
                 shutil.rmtree(child)

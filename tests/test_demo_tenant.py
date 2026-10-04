@@ -221,3 +221,20 @@ def test_reset_empties_the_folder_without_deleting_it(tmp_path, monkeypatch):
     demo_tenant.seed(folder, reset=True)
     assert folder.exists() and not (folder / "visitor-upload.txt").exists()
     assert demo_tenant.is_demo(folder)
+
+
+@pytest.mark.skipif(not Path("/proc/self/fd").is_dir(), reason="needs /proc (Linux)")
+def test_seeding_leaves_no_database_file_open(tmp_path):
+    # Windows can't delete or replace an open file, so a reset needs every handle closed.
+    import os
+
+    demo_tenant.seed(tmp_path / "var-demo")
+    open_db = []
+    for fd in os.listdir("/proc/self/fd"):
+        try:
+            target = os.readlink(f"/proc/self/fd/{fd}")
+        except OSError:
+            continue
+        if target.endswith("grc.db"):
+            open_db.append(target)
+    assert open_db == []
