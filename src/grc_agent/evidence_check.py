@@ -29,7 +29,10 @@ VERDICTS = {
     "partly_relevant": "Partly on topic",
     "not_relevant": "Not about this obligation",
     "too_little_content": "Too little to judge",
+    # Not from the AI: the file's text couldn't be read at all (a scan, an image).
+    "unreadable": "Couldn't read the text",
 }
+READABLE = (".txt", ".md", ".csv", ".json", ".pdf", ".docx")
 # Results that stop a file counting as evidence until a person overrules them.
 REJECTED = ("not_relevant", "too_little_content")
 

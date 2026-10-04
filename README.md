@@ -123,8 +123,12 @@ obligation: on topic, partly, not about it, or too little to judge, with a reaso
 it doesn't show. A file flagged as off-topic stops counting as evidence (a control can't
 be marked implemented on it) until someone replaces it or clicks **Count it anyway**,
 which is logged. The check runs after each upload and on demand; it judges only what a
-document is about, never whether the control works. Images and spreadsheets are left to
-a person.
+document is about, never whether the control works. Images, spreadsheets and scanned
+PDFs (no text layer) are labelled **Couldn't read the text** so a person checks them.
+
+**Read text** on each evidence file shows exactly what GRC Flow read from it (text, PDF,
+Word, CSV, JSON), as plain text, so a consultant can see what the AI check judged. Opening
+it is recorded in the audit log.
 
 **AI drafts, people decide.** Status and severity always come from the rules. When the AI
 drafts a finding's wording, the finding is labelled **Human review required** until a

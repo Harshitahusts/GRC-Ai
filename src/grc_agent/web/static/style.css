@@ -1031,3 +1031,6 @@ pre.code { background: var(--hover); border: 1px solid var(--border); border-rad
 .key-once h2 { color: var(--pass); font-size: 1.05rem; display: flex; gap: .4rem; align-items: center; }
 .key-value { display: inline-block; padding: .3rem .5rem; background: var(--hover); border-radius: 6px; font-size: .85rem; }
 .plan-step > details > summary { color: var(--text); }
+
+/* Text read from an evidence file */
+.evidence-text { font-family: inherit; white-space: pre-wrap; word-break: break-word; max-height: 70vh; overflow: auto; background: var(--hover); border: 1px solid var(--border); border-radius: 8px; padding: .9rem 1rem; font-size: .88rem; line-height: 1.55; }

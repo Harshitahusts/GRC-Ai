@@ -251,8 +251,6 @@ def ai_ready(app) -> bool:
 
 def run_check(app, row) -> evidence_check.CheckResult:
     """Read the stored file and ask the AI. No database writes (safe in a thread)."""
-    if app.state.ai.demo:
-        raise CheckSkipped("the AI is in demo mode. Set up a provider under AI provider.")
     obligation = next(
         (o for o in app.state.register.obligations if o.id == row["obligation_id"]), None
     )
@@ -264,7 +262,11 @@ def run_check(app, row) -> evidence_check.CheckResult:
     try:
         text = evidence_check.extract_text(path.read_bytes(), Path(row["stored_name"]).suffix)
     except evidence_check.Unreadable as exc:
-        raise CheckSkipped(f"{exc}.") from None
+        # Recorded on the file (no AI involved), so the row says why it wasn't checked.
+        reason = str(exc)
+        return evidence_check.CheckResult("unreadable", reason[:1].upper() + reason[1:] + ".", ())
+    if app.state.ai.demo:
+        raise CheckSkipped("the AI is in demo mode. Set up a provider under AI provider.")
     settings, client = ai_views.client_for(app)
     try:
         return evidence_check.check(
@@ -294,7 +296,9 @@ def save_check(
             result.verdict,
             result.reason,
             json.dumps(list(result.missing)),
-            f"{settings.provider_label} · {settings.model or 'auto'}",
+            "GRC Flow (no AI call)"
+            if result.verdict == "unreadable"
+            else f"{settings.provider_label} · {settings.model or 'auto'}",
             db.now(),
             row["id"],
         ),
@@ -491,6 +495,7 @@ def register(app: FastAPI) -> None:
             obligations=request.app.state.register.obligations,
             human_size=datamanager.human_size,
             check_labels=evidence_check.VERDICTS,
+            readable=evidence_check.READABLE,
             rejected=evidence_check.REJECTED,
             ai_ready=ai_ready(request.app),
         )
@@ -637,13 +642,52 @@ def register(app: FastAPI) -> None:
             flash(request, f"Couldn't check {row['title']}: {exc}", "error")
             return redirect(f"/engagements/{eid}/evidence#ev{fid}")
         save_check(conn, row, result, request.app.state.ai, user)
-        flash(
-            request,
-            f"AI check of {row['title']}: {evidence_check.VERDICTS[result.verdict]}. "
-            + result.reason,
-            "warn" if result.verdict in evidence_check.REJECTED else "info",
-        )
+        if result.verdict == "unreadable":
+            flash(request, f"Couldn't check {row['title']}: {result.reason}", "warn")
+        else:
+            flash(
+                request,
+                f"AI check of {row['title']}: {evidence_check.VERDICTS[result.verdict]}. "
+                + result.reason,
+                "warn" if result.verdict in evidence_check.REJECTED else "info",
+            )
         return redirect(f"/engagements/{eid}/evidence#ev{fid}")
+
+    @app.get("/engagements/{eid}/evidence/{fid}/text")
+    def evidence_text(eid: int, fid: int, request: Request, user: User, conn: Conn):
+        """The text GRC Flow reads from the file: what the AI check sees."""
+        eng = agent_engagement(conn, eid)
+        row = get_file(conn, eid, fid)
+        path = evidence_dir(request.app) / row["stored_name"]
+        if not path.is_file():
+            raise HTTPException(status_code=410, detail="The file is missing from the server.")
+        text, problem = "", ""
+        try:
+            text = evidence_check.extract_text(path.read_bytes(), Path(row["stored_name"]).suffix)
+        except evidence_check.Unreadable as exc:
+            problem = str(exc)
+        db.audit(conn, user, "evidence_text_viewed", eid, {"title": row["title"]})
+        limit = 50_000
+        ob = next(
+            (o for o in request.app.state.register.obligations if o.id == row["obligation_id"]),
+            None,
+        )
+        return render(
+            request,
+            "evidence_text.html",
+            eng=eng,
+            s=_summary(conn, eng),
+            tab="evidence",
+            f=row,
+            ob=ob,
+            text=text[:limit],
+            cut=len(text) > limit,
+            chars=len(text),
+            ai_chars=evidence_check.MAX_CHARS,
+            problem=problem,
+            check_labels=evidence_check.VERDICTS,
+            human_size=datamanager.human_size,
+        )
 
     @app.post("/engagements/{eid}/evidence/{fid}/overrule")
     async def evidence_overrule(eid: int, fid: int, request: Request, user: User, conn: Conn):

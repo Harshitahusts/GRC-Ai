@@ -27,12 +27,16 @@
         {% for f in items %}
         <tr id="ev{{ f.id }}" class="{{ 'is-closed' if f.status == 'superseded' }}">
           <td><a class="strong-link" href="/engagements/{{ eng.id }}/evidence/{{ f.id }}/download">{{ f.title }}</a>
-            <br><span class="muted small">{{ f.filename }} · {{ human_size(f.size_bytes) }} · v{{ f.version }}{% if f.status == "superseded" %} · replaced{% endif %}</span>
+            <br><span class="muted small">{{ f.filename }} · {{ human_size(f.size_bytes) }} · v{{ f.version }}{% if f.status == "superseded" %} · replaced{% endif %}{% if f.stored_name[-5:].lower().endswith(readable) %} · <a href="/engagements/{{ eng.id }}/evidence/{{ f.id }}/text">Read text</a>{% endif %}</span>
             {% if f.ai_check %}
             {% set flagged = f.ai_check in rejected and not f.check_overruled_by %}
             <div class="ai-check small">
+              {% if f.ai_check == "unreadable" %}
+              <span class="badge badge-warn" title="No AI call was made: there is no text to read. A person needs to look at this file.">{{ check_labels.unreadable }}</span>
+              {% else %}
               <span class="badge {{ 'badge-fail' if flagged else 'badge-warn' if f.ai_check == 'partly_relevant' or f.ai_check in rejected else 'badge-pass' }}"
                 title="Checked {{ (f.ai_checked_at or '')[:10] }} by {{ f.ai_checked_by }}. The AI judges only what the file is about, not whether the control works.">{{ icon("i-spark") }} AI check: {{ check_labels.get(f.ai_check, f.ai_check) }}</span>
+              {% endif %}
               {% if f.check_overruled_by %}<span class="badge badge-none">Counted anyway by {{ f.check_overruled_by }}</span>{% endif %}
               <span class="muted">{{ f.ai_check_reason }}</span>
               {% if f.missing %}<span class="muted">Not shown: {{ f.missing|join("; ") }}.</span>{% endif %}
