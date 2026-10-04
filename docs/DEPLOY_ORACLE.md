@@ -158,6 +158,67 @@ The website is built from the `main` branch of
 [GRC-WEBSITE](https://github.com/Harshitahusts/GRC-WEBSITE). Merge your changes there, then
 run the update command below: it rebuilds the website from the latest `main`.
 
+## 9. Email, and sign-in with Google or Microsoft (optional)
+
+Each part works on its own; set up only what you want. Keys go in the server's `.env`
+file, never in chat or in the code.
+
+**Email (Resend)**, for invites and "Forgot password?" links:
+
+1. Sign up at [resend.com](https://resend.com). Under **Domains**, add `grc-flow.com`.
+2. Resend shows a few DNS records (TXT and MX). Add each one in Namecheap under
+   **Advanced DNS**, exactly as shown, then click **Verify** in Resend.
+3. Under **API Keys**, create a key with **Sending access** and copy it.
+
+**Google:**
+
+1. In [Google Cloud Console](https://console.cloud.google.com), create a project, then open
+   **APIs & Services > OAuth consent screen**: choose *External*, app name *GRC Flow*, your
+   support email, authorised domain `grc-flow.com`. Publish the app.
+2. **Credentials > Create credentials > OAuth client ID > Web application**. Under
+   *Authorised redirect URIs* add `https://app.grc-flow.com/auth/google/callback`.
+3. Copy the **Client ID** and **Client secret**.
+
+**Microsoft:**
+
+1. In [Microsoft Entra admin center](https://entra.microsoft.com), go to **App
+   registrations > New registration**. Name *GRC Flow*; account types: *any organisational
+   directory and personal Microsoft accounts*; redirect URI (Web):
+   `https://app.grc-flow.com/auth/microsoft/callback`.
+2. **Certificates & secrets > New client secret**: copy its **Value**. From **Overview**,
+   copy the **Application (client) ID**.
+
+**Add them to the server**, then update:
+
+```bash
+nano ~/grc-flow/.env
+```
+
+Add the lines you have (save with Ctrl+O, Enter, then Ctrl+X):
+
+```bash
+RESEND_API_KEY=re_...
+GRC_MAIL_FROM=GRC Flow <noreply@grc-flow.com>
+GOOGLE_CLIENT_ID=...apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=...
+MICROSOFT_CLIENT_ID=...
+MICROSOFT_CLIENT_SECRET=...
+```
+
+```bash
+cd ~/grc-flow && bash deploy/setup-server.sh
+```
+
+How it works once it's on:
+
+- **Team & roles:** add a person with their email and no password; they get an invite to
+  set a password or connect Google or Microsoft.
+- **Sign-in page:** "Forgot password?" emails a one-hour link; "Continue with Google /
+  Microsoft" works for anyone who has connected that account.
+- **Account** (top-right menu): change your password, save your email, connect or
+  disconnect Google and Microsoft. A Google or Microsoft account only signs someone in
+  after it has been connected; a matching email address alone never does.
+
 ---
 
 ## Everyday tasks
@@ -194,7 +255,7 @@ From your PC: `scp -i ssh-key.key "ubuntu@YOUR_SERVER_IP:~/backups/*" .`
 | Build stops with "killed" | Out of memory: use at least 6 GB, or add swap: `sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile` |
 | "Your connection is not private" | DNS changed recently: wait 5 to 10 minutes; Caddy retries. Check `logs -f caddy` |
 | Build fails with "no space left" | `sudo docker system prune -af`, then run the script again |
-| Forgot the login password | `sudo docker compose exec web grc-web passwd yourname` |
+| Forgot the login password | "Forgot password?" on the sign-in page (needs email, step 9), or `sudo docker compose exec web grc-web passwd yourname` |
 
 ## Keep it free and running
 

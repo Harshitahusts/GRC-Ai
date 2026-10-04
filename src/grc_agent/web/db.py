@@ -316,6 +316,29 @@ CREATE TABLE IF NOT EXISTS api_keys (
     last_used_at TEXT,
     revoked_at TEXT
 );
+-- Google / Microsoft accounts linked to a GRC Flow account (web/auth_views.py). A sign-in
+-- is matched on (provider, subject) only, never on an email address.
+CREATE TABLE IF NOT EXISTS login_identities (
+    id INTEGER PRIMARY KEY,
+    username TEXT NOT NULL,
+    provider TEXT NOT NULL,                   -- google | microsoft
+    subject TEXT NOT NULL,                    -- the provider's stable id for the person
+    email TEXT NOT NULL DEFAULT '',           -- shown on the Account page only
+    created_at TEXT NOT NULL,
+    last_used_at TEXT,
+    UNIQUE (provider, subject)
+);
+-- Single-use links sent by email: invites and password resets. Only a hash is kept.
+CREATE TABLE IF NOT EXISTS auth_tokens (
+    id INTEGER PRIMARY KEY,
+    token_hash TEXT NOT NULL UNIQUE,
+    username TEXT NOT NULL,
+    purpose TEXT NOT NULL,                    -- invite | reset
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    used_at TEXT
+);
 CREATE TABLE IF NOT EXISTS audit_log (
     id INTEGER PRIMARY KEY,
     at TEXT NOT NULL,
@@ -385,7 +408,11 @@ def connect(path: str | Path) -> sqlite3.Connection:
 # existing local database upgrades in place.
 MIGRATIONS = {
     # admin: everything incl. team; member: all client work; viewer: read-only.
-    "users": {"role": "TEXT NOT NULL DEFAULT 'admin'"},
+    "users": {
+        "role": "TEXT NOT NULL DEFAULT 'admin'",
+        # Where invites and password-reset links go (optional).
+        "email": "TEXT NOT NULL DEFAULT ''",
+    },
     "findings": {
         "citations_json": "TEXT",
         "unresolved_json": "TEXT",
@@ -623,6 +650,8 @@ COPY_ORDER = (
     "evidence_files",
     "ai_providers",
     "api_keys",
+    "login_identities",
+    "auth_tokens",
     "audit_log",
 )
 

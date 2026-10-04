@@ -11,11 +11,21 @@
 <div class="grid-2 wide-left">
   <section class="card">
     <table class="table">
-      <thead><tr><th>Account</th><th>Role</th><th class="hide-sm">Since</th></tr></thead>
+      <thead><tr><th>Account</th><th>Role</th><th class="hide-sm">Since</th>{% if is_admin %}<th></th>{% endif %}</tr></thead>
       <tbody>
         {% for r in rows %}
         <tr>
-          <td><strong>{{ r.username }}</strong>{% if r.username == user %} <span class="tag">you</span>{% endif %}</td>
+          <td><strong>{{ r.username }}</strong>{% if r.username == user %} <span class="tag">you</span>{% endif %}
+            {% if r.no_password and not r.sign_ins %} <span class="badge badge-none">Invited</span>{% endif %}
+            {% if r.sign_ins %} <span class="tag" title="Signs in with Google or Microsoft">SSO</span>{% endif %}
+            {% if is_admin %}
+            <form method="post" action="/team/{{ r.username|urlencode }}/email" class="inline-email">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <input name="email" type="email" value="{{ r.email }}" placeholder="email" maxlength="254" aria-label="Email for {{ r.username }}" class="small">
+              <button type="submit" class="link small">Save</button>
+            </form>
+            {% elif r.email %}<br><span class="small muted">{{ r.email }}</span>{% endif %}
+          </td>
           <td>
             {% if is_admin %}
             <form method="post" action="/team/{{ r.username|urlencode }}/role" class="inline-role">
@@ -26,6 +36,16 @@
             {% else %}{{ r.role|capitalize }}{% endif %}
           </td>
           <td class="hide-sm small muted">{{ r.created_at[:10] }}</td>
+          {% if is_admin %}
+          <td class="nowrap">
+            {% if mail_on and r.email %}
+            <form method="post" action="/team/{{ r.username|urlencode }}/send-link">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <button type="submit" class="link small">{{ "Send invite" if r.no_password and not r.sign_ins else "Send reset link" }}</button>
+            </form>
+            {% endif %}
+          </td>
+          {% endif %}
         </tr>
         {% endfor %}
       </tbody>
@@ -38,9 +58,10 @@
     <form method="post" action="/team" class="stack">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <label>Username <input name="username" required maxlength="40" pattern="[A-Za-z0-9._\-]{2,40}" autocomplete="off"></label>
-      <label>Starting password <input name="password" type="password" required minlength="10" autocomplete="new-password"></label>
+      <label>Email {% if not mail_on %}<span class="muted small">(optional)</span>{% endif %}<input name="email" type="email" maxlength="254" autocomplete="off" placeholder="name@company.com"></label>
       <label>Role <select name="role">{% for k in roles %}<option value="{{ k }}" {% if k == "member" %}selected{% endif %}>{{ k|capitalize }}</option>{% endfor %}</select></label>
-      <p class="small muted">They can change it with <code>grc-web passwd NAME</code> on the server.</p>
+      <label>Starting password {% if mail_on %}<span class="muted small">(optional)</span>{% endif %}<input name="password" type="password" {% if not mail_on %}required{% endif %} minlength="10" autocomplete="new-password"></label>
+      <p class="small muted">{% if mail_on %}Leave the password empty and we'll email them an invite to set their own{% if sign_in_options() %} or sign in with Google or Microsoft{% endif %}.{% else %}Share the starting password privately; they can change it under Account. Set up email (Resend) to send invites instead.{% endif %}</p>
       <p><button type="submit" class="primary">{{ icon("i-plus") }} Add</button></p>
     </form>
   </section>

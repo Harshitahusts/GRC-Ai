@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block title %}Account{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Account</h1>
+    <p class="muted">Signed in as <strong>{{ me.username }}</strong> ({{ me.role }}). How you sign in, and where password-reset emails go.</p>
+  </div>
+</div>
+<div class="grid-2">
+  <section class="card">
+    <h2>Sign in with Google or Microsoft</h2>
+    {% if identities %}
+    <ul class="sign-ins">
+      {% for i in identities %}
+      <li>
+        <span>{{ icon("i-" ~ i.provider) }}<span><strong>{{ provider_labels.get(i.provider, i.provider) }}</strong><br><span class="small muted">{{ i.email or "no email shared" }}</span></span></span>
+        <form method="post" action="/account/sign-ins/{{ i.id }}/remove" onsubmit="return confirm('Disconnect this account? You won\'t be able to sign in with it.')">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="link small danger">Disconnect</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% if providers %}
+    {% set linked = identities|map(attribute="provider")|list %}
+    <div class="connect-row">
+      {% for p in providers if p.key not in linked %}<a class="button sso-button" href="/auth/{{ p.key }}?intent=link">{{ icon("i-" ~ p.key) }}Connect {{ p.label }}</a>{% endfor %}
+    </div>
+    <p class="small muted">Once connected, “Continue with {{ providers[0].label }}” on the sign-in page signs you straight in.</p>
+    {% elif not identities %}
+    <p class="muted">Not set up on this workspace yet. An admin can turn it on (see the deploy guide).</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>{{ "Change password" if has_password else "Set a password" }}</h2>
+    <form method="post" action="/account/password" class="stack">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="hidden" name="username" value="{{ me.username }}" autocomplete="username">
+      {% if has_password %}<label>Current password <input name="current" type="password" required autocomplete="current-password"></label>{% endif %}
+      <label>New password <input name="password" type="password" required minlength="10" maxlength="256" autocomplete="new-password"></label>
+      <label>Type it again <input name="confirm" type="password" required minlength="10" maxlength="256" autocomplete="new-password"></label>
+      <p><button type="submit" class="primary">{{ "Change password" if has_password else "Set password" }}</button></p>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>Email</h2>
+    <form method="post" action="/account/email" class="stack">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label>Email address <input name="email" type="email" maxlength="254" value="{{ me.email }}" autocomplete="email" placeholder="you@company.com"></label>
+      <p class="small muted">{% if mail_on %}Used for password-reset links.{% else %}Used for password-reset links once email is set up on this workspace.{% endif %} Leave empty to remove it.</p>
+      <p><button type="submit">Save email</button></p>
+    </form>
+  </section>
+</div>
+{% endblock %}

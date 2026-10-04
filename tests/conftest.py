@@ -52,6 +52,17 @@ def _api_mode(monkeypatch):
         "GRC_FORCE_HTTPS",
         "GRC_TLS_CERT",
         "GRC_TLS_KEY",
+        # Email and Google / Microsoft sign-in are off unless a test turns them on.
+        "RESEND_API_KEY",
+        "GRC_MAIL_FROM",
+        "GRC_PUBLIC_URL",
+        "GRC_DOMAIN",
+        "GOOGLE_CLIENT_ID",
+        "GOOGLE_CLIENT_SECRET",
+        "MICROSOFT_CLIENT_ID",
+        "MICROSOFT_CLIENT_SECRET",
+        "MICROSOFT_TENANT",
+        "GRC_PUBLIC_DEMO",
     ):
         monkeypatch.delenv(name, raising=False)
     # No test may reach a real AI provider (evidence checks start on their own after an

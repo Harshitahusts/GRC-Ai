@@ -31,7 +31,15 @@ from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
 
 from grc_agent import evidence_check, plan
-from grc_agent.web import ai_views, datamanager, db, discovery_views, register_views
+from grc_agent.web import (
+    ai_views,
+    auth_views,
+    datamanager,
+    db,
+    discovery_views,
+    mailer,
+    register_views,
+)
 from grc_agent.web.registers import REGISTERS, TASKS
 from grc_agent.web.security import hash_password
 
@@ -809,7 +817,11 @@ def register(app: FastAPI) -> None:
     @app.get("/team")
     def team_page(request: Request, user: User, conn: Conn):
         rows = conn.execute(
-            "SELECT username, role, created_at FROM users ORDER BY username"
+            "SELECT u.username, u.role, u.created_at, u.email, "
+            "u.password_hash LIKE '!%' AS no_password, "
+            "(SELECT COUNT(*) FROM login_identities i "
+            " WHERE LOWER(i.username) = LOWER(u.username)) AS sign_ins "
+            "FROM users u ORDER BY u.username"
         ).fetchall()
         return render(
             request,
@@ -817,6 +829,7 @@ def register(app: FastAPI) -> None:
             rows=rows,
             roles=ROLES,
             is_admin=user_role(request) == "admin",
+            mail_on=mailer.configured(),
         )
 
     def require_admin(request):
@@ -828,25 +841,105 @@ def register(app: FastAPI) -> None:
         form = await form_with_csrf(request)
         require_admin(request)
         name = str(form.get("username", "")).strip()
+        email = str(form.get("email", "")).strip()
         password = str(form.get("password", ""))
         role = str(form.get("role", "member"))
         if not re.fullmatch(r"[A-Za-z0-9._-]{2,40}", name):
             flash(request, "Use 2-40 letters, digits, dots, dashes or underscores.", "error")
-            return redirect("/team")
-        if len(password) < 10:
-            flash(request, "Give a starting password of at least 10 characters.", "error")
             return redirect("/team")
         if role not in ROLES:
             raise HTTPException(status_code=400, detail="Unknown role")
         if conn.execute("SELECT 1 FROM users WHERE LOWER(username) = LOWER(?)", (name,)).fetchone():
             flash(request, f"{name} already has an account.", "error")
             return redirect("/team")
+        if problem := auth_views.email_problem(conn, email, name):
+            flash(request, problem, "error")
+            return redirect("/team")
+        invite = not password
+        if invite and not (email and mailer.configured()):
+            flash(
+                request,
+                "Give a starting password, or an email address to send an invite to"
+                + ("." if mailer.configured() else " (email isn't set up on this server yet)."),
+                "error",
+            )
+            return redirect("/team")
+        if password and len(password) < 10:
+            flash(request, "Give a starting password of at least 10 characters.", "error")
+            return redirect("/team")
         conn.execute(
-            "INSERT INTO users (username, password_hash, created_at, role) VALUES (?,?,?,?)",
-            (name, hash_password(password), db.now(), role),
+            "INSERT INTO users (username, password_hash, created_at, role, email) "
+            "VALUES (?,?,?,?,?)",
+            (
+                name,
+                auth_views.NO_PASSWORD if invite else hash_password(password),
+                db.now(),
+                role,
+                email,
+            ),
         )
         db.audit(conn, user, "user_created", None, {"username": name, "role": role})
-        flash(request, f"Added {name} as {role}. Share the starting password privately.")
+        if invite:
+            try:
+                auth_views.send_invite(conn, request, name, email, user)
+            except mailer.MailError as exc:
+                flash(
+                    request,
+                    f"Added {name}, but the invite email didn't send: {exc} "
+                    "Use “Send invite” to try again.",
+                    "error",
+                )
+                return redirect("/team")
+            flash(request, f"Added {name} as {role} and emailed an invite to {email}.")
+        else:
+            flash(request, f"Added {name} as {role}. Share the starting password privately.")
+        return redirect("/team")
+
+    @app.post("/team/{name}/email")
+    async def team_email(name: str, request: Request, user: User, conn: Conn):
+        form = await form_with_csrf(request)
+        require_admin(request)
+        row = conn.execute(
+            "SELECT username FROM users WHERE LOWER(username) = LOWER(?)", (name,)
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="No such user")
+        email = str(form.get("email", "")).strip()
+        if problem := auth_views.email_problem(conn, email, row["username"]):
+            flash(request, problem, "error")
+            return redirect("/team")
+        conn.execute("UPDATE users SET email = ? WHERE LOWER(username) = LOWER(?)", (email, name))
+        db.audit(
+            conn, user, "email_changed", None, {"username": row["username"], "set": bool(email)}
+        )
+        flash(request, f"Saved the email for {row['username']}.")
+        return redirect("/team")
+
+    @app.post("/team/{name}/send-link")
+    async def team_send_link(name: str, request: Request, user: User, conn: Conn):
+        await form_with_csrf(request)
+        require_admin(request)
+        row = conn.execute(
+            "SELECT * FROM users WHERE LOWER(username) = LOWER(?)", (name,)
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="No such user")
+        if not row["email"]:
+            flash(request, f"Add an email for {row['username']} first.", "error")
+            return redirect("/team")
+        invite = not auth_views.has_password(row)
+        try:
+            if invite:
+                auth_views.send_invite(conn, request, row["username"], row["email"], user)
+            else:
+                auth_views.send_reset(conn, request, row["username"], row["email"], user)
+        except mailer.MailError as exc:
+            flash(request, f"The email didn't send: {exc}", "error")
+            return redirect("/team")
+        flash(
+            request,
+            f"Emailed {'an invite' if invite else 'a password-reset link'} to {row['email']}.",
+        )
         return redirect("/team")
 
     @app.post("/team/{name}/role")
