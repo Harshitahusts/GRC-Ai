@@ -168,6 +168,24 @@ run the update command below: it rebuilds the website from the latest `main`.
 cd ~/grc-flow && bash deploy/setup-server.sh
 ```
 
+**Also deploy branches that aren't merged yet** (for example to try a change on the
+real server before merging its pull request):
+
+```bash
+cd ~/grc-flow && bash deploy/setup-server.sh --branches            # every open branch
+cd ~/grc-flow && bash deploy/setup-server.sh --branches my-branch  # only these (comma-separated)
+```
+
+The server builds a copy of `main` with those branches merged on top, for both the app and
+the website. Nothing is merged or pushed on GitHub. A branch that conflicts with `main` is
+skipped with a warning. To do this on every update, add `GRC_DEPLOY_BRANCHES=all` to
+`~/grc-flow/.env`; `--main-only` goes back to `main` alone. Unreviewed branches can break
+the live site, so prefer merging pull requests once they're ready.
+
+**After an update** a normal reload shows the new version; Ctrl+F5 isn't needed. Pages are
+always checked for a newer version, and the app's styles and scripts change their address
+whenever they change.
+
 **See what's happening (logs):** the script prints the exact command at the end. With the
 website it's:
 

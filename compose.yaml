@@ -1,6 +1,7 @@
 services:
   web:
-    build: .
+    # deploy/setup-server.sh --branches points this at a copy with branches merged in.
+    build: ${GRC_APP_CONTEXT:-.}
     # Published on this machine only. Change to "8000:8000" to expose it on your network.
     ports:
       - "127.0.0.1:8000:8000"

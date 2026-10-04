@@ -23,6 +23,11 @@
 	@www expression {host}.startsWith("www.")
 	redir @www https://{http.request.host.labels.1}.{http.request.host.labels.0}{uri} 308
 	reverse_proxy website:3000
+	# Pages: browsers check for a new version on every visit, so an update shows on a
+	# normal reload (no Ctrl+F5). Files under /_next/static/ have the version in their name
+	# and keep the long cache the website gives them.
+	@pages not path /_next/static/*
+	header @pages >Cache-Control "no-cache"
 	header {
 		-Server
 		-X-Powered-By

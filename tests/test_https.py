@@ -1,5 +1,7 @@
 """HTTPS: security headers, HSTS, redirects, Secure cookies, certificates, AI addresses."""
 
+import re
+
 import anthropic
 import pytest
 from cryptography import x509
@@ -45,6 +47,12 @@ def test_sign_in_links_to_the_website_when_set(tmp_path, monkeypatch):
     monkeypatch.setenv("GRC_SITE_URL", "https://grc-flow.com/")
     page = TestClient(app).get("/login").text
     assert 'href="https://grc-flow.com">&larr; Back to grc-flow.com' in page
+
+
+def test_static_links_change_when_the_files_change(tmp_path):
+    page = TestClient(create_app(tmp_path)).get("/login").text
+    version = re.search(r'/static/style\.css\?v=([0-9a-f]{10})"', page).group(1)
+    assert f'/static/app.js?v={version}"' in page
 
 
 def test_force_https_redirects_remote_plain_http(tmp_path, monkeypatch):

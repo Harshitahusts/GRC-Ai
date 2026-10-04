@@ -9,9 +9,28 @@
 # password, and starts the app, PostgreSQL and Caddy (HTTPS). With a website domain it also
 # runs the website (grc-flow.com, www.), linked to and from the app.
 # Safe to run again: it keeps an existing .env and only updates and restarts everything.
+#
+# Deploy work that isn't merged yet: add branches on top of main for this server only.
+# Nothing is pushed or merged on GitHub; a branch that conflicts with main is skipped.
+#   bash deploy/setup-server.sh --branches          every open branch of both repositories
+#   bash deploy/setup-server.sh --branches a,b      only these branch names (in either repo)
+# To do it on every run, set GRC_DEPLOY_BRANCHES=all (or a list) in .env; --main-only overrides.
 set -euo pipefail
 
+branches_arg=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --branches)
+      if [ -n "${2:-}" ] && [ "${2#-}" = "$2" ]; then branches_arg="$2"; shift; else branches_arg="all"; fi ;;
+    --branches=*) branches_arg="${1#*=}" ;;
+    --main-only) branches_arg="none" ;;
+    *) echo "Unknown option: $1 (use --branches [list] or --main-only)"; exit 2 ;;
+  esac
+  shift
+done
+
 REPO="https://github.com/Harshitahusts/GRC-Ai.git"
+WEBSITE_REPO="https://github.com/Harshitahusts/GRC-WEBSITE.git"
 DIR="$HOME/grc-flow"
 COMPOSE=(docker compose -f compose.yaml -f compose.postgres.yaml -f compose.caddy.yaml)
 
@@ -126,6 +145,47 @@ for name in "$domain" ${site:+"$site" "www.$site"}; do
   fi
 done
 echo "Caddy keeps retrying certificates, so HTTPS starts a few minutes after DNS is right."
+
+# Which code to build: main, or main with branches merged on top (see the top of this file).
+branches="${branches_arg:-$(grep '^GRC_DEPLOY_BRANCHES=' .env | tail -1 | cut -d= -f2- | tr -d '"' || true)}"
+if [ -n "$branches" ] && [ "$branches" != "none" ] && [ "$branches" != "main" ]; then
+  say "Merging branches on top of main (this server only)"
+  # build_copy NAME URL FOLDER: a copy of origin/main with the branches merged into it.
+  build_copy() {
+    local name=$1 url=$2 dir=$3 b
+    local -a list=()
+    if [ -d "$dir/.git" ]; then git -C "$dir" fetch -q --prune origin; else git clone -q "$url" "$dir"; fi
+    git -C "$dir" checkout -q --detach origin/main
+    git -C "$dir" reset -q --hard origin/main
+    git -C "$dir" clean -qfdx
+    if [ "$branches" = "all" ]; then
+      mapfile -t list < <(git -C "$dir" for-each-ref --format='%(refname:lstrip=3)' refs/remotes/origin | grep -vxE 'HEAD|main' || true)
+    else
+      read -ra list <<< "${branches//,/ }"
+    fi
+    for b in "${list[@]}"; do
+      git -C "$dir" rev-parse -q --verify "origin/$b" >/dev/null || continue   # not in this repo
+      if git -C "$dir" merge-base --is-ancestor "origin/$b" HEAD; then continue; fi   # already in main
+      if git -C "$dir" -c user.name="GRC Flow deploy" -c user.email=deploy@localhost \
+          merge -q --no-edit "origin/$b" >/dev/null 2>&1; then
+        echo "$name: merged $b"
+      else
+        git -C "$dir" merge --abort 2>/dev/null || git -C "$dir" reset -q --hard HEAD
+        warn "$name: skipped $b, it conflicts with main. Resolve it in a pull request."
+      fi
+    done
+    echo "$name: building $(git -C "$dir" log -1 --format='%h %s')"
+  }
+  mkdir -p "$DIR/.deploy"
+  build_copy "App" "$REPO" "$DIR/.deploy/app"
+  export GRC_APP_CONTEXT="$DIR/.deploy/app"
+  if [ -n "$site" ]; then
+    build_copy "Website" "$WEBSITE_REPO" "$DIR/.deploy/website"
+    export GRC_WEBSITE_CONTEXT="$DIR/.deploy/website"
+  fi
+else
+  echo "Building main. To include branches that aren't merged yet: bash deploy/setup-server.sh --branches"
+fi
 
 say "6/6 Starting GRC Flow (the first build takes 5 to 10 minutes)"
 $DOCKER "${COMPOSE[@]}" up -d --build --remove-orphans   # also stops services no longer used (the old demo)
