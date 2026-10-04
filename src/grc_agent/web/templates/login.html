@@ -40,6 +40,8 @@
       <p class="caps" id="caps" hidden>{{ icon("i-alert") }} Caps Lock is on</p>
       <button type="submit" class="primary"><span class="spinner" aria-hidden="true"></span><span class="label">Sign in</span></button>
     </form>
+    {% set website = site_url() %}
+    {% if website %}<p class="login-site small"><a href="{{ website }}">&larr; Back to {{ website.split("://", 1)[1] }}</a></p>{% endif %}
     <p class="login-alt small muted">No account yet? Ask an admin to add you on <strong>Team &amp; roles</strong>. Forgot your password? An admin can reset it with <code>grc-web passwd NAME</code>.</p>
   </div>
 </div>

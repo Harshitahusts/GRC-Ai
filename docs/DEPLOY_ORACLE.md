@@ -4,17 +4,12 @@ This puts everything on one Oracle Cloud Always Free server in the Mumbai region
 
 - **https://app.grc-flow.com**: the GRC Flow app (sign-in, clients, AI analyst), with its
   data in PostgreSQL;
-- **https://grc-flow.com** (and www): the website, built from
-  [GRC-WEBSITE](https://github.com/Harshitahusts/GRC-WEBSITE);
-- **https://demo.grc-flow.com**: a demo workspace with sample clients, shown inside the
-  website's *Live demo* page (grc-flow.com/demo). It's separate from the real app: its own
-  data, and simulated AI answers so visitors can't spend your AI credits. Every visitor
-  shares one sign-in, so it runs in *public demo* mode: the AI provider, team and roles,
-  API keys, the GitHub App, real connections and MCP are switched off (nobody can lock
-  others out or make the server call addresses they choose), uploads are capped at 2 MB,
-  and it resets to fresh sample data every night at 03:17 server time.
+- **https://grc-flow.com** (www redirects to it): the website, built from
+  [GRC-WEBSITE](https://github.com/Harshitahusts/GRC-WEBSITE).
 
-The website and demo are optional: skip them if the website lives somewhere else.
+The two are linked: the website's **Sign in** button opens app.grc-flow.com, and the app's
+sign-in page links back to grc-flow.com. The website is optional: skip it if it lives
+somewhere else.
 
 Time needed: about 45 minutes, most of it waiting.
 
@@ -28,12 +23,11 @@ Time needed: about 45 minutes, most of it waiting.
      │                                                    │
      │  Caddy ── HTTPS certificates for every address     │
      │   ├─ app.grc-flow.com ──► GRC Flow app ──► PostgreSQL
-     │   ├─ grc-flow.com, www ──► website (Next.js)       │
-     │   └─ demo.grc-flow.com ──► demo workspace (sample data)
+     │   └─ grc-flow.com, www ──► website (Next.js)       │
      └────────────────────────────────────────────────────┘
 ```
 
-Only Caddy is reachable from the internet. The app, demo, website and database have no
+Only Caddy is reachable from the internet. The app, website and database have no
 public ports, and everything runs in Docker so it can move to a bigger server later unchanged.
 
 What you get for free: an Arm server with 2 CPUs and 12 GB of memory, enough for all of
@@ -85,16 +79,16 @@ In Namecheap: **Domain List → grc-flow.com → Manage → Advanced DNS → Hos
 
 1. **Delete** Namecheap's parking records: usually a `CNAME Record` for `www` pointing to
    `parkingpage.namecheap.com` and a `URL Redirect Record` for `@`.
-2. **Add four A records** (*Add New Record → A Record*), each with the server's public IP:
+2. **Add three A records** (*Add New Record → A Record*), each with the server's public IP:
 
 | Type | Host | Value | TTL | For |
 |---|---|---|---|---|
 | A Record | `app` | the server's public IP | Automatic | the GRC Flow app |
 | A Record | `@` | the server's public IP | Automatic | the website |
 | A Record | `www` | the server's public IP | Automatic | the website |
-| A Record | `demo` | the server's public IP | Automatic | the live demo on the website |
 
-Skip `@`, `www` and `demo` if the website is hosted somewhere else.
+Skip `@` and `www` if the website is hosted somewhere else. If you added a `demo` record
+earlier, you can delete it: it's no longer used.
 
 > **Don't touch the email records.** If you use Google Workspace or Gmail for
 > talk@grc-flow.com, leave its `MX` and `TXT` records (SPF, DKIM, verification) exactly as
@@ -106,7 +100,6 @@ Changes usually work within 5 to 30 minutes. Check from your PC:
 ```
 nslookup app.grc-flow.com
 nslookup grc-flow.com
-nslookup demo.grc-flow.com
 ```
 
 Each should show the server's IP. Wait for this before step 6, or the HTTPS
@@ -140,13 +133,12 @@ bash setup.sh
 It asks for:
 
 - **the app's subdomain**, for example `app.grc-flow.com`;
-- **the website's domain**, `grc-flow.com` (or press Enter to skip hosting the website and
-  demo). The demo goes on `demo.` of this domain;
+- **the website's domain**, `grc-flow.com` (or press Enter to skip hosting the website);
 - **a Groq API key** (optional; you can add it later on the app's *AI provider* page).
 
 Then it installs Docker, opens ports 80 and 443 on the server, downloads GRC Flow to
 `~/grc-flow`, writes `.env` with a random database password, and starts the app,
-PostgreSQL, the website, the demo and Caddy. The first build takes 5 to 10 minutes on the
+PostgreSQL, the website and Caddy. The first build takes 5 to 10 minutes on the
 free Arm server.
 
 ## 7. Create your login and open the app
@@ -156,9 +148,8 @@ cd ~/grc-flow
 sudo docker compose exec web grc-web adduser yourname
 ```
 
-Open **https://app.grc-flow.com**, **https://grc-flow.com** and
-**https://grc-flow.com/demo** (the demo signs in as `demo` / `grc-demo-2026`). The first
-visit can take a minute while Caddy gets the certificates. Then open **AI provider** in the
+Open **https://grc-flow.com** and click **Sign in**: it takes you to
+**https://app.grc-flow.com**. The first visit can take a minute while Caddy gets the certificates. Then open **AI provider** in the
 app's sidebar to add or test your Groq key.
 
 ## 8. Change the website
@@ -171,25 +162,19 @@ run the update command below: it rebuilds the website from the latest `main`.
 
 ## Everyday tasks
 
-**Update to the latest version** (app, website and demo):
+**Update to the latest version** (app and website):
 
 ```bash
 cd ~/grc-flow && bash deploy/setup-server.sh
 ```
 
 **See what's happening (logs):** the script prints the exact command at the end. With the
-website and demo it's:
+website it's:
 
 ```bash
-cd ~/grc-flow && sudo docker compose -f compose.yaml -f compose.postgres.yaml -f compose.caddy.yaml -f compose.site.yaml logs -f web website demo caddy
+cd ~/grc-flow && sudo docker compose -f compose.yaml -f compose.postgres.yaml -f compose.caddy.yaml -f compose.site.yaml logs -f web website caddy
 ```
 
-**Reset the demo to fresh sample data now** (it also resets itself every night; the
-setup script adds that to the server's crontab):
-
-```bash
-cd ~/grc-flow && sudo docker compose -f compose.yaml -f compose.postgres.yaml -f compose.caddy.yaml -f compose.site.yaml restart demo
-```
 
 **Back up** (database and evidence files), then copy the files off the server:
 
@@ -206,7 +191,6 @@ From your PC: `scp -i ssh-key.key "ubuntu@YOUR_SERVER_IP:~/backups/*" .`
 | Problem | Fix |
 |---|---|
 | Browser can't reach the site | Check step 3 (both ingress rules) and that DNS points to the right IP: `nslookup app.grc-flow.com` |
-| Website's *Live demo* says the demo isn't running | Check the `demo` DNS record, then `logs demo` (see above) |
 | Build stops with "killed" | Out of memory: use at least 6 GB, or add swap: `sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile` |
 | "Your connection is not private" | DNS changed recently: wait 5 to 10 minutes; Caddy retries. Check `logs -f caddy` |
 | Build fails with "no space left" | `sudo docker system prune -af`, then run the script again |

@@ -1,56 +1,28 @@
-# The website (https://grc-flow.com) and the public demo workspace (https://demo.grc-flow.com)
-# on the same server as the app. Add it after compose.caddy.yaml:
+# The website (https://grc-flow.com, www redirects to it) on the same server as the app
+# (https://app.grc-flow.com). Add it after compose.caddy.yaml:
 #
 #   docker compose -f compose.yaml -f compose.postgres.yaml -f compose.caddy.yaml \
 #     -f compose.site.yaml up -d --build
 #
-# Set GRC_SITE_DOMAIN in .env (e.g. grc-flow.com) and point the @, www and demo DNS
-# records at this server. deploy/setup-server.sh does all of this; see docs/DEPLOY_ORACLE.md.
+# Set GRC_SITE_DOMAIN in .env (e.g. grc-flow.com) and point the @ and www DNS records at
+# this server. deploy/setup-server.sh does all of this; see docs/DEPLOY_ORACLE.md.
 services:
   # The GRC-Flow website (Next.js), built from its own repository.
   website:
     build:
       context: ${GRC_WEBSITE_CONTEXT:-https://github.com/Harshitahusts/GRC-WEBSITE.git#main}
       args:
-        # The website's Live demo page shows the demo workspace below inside the page.
-        NEXT_PUBLIC_APP_DEMO_URL: https://demo.${GRC_SITE_DOMAIN}
+        # The website's "Sign in" links go to the app.
+        NEXT_PUBLIC_APP_URL: https://${GRC_DOMAIN}
     restart: unless-stopped
 
-  # Sample workspace with six made-up clients, signed in as demo / grc-demo-2026.
-  # Separate from the real app: its own SQLite data and no AI keys, so visitors
-  # get simulated AI answers and can't spend your credits or see real clients.
-  demo:
-    build: .
-    # --reset: every start is a fresh copy of the sample data. setup-server.sh restarts
-    # this container every night, so whatever visitors changed is gone by morning.
-    command: ["grc-web", "demo", "--dir", "/data", "--lan", "--port", "8001", "--reset"]
+  web:
     environment:
-      GRC_AI_MODE: demo
-      # Shared by every visitor: settings, team, API keys and real connections are off.
-      GRC_PUBLIC_DEMO: "1"
-      GRC_EVIDENCE_MAX_MB: "2"
-      GRC_DATABASE_URL: ""
-      GRC_PUBLIC_URL: https://demo.${GRC_SITE_DOMAIN}
-      GRC_FORCE_HTTPS: "1"
-      GRC_TRUSTED_PROXIES: "*"
-      # Only the website may show the demo inside its pages.
-      GRC_FRAME_ANCESTORS: https://${GRC_SITE_DOMAIN} https://www.${GRC_SITE_DOMAIN}
-    volumes:
-      - grc-demo:/data
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/healthz')"]
-      interval: 30s
-      timeout: 3s
-      start_period: 60s
-    restart: unless-stopped
+      # The app's sign-in page links back to the website.
+      GRC_SITE_URL: https://${GRC_SITE_DOMAIN}
 
   caddy:
     environment:
       GRC_SITE_ADDRESS: ${GRC_SITE_DOMAIN:?Set GRC_SITE_DOMAIN in .env, e.g. grc-flow.com}, www.${GRC_SITE_DOMAIN}
-      GRC_DEMO_ADDRESS: demo.${GRC_SITE_DOMAIN}
     depends_on:
       - website
-      - demo
-
-volumes:
-  grc-demo:
