@@ -358,12 +358,24 @@ def label(target: str | Path) -> str:
     return pg.safe_label(target) if pg.is_postgres(target) else str(target)
 
 
+class _ClosingConnection(sqlite3.Connection):
+    """`with connect(...) as conn:` commits (or rolls back) and then closes, like the
+    PostgreSQL connection does. Plain sqlite3 leaves the file open until garbage
+    collection, and Windows can't delete or replace a file that is still open."""
+
+    def __exit__(self, exc_type, exc, tb):
+        try:
+            return super().__exit__(exc_type, exc, tb)
+        finally:
+            self.close()
+
+
 def connect(path: str | Path) -> sqlite3.Connection:
     # One connection per request. FastAPI may open it in a worker thread and use
     # it in the event loop thread, but never from two threads at once.
     if pg.is_postgres(path):
         return pg.Connection(path)  # type: ignore[return-value]
-    conn = sqlite3.connect(path, check_same_thread=False)
+    conn = sqlite3.connect(path, check_same_thread=False, factory=_ClosingConnection)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn

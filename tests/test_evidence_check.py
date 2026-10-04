@@ -135,7 +135,10 @@ def test_unusable_answer_and_unreadable_files_are_reported(authed, app, ai):
     assert png.status_code == 200
     fid = _file(app)["id"]
     page = post(authed, f"/engagements/{eid}/evidence/{fid}/check").text
-    assert "images and spreadsheets can&#39;t be read" in page
+    assert "Images and spreadsheets can&#39;t be read" in page
+    # Recorded on the file without an AI call, so the row says why it wasn't checked.
+    assert _file(app)["ai_check"] == "unreadable" and "no AI call" in _file(app)["ai_checked_by"]
+    assert "Couldn&#39;t read the text" in authed.get(f"/engagements/{eid}/evidence").text
 
 
 def test_text_extraction_from_word_and_the_injection_guard():
@@ -159,3 +162,28 @@ def test_tiny_files_are_judged_without_calling_the_ai():
         fake, Settings(provider="groq", model="m"), None, "t", "Other", "hi"
     )
     assert result.verdict == "too_little_content" and not fake.calls
+
+
+def test_read_the_text_the_app_extracted(authed, app):
+    eid = create(authed)
+    buf = io.BytesIO()
+    doc = Document()
+    doc.add_paragraph("Breach response: tell the Board within 72 hours <b>now</b>.")
+    doc.save(buf)
+    authed.post(
+        f"/engagements/{eid}/evidence",
+        data={"csrf": csrf(authed, "/"), "title": "Breach SOP", "obligation_id": "OBL-005"},
+        files={"file": ("sop.docx", buf.getvalue(), "application/octet-stream")},
+    )
+    fid = _file(app)["id"]
+    listing = authed.get(f"/engagements/{eid}/evidence").text
+    assert f"/engagements/{eid}/evidence/{fid}/text" in listing
+    page = authed.get(f"/engagements/{eid}/evidence/{fid}/text").text
+    assert "tell the Board within 72 hours" in page
+    assert "&lt;b&gt;now&lt;/b&gt;" in page  # shown as text, never as HTML
+    with db.connect(app.state.db_path) as conn:
+        actions = [r[0] for r in conn.execute("SELECT action FROM audit_log")]
+    assert "evidence_text_viewed" in actions
+    # Another engagement can't read it.
+    other = create(authed)
+    assert authed.get(f"/engagements/{other}/evidence/{fid}/text").status_code == 404

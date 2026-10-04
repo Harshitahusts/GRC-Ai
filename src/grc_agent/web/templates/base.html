@@ -80,7 +80,10 @@
     </div>
   </header>
   {% endif %}
-  {% if demo_tenant and user and path == "/assistant" %}
+  {% if public_demo and user %}
+  {# Shown on every page: visitors to the shared public demo are strangers. #}
+  <div class="tenant-banner" role="status"><svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg><span><strong>Public demo.</strong> Six made-up clients, shared with everyone trying GRC Flow, so don't enter real personal data. AI answers are simulated, settings and real connections are switched off, and everything resets every night.</span></div>
+  {% elif demo_tenant and user and path == "/assistant" %}
   <div class="tenant-banner" role="status"><svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg><span><strong>Demo tenant.</strong> Sample clients and data for demos, not real. Colleagues act every minute or so, and connector syncs are simulated. Your main workspace is separate and untouched.</span></div>
   {% endif %}
   {% if demo_mode and user and path == "/assistant" %}

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% from "_macros.html" import engagement_header %}
+{% block title %}{{ f.title }} · text · {{ eng.client }}{% endblock %}
+{% block content %}
+{{ engagement_header(eng, s, tab) }}
+<p class="crumb"><a href="/engagements/{{ eng.id }}/evidence">Evidence</a> / {{ f.title }}</p>
+<div class="grid-2 wide-left">
+  <section class="card">
+    <h2>Text read from {{ f.filename }}</h2>
+    {% if problem %}
+    <p class="flash flash-warn">Couldn't read any text: {{ problem }}. Open the file itself to check it.</p>
+    {% elif not text.strip() %}
+    <p class="flash flash-warn">The file has no text.</p>
+    {% else %}
+    <p class="muted small">{{ "{:,}".format(chars) }} characters{% if cut %}, first 50,000 shown{% endif %}. The AI relevance check reads the first {{ "{:,}".format(ai_chars) }}. Layout, images and handwriting aren't included.</p>
+    <pre class="evidence-text">{{ text }}</pre>
+    {% endif %}
+  </section>
+  <aside class="card">
+    <h2>File</h2>
+    <p class="small">{{ f.category }} · {{ human_size(f.size_bytes) }} · version {{ f.version }}<br>Uploaded {{ f.uploaded_at[:10] }} by {{ f.uploaded_by }}</p>
+    {% if ob %}<p class="small">Supports <strong>{{ ob.source }}</strong>: {{ ob.obligation }}</p>{% endif %}
+    {% if f.ai_check %}<p class="small">{{ "Check" if f.ai_check == "unreadable" else "AI check" }}: <strong>{{ check_labels.get(f.ai_check, f.ai_check) }}</strong>. {{ f.ai_check_reason }}</p>{% endif %}
+    <p class="small muted">SHA-256 {{ f.sha256[:16] }}…</p>
+    <p><a class="button small" href="/engagements/{{ eng.id }}/evidence/{{ f.id }}/download">Download the original</a></p>
+  </aside>
+</div>
+{% endblock %}

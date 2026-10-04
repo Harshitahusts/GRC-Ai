@@ -131,6 +131,14 @@ say "6/6 Starting GRC Flow (the first build takes 5 to 10 minutes)"
 $DOCKER "${COMPOSE[@]}" up -d --build --remove-orphans   # also stops services no longer used (the old demo)
 $DOCKER "${COMPOSE[@]}" ps
 
+if [ -n "$site" ] && command -v crontab >/dev/null 2>&1; then
+  # The public demo starts from fresh sample data each time; restart it every night at
+  # 03:17 server time, so whatever visitors changed is gone by morning.
+  line="17 3 * * * cd $DIR && docker compose ${COMPOSE[*]:2} restart demo >/dev/null 2>&1 # grc-flow-demo-reset"
+  { $SUDO crontab -l 2>/dev/null | grep -v 'grc-flow-demo-reset' || true; echo "$line"; } | $SUDO crontab -
+  echo "The public demo resets every night (root crontab: grc-flow-demo-reset)."
+fi
+
 run="${DOCKER:+$DOCKER }docker compose"
 cat <<EOF
 

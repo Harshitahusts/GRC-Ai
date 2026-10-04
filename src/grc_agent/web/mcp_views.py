@@ -163,6 +163,10 @@ def register(app: FastAPI) -> None:
 
     @app.post("/mcp")
     async def mcp_post(request: Request):
+        from grc_agent.web.app import public_demo
+
+        if public_demo():
+            return _error(None, -32600, "MCP is switched off in the public demo.", 403)
         if not _origin_ok(request):
             return _error(None, -32600, "Cross-site requests are not allowed.", 403)
         auth = request.headers.get("authorization", "")

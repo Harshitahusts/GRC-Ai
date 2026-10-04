@@ -2,6 +2,7 @@
 
 import random
 import re
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -172,3 +173,68 @@ def test_demo_has_privacy_operations_and_controls(demo_dir, demo):
     assert controls >= 4 and files == 1
     work = demo.get("/work").text
     assert "Lab reports emailed to the wrong patient group" in work and "Overdue" in work
+
+
+def test_public_demo_switches_off_risky_settings(demo, monkeypatch):
+    """demo.grc-flow.com: every visitor is the same admin, so anything that reaches outside
+    the demo or locks others out is refused; the client workflow still works."""
+    monkeypatch.setenv("GRC_PUBLIC_DEMO", "1")
+    page = demo.get("/").text
+    assert "Public demo." in page and "resets every night" in page
+    token = csrf(demo, "/")
+    refused = {
+        "/settings/ai": {"provider": "custom", "base_url": "http://169.254.169.254/"},
+        "/settings/api-keys": {"name": "x"},
+        "/team": {"username": "mallory", "password": "0123456789ab", "role": "admin"},
+        f"/team/{demo_tenant.DEMO_USER}/role": {"role": "viewer"},
+        "/engagements/1/connectors": {"connector": "aws", "method": "keys"},
+    }
+    for path, form in refused.items():
+        r = demo.post(path, data={**form, "csrf": token}, headers={"referer": "http://testserver/"})
+        assert "This is the public demo" in r.text, path
+    with db.connect(demo.app.state.db_path) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM api_keys").fetchone()[0] == 0
+        role = conn.execute(
+            "SELECT role FROM users WHERE username = ?", (demo_tenant.DEMO_USER,)
+        ).fetchone()[0]
+        assert role == "admin"
+        assert not conn.execute("SELECT 1 FROM users WHERE username = 'mallory'").fetchone()
+    assert demo.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "ping"}).status_code == 403
+    # The workflow itself still works.
+    r = demo.post("/engagements", data={"client": "Visitor Co", "sector": "SaaS", "csrf": token})
+    assert r.status_code == 200 and "Visitor Co" in r.text
+
+
+def test_reset_empties_the_folder_without_deleting_it(tmp_path, monkeypatch):
+    # In Docker the demo folder is a mounted volume: it can be emptied, not removed.
+    folder = demo_tenant.seed(tmp_path / "var-demo")
+    (folder / "visitor-upload.txt").write_text("x")
+    removed = []
+    real_rmdir = demo_tenant.shutil.rmtree
+
+    def guard(path, *a, **k):
+        assert Path(path) != folder, "tried to delete the mount point itself"
+        removed.append(path)
+        return real_rmdir(path, *a, **k)
+
+    monkeypatch.setattr(demo_tenant.shutil, "rmtree", guard)
+    demo_tenant.seed(folder, reset=True)
+    assert folder.exists() and not (folder / "visitor-upload.txt").exists()
+    assert demo_tenant.is_demo(folder)
+
+
+@pytest.mark.skipif(not Path("/proc/self/fd").is_dir(), reason="needs /proc (Linux)")
+def test_seeding_leaves_no_database_file_open(tmp_path):
+    # Windows can't delete or replace an open file, so a reset needs every handle closed.
+    import os
+
+    demo_tenant.seed(tmp_path / "var-demo")
+    open_db = []
+    for fd in os.listdir("/proc/self/fd"):
+        try:
+            target = os.readlink(f"/proc/self/fd/{fd}")
+        except OSError:
+            continue
+        if target.endswith("grc.db"):
+            open_db.append(target)
+    assert open_db == []
