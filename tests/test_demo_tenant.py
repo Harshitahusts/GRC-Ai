@@ -51,6 +51,15 @@ def test_seed_covers_every_pipeline_stage(demo_dir):
     assert oldest < db.now()[:10]  # history is spread over past weeks
 
 
+def test_seeds_behind_an_https_proxy(tmp_path, monkeypatch):
+    # On a server, cookies are Secure-only; seeding still signs in and adds the clients.
+    monkeypatch.setenv("GRC_FORCE_HTTPS", "1")
+    monkeypatch.setenv("GRC_PUBLIC_URL", "https://demo.grc-flow.com")
+    folder = demo_tenant.seed(tmp_path / "var-demo")
+    with db.connect(db.database_target(folder)) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM engagements").fetchone()[0] == 6
+
+
 def test_refuses_to_seed_over_a_real_workspace(tmp_path):
     real = tmp_path / "var"
     real.mkdir()
