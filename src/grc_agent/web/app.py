@@ -19,6 +19,7 @@ from collections.abc import Iterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Any
+from urllib.parse import urlsplit
 
 import anthropic
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
@@ -258,6 +259,34 @@ def current_user(request: Request) -> str:
     return user
 
 
+# The public demo (GRC_PUBLIC_DEMO=1, e.g. demo.grc-flow.com) is shared by every visitor,
+# all signed in as one admin. Anything that reaches outside the demo or locks others out
+# is switched off there: the AI provider, team and roles, API keys, the GitHub App, and
+# connecting real systems (which would make this server call addresses visitors choose).
+PUBLIC_DEMO_BLOCKED = re.compile(
+    r"^/(settings/|team(/|$)|mcp$|engagements/\d+/connectors(/github/find)?$)"
+)
+
+
+def public_demo() -> bool:
+    return os.getenv("GRC_PUBLIC_DEMO", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _refuse_in_public_demo(request: Request) -> None:
+    if not (public_demo() and PUBLIC_DEMO_BLOCKED.match(request.url.path)):
+        return
+    flash(
+        request,
+        "This is the public demo, so settings, team, API keys and real connections are "
+        "switched off. Everything else works, and the demo resets every night.",
+        "warn",
+    )
+    back = urlsplit(request.headers.get("referer", "")).path or "/"
+    raise HTTPException(
+        status_code=303, headers={"Location": back if back.startswith("/") else "/"}
+    )
+
+
 # Paths a read-only (viewer) account may still post to.
 # A read-only key (MCP tools only read) is fine for a viewer too.
 VIEWER_POSTS = ("/login", "/logout", "/notifications", "/settings/api-keys")
@@ -278,6 +307,7 @@ async def form_with_csrf(request: Request) -> dict[str, Any]:
     form = await request.form()
     if not csrf_matches(request.session.get("csrf"), form.get("csrf")):
         raise HTTPException(status_code=403, detail="Form expired. Go back, reload and try again.")
+    _refuse_in_public_demo(request)
     if user_role(request) == "viewer" and not request.url.path.startswith(VIEWER_POSTS):
         raise HTTPException(
             status_code=403, detail="Your account is read-only. Ask an admin for access."
@@ -315,6 +345,7 @@ def render(request: Request, name: str, status_code: int = 200, **context: Any) 
         choices=CHOICES,
         outcome_labels=OUTCOME_LABELS,
         demo_tenant=request.app.state.demo_tenant,
+        public_demo=public_demo(),
         demo_login=(demo_tenant.DEMO_USER, demo_tenant.DEMO_PASSWORD)
         if request.app.state.demo_tenant
         else None,

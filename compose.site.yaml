@@ -21,9 +21,14 @@ services:
   # get simulated AI answers and can't spend your credits or see real clients.
   demo:
     build: .
-    command: ["grc-web", "demo", "--dir", "/data", "--lan", "--port", "8001"]
+    # --reset: every start is a fresh copy of the sample data. setup-server.sh restarts
+    # this container every night, so whatever visitors changed is gone by morning.
+    command: ["grc-web", "demo", "--dir", "/data", "--lan", "--port", "8001", "--reset"]
     environment:
       GRC_AI_MODE: demo
+      # Shared by every visitor: settings, team, API keys and real connections are off.
+      GRC_PUBLIC_DEMO: "1"
+      GRC_EVIDENCE_MAX_MB: "2"
       GRC_DATABASE_URL: ""
       GRC_PUBLIC_URL: https://demo.${GRC_SITE_DOMAIN}
       GRC_FORCE_HTTPS: "1"

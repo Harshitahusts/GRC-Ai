@@ -390,7 +390,13 @@ def seed(data_dir: Path, reset: bool = False) -> Path:
             )
         if not reset:
             return data_dir
-        shutil.rmtree(data_dir)
+        # Empty the folder rather than deleting it: in Docker it is a mounted volume,
+        # which can't be removed.
+        for child in data_dir.iterdir():
+            if child.is_dir() and not child.is_symlink():
+                shutil.rmtree(child)
+            else:
+                child.unlink()
     data_dir.mkdir(parents=True, exist_ok=True)
     target = db.database_target(data_dir)
     if db.is_postgres(target):

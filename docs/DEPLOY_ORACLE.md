@@ -8,7 +8,11 @@ This puts everything on one Oracle Cloud Always Free server in the Mumbai region
   [GRC-WEBSITE](https://github.com/Harshitahusts/GRC-WEBSITE);
 - **https://demo.grc-flow.com**: a demo workspace with sample clients, shown inside the
   website's *Live demo* page (grc-flow.com/demo). It's separate from the real app: its own
-  data, and simulated AI answers so visitors can't spend your AI credits.
+  data, and simulated AI answers so visitors can't spend your AI credits. Every visitor
+  shares one sign-in, so it runs in *public demo* mode: the AI provider, team and roles,
+  API keys, the GitHub App, real connections and MCP are switched off (nobody can lock
+  others out or make the server call addresses they choose), uploads are capped at 2 MB,
+  and it resets to fresh sample data every night at 03:17 server time.
 
 The website and demo are optional: skip them if the website lives somewhere else.
 
@@ -180,11 +184,11 @@ website and demo it's:
 cd ~/grc-flow && sudo docker compose -f compose.yaml -f compose.postgres.yaml -f compose.caddy.yaml -f compose.site.yaml logs -f web website demo caddy
 ```
 
-**Reset the demo to fresh sample data** (visitors can change it):
+**Reset the demo to fresh sample data now** (it also resets itself every night; the
+setup script adds that to the server's crontab):
 
 ```bash
-cd ~/grc-flow && F="-f compose.yaml -f compose.postgres.yaml -f compose.caddy.yaml -f compose.site.yaml"
-sudo docker compose $F rm -sf demo && sudo docker volume rm grc-flow_grc-demo && sudo docker compose $F up -d demo
+cd ~/grc-flow && sudo docker compose -f compose.yaml -f compose.postgres.yaml -f compose.caddy.yaml -f compose.site.yaml restart demo
 ```
 
 **Back up** (database and evidence files), then copy the files off the server:
