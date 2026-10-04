@@ -39,6 +39,14 @@ def test_frame_ancestors_lets_named_sites_frame_the_app(tmp_path, monkeypatch):
     assert "x-frame-options" not in r.headers
 
 
+def test_sign_in_links_to_the_website_when_set(tmp_path, monkeypatch):
+    app = create_app(tmp_path)
+    assert "Back to" not in TestClient(app).get("/login").text
+    monkeypatch.setenv("GRC_SITE_URL", "https://grc-flow.com/")
+    page = TestClient(app).get("/login").text
+    assert 'href="https://grc-flow.com">&larr; Back to grc-flow.com' in page
+
+
 def test_force_https_redirects_remote_plain_http(tmp_path, monkeypatch):
     monkeypatch.setenv("GRC_FORCE_HTTPS", "1")
     app = create_app(tmp_path)

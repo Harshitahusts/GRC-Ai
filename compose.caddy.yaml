@@ -1,5 +1,5 @@
 # Put GRC Flow on its own subdomain over HTTPS (for example https://app.grc-flow.com).
-# Add compose.site.yaml to host the website and the public demo on the same server:
+# Add compose.site.yaml to host the website (https://grc-flow.com) on the same server:
 #
 #   docker compose -f compose.yaml -f compose.postgres.yaml -f compose.caddy.yaml up -d --build
 #
@@ -15,10 +15,9 @@ services:
       - "443:443/udp"
     environment:
       GRC_DOMAIN: ${GRC_DOMAIN:?Set GRC_DOMAIN in .env, e.g. app.grc-flow.com}
-      # The website and demo addresses come from compose.site.yaml. Without it they're
-      # local-only placeholders, so no certificate is requested for them.
+      # The website's address comes from compose.site.yaml. Without it this is a
+      # local-only placeholder, so no certificate is requested for it.
       GRC_SITE_ADDRESS: http://site.localhost
-      GRC_DEMO_ADDRESS: http://demo.localhost
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data

@@ -290,9 +290,8 @@ keys are only ever sent over HTTPS, or over plain HTTP to a server on your own n
 The app runs on its own subdomain, such as `https://app.grc-flow.com`, with a real
 certificate (no browser warning), PostgreSQL for the data, and Caddy in front for HTTPS.
 The same server can also run the website (`grc-flow.com`, from
-[GRC-WEBSITE](https://github.com/Harshitahusts/GRC-WEBSITE)) and a public demo workspace
-(`demo.grc-flow.com`, shown inside the website's Live demo page), or leave the main domain
-free for a website hosted anywhere.
+[GRC-WEBSITE](https://github.com/Harshitahusts/GRC-WEBSITE)), linked to and from the app,
+or leave the main domain free for a website hosted anywhere.
 
 **Step-by-step for Oracle Cloud's free server in Mumbai:** [docs/DEPLOY_ORACLE.md](docs/DEPLOY_ORACLE.md).
 
@@ -307,7 +306,7 @@ cd ~/grc-flow && docker compose exec web grc-web adduser yourname   # your first
 
 It asks for the subdomain, the website's domain (optional) and a Groq key (optional),
 generates the database password, and runs `compose.yaml` + `compose.postgres.yaml` +
-`compose.caddy.yaml`, plus `compose.site.yaml` (website and demo) when a website domain
+`compose.caddy.yaml`, plus `compose.site.yaml` (the website) when a website domain
 is given. Only Caddy is
 reachable from the internet; the app and database have no public ports. Plain HTTP is
 redirected to HTTPS, login cookies are `Secure`, and browsers are told to keep using HTTPS.

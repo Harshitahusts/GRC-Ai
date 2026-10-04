@@ -239,6 +239,15 @@ def describe_action(row: Any) -> str:
 templates.env.filters["activity"] = describe_action
 
 
+def site_url() -> str:
+    """The public website (GRC_SITE_URL, e.g. https://grc-flow.com), linked from sign-in."""
+    url = os.getenv("GRC_SITE_URL", "").strip().rstrip("/")
+    return url if url.startswith(("https://", "http://")) else ""
+
+
+templates.env.globals["site_url"] = site_url
+
+
 # ---------------------------------------------------------------- helpers
 
 
