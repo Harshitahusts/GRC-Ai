@@ -12,6 +12,7 @@
 	reverse_proxy web:8000
 	header {
 		-Server
+		-Via
 	}
 }
 
@@ -36,5 +37,13 @@
 		X-Frame-Options "DENY"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+		Cross-Origin-Opener-Policy "same-origin"
+		# Next.js pages carry inline scripts, so 'unsafe-inline' stays for scripts; nothing
+		# can load from or post to another site, and the site can't be framed.
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self' mailto:; frame-ancestors 'none'; upgrade-insecure-requests"
+		-Via
+		-X-Nextjs-Cache
+		-X-Nextjs-Prerender
+		-X-Nextjs-Stale-Time
 	}
 }

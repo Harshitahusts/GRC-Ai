@@ -367,7 +367,9 @@ def database_target(data_dir: str | Path) -> str | Path:
         raise SystemExit("GRC_DATABASE_URL must start with postgresql:// (or postgres://).")
     schema = os.getenv("GRC_DATABASE_SCHEMA", "").strip()
     if schema == "auto":
-        digest = hashlib.sha1(str(Path(data_dir).resolve()).encode()).hexdigest()[:16]
+        digest = hashlib.sha1(
+            str(Path(data_dir).resolve()).encode(), usedforsecurity=False
+        ).hexdigest()[:16]
         schema = f"ws_{digest}"
     return pg.with_schema(url, schema) if schema else url
 

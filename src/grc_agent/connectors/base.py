@@ -88,6 +88,19 @@ def check_public_https(url: str) -> None:
             raise ConnectorError(f"{parsed.hostname} is a private or local address.")
 
 
+class _CheckedRedirects(urllib.request.HTTPRedirectHandler):
+    """Follow a redirect only to another public HTTPS address. Without this, a server
+    that passed check_public_https could redirect the request into the private network
+    (or to cloud metadata at 169.254.169.254)."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        check_public_https(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_opener = urllib.request.build_opener(_CheckedRedirects)
+
+
 def check_host(url: str, allowed_suffixes: tuple[str, ...], what: str) -> None:
     parsed = urllib.parse.urlparse(url)
     host = (parsed.hostname or "").lower()
@@ -117,7 +130,7 @@ def request(
         headers["Content-Type"] = "application/x-www-form-urlencoded"
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:  # noqa: S310 (https checked by callers)
+        with _opener.open(req, timeout=TIMEOUT) as resp:  # noqa: S310 (https checked by callers)
             return Response(resp.status, _parse(resp.read()))
     except urllib.error.HTTPError as exc:
         return Response(exc.code, _parse(exc.read()))

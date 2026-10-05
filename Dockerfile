@@ -5,7 +5,12 @@ WORKDIR /app
 
 COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
-RUN pip install --no-cache-dir ".[postgres]" && useradd --create-home --uid 1000 grc && mkdir /data && chown grc /data
+# OS security updates and a current pip/setuptools at every build (older pip has known
+# CVEs), then the app.
+RUN apt-get update && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir --upgrade "pip>=26.2" "setuptools>=83" \
+    && pip install --no-cache-dir ".[postgres]" && useradd --create-home --uid 1000 grc && mkdir /data && chown grc /data
 
 USER grc
 VOLUME /data
