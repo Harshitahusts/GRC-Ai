@@ -19,18 +19,18 @@ isn't reachable from the test environment, and Semgrep's rule sets (download blo
 
 ## Findings and fixes
 
-| # | Severity | Finding | Fix |
+| # | Severity (CVSS 3.1) | Finding | Fix |
 |---|---|---|---|
-| 1 | High | **A removed user kept access for up to 8 hours.** Sessions are signed cookies and were never checked against the database, and a removed user's role (empty) counted as a member, so they could still change data. | Every request checks that the session's user still exists. |
-| 2 | Medium | **Changing or resetting a password didn't sign out other sessions** (another browser, a stolen cookie). | Sessions carry a fingerprint of the user's password hash; a new password ends every other session. The session that changed it stays signed in. |
-| 3 | Medium | **Password spraying.** The lockout counted per username only, so an attacker could try a few passwords against many accounts without ever being blocked. | Also limited per address: 20 failed sign-ins in 5 minutes. |
-| 4 | Medium | **SSRF through the AI provider address.** An admin could point the custom AI server at the cloud metadata service (169.254.169.254) or the server's internal network. On a hosted service the client's admin isn't the operator. | Metadata and link-local addresses are always refused, after resolving the host name. Once the app is served over HTTPS, private and loopback addresses are refused too, unless `GRC_ALLOW_PRIVATE_AI_URL=1`. |
-| 5 | Medium | **SSRF through connector redirects.** A self-hosted GitLab URL was checked to be public, but redirects were then followed without a check, so a hostile server could bounce the request into the private network. | Every redirect is checked again: it must be HTTPS to a public address. |
-| 6 | Medium | **Outdated pip and setuptools in the app image** (pip 25.0.1: CVE-2025-8869, CVE-2026-1703, CVE-2026-3219, CVE-2026-6357, CVE-2026-8643, CVE-2026-13346; setuptools 79: CVE-2026-59890). Build tools, not used by the running app, but present in the image. | The image upgrades to pip ≥ 26.2 and setuptools ≥ 83 (tested: pip 26.2.1, setuptools 84.0.0). |
-| 7 | Low | **OS packages in the base images aren't patched after the base image is published.** | The app image runs `apt-get upgrade` and the website image runs `apk upgrade` at every build. |
-| 8 | Low | **No Content-Security-Policy on the website** (the app had one). | Caddy sends a CSP for the website: only this site's scripts, styles, images and connections; no framing; forms only to this site or email. |
-| 9 | Info | **Server software disclosed** in `Via: 1.1 Caddy` and `x-nextjs-*` headers. | Removed. |
-| 10 | Info | Bandit flagged SHA1. Both uses are non-security (a version fingerprint and a schema name). | Marked `usedforsecurity=False`. |
+| 1 | High (8.1) | **A removed user kept access for up to 8 hours.** Sessions are signed cookies and were never checked against the database, and a removed user's role (empty) counted as a member, so they could still change data. | Every request checks that the session's user still exists. |
+| 2 | High (7.4) | **Changing or resetting a password didn't sign out other sessions** (another browser, a stolen cookie). | Sessions carry a fingerprint of the user's password hash; a new password ends every other session. The session that changed it stays signed in. |
+| 3 | Medium (6.5) | **Password spraying.** The lockout counted per username only, so an attacker could try a few passwords against many accounts without ever being blocked. | Also limited per address: 20 failed sign-ins in 5 minutes. |
+| 4 | Medium (6.8) | **SSRF through the AI provider address.** An admin could point the custom AI server at the cloud metadata service (169.254.169.254) or the server's internal network. On a hosted service the client's admin isn't the operator. | Metadata and link-local addresses are always refused, after resolving the host name. Once the app is served over HTTPS, private and loopback addresses are refused too, unless `GRC_ALLOW_PRIVATE_AI_URL=1`. |
+| 5 | Medium (6.3) | **SSRF through connector redirects.** A self-hosted GitLab URL was checked to be public, but redirects were then followed without a check, so a hostile server could bounce the request into the private network. | Every redirect is checked again: it must be HTTPS to a public address. |
+| 6 | Medium (4.6) | **Outdated pip and setuptools in the app image** (pip 25.0.1: CVE-2025-8869, CVE-2026-1703, CVE-2026-3219, CVE-2026-6357, CVE-2026-8643, CVE-2026-13346; setuptools 79: CVE-2026-59890). Build tools, not used by the running app, but present in the image. | The image upgrades to pip ≥ 26.2 and setuptools ≥ 83 (tested: pip 26.2.1, setuptools 84.0.0). |
+| 7 | Low (3.7) | **OS packages in the base images aren't patched after the base image is published.** | The app image runs `apt-get upgrade` and the website image runs `apk upgrade` at every build. |
+| 8 | Low (3.1) | **No Content-Security-Policy on the website** (the app had one). | Caddy sends a CSP for the website: only this site's scripts, styles, images and connections; no framing; forms only to this site or email. |
+| 9 | Info (0.0) | **Server software disclosed** in `Via: 1.1 Caddy` and `x-nextjs-*` headers. | Removed. |
+| 10 | Info (0.0) | Bandit flagged SHA1. Both uses are non-security (a version fingerprint and a schema name). | Marked `usedforsecurity=False`. |
 
 ## Checked and found secure
 
