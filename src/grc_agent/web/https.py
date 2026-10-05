@@ -218,11 +218,42 @@ def fingerprint(cert_path: str) -> str:
     return cert.fingerprint(hashes.SHA256()).hex(":").upper()
 
 
+def _resolved(host: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    try:
+        return [ipaddress.ip_address(i[4][0].split("%")[0]) for i in socket.getaddrinfo(host, None)]
+    except (socket.gaierror, ValueError, UnicodeError):
+        return []
+
+
 def insecure_url_problem(url: str) -> str | None:
-    """Why an AI provider address is unsafe for an API key, or None if it is fine."""
+    """Why an AI provider address is unsafe for an API key, or None if it is fine.
+
+    Also stops the address being used to reach the server's own network: cloud metadata
+    (169.254.169.254, link-local) is always refused, and once the app is served over
+    HTTPS to the internet, so are this machine and private networks, unless
+    GRC_ALLOW_PRIVATE_AI_URL=1 says a model really runs there (for example Ollama).
+    """
     parts = urlsplit(url)
     if parts.scheme not in {"http", "https"} or not parts.hostname:
         return "The address must start with https:// (or http:// for a server on your network)."
+    host = parts.hostname.strip("[]").lower()
+    ips = _resolved(host)
+    if host in {"metadata", "metadata.google.internal"} or any(
+        ip.is_link_local or (ip.version == 6 and ip.ipv4_mapped and ip.ipv4_mapped.is_link_local)
+        for ip in ips
+    ):
+        return "That address belongs to the cloud server's internal metadata service."
+    if (
+        https_enabled()
+        and not _on("GRC_ALLOW_PRIVATE_AI_URL")
+        and any(
+            ip.is_private or ip.is_loopback or ip.is_reserved or ip.is_unspecified for ip in ips
+        )
+    ):
+        return (
+            "That address is on this server's own network. To use a model running there "
+            "(for example Ollama), set GRC_ALLOW_PRIVATE_AI_URL=1."
+        )
     if parts.scheme == "http" and not is_local_host(parts.hostname):
         return (
             "Use https:// for a server on the internet. Plain http:// would send your "

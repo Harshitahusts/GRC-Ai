@@ -162,15 +162,18 @@ def register(app: FastAPI) -> None:
         public_demo,
         redirect,
         render,
+        session_stamp,
+        start_session,
     )
-    from grc_agent.web.security import new_csrf_token
 
     app.state.reset_requests = {}
 
     def sign_in(request: Request, conn, username: str, via: str):
-        request.session.clear()  # new session on login
-        request.session["user"] = username
-        request.session["csrf"] = new_csrf_token()
+        row = conn.execute(
+            "SELECT username, password_hash FROM users WHERE LOWER(username) = LOWER(?)",
+            (username,),
+        ).fetchone()
+        start_session(request, row["username"], row["password_hash"])
         request.app.state.login_failures.pop(username.lower(), None)
         db.audit(conn, username, "login", None, {"via": via})
         return redirect("/")
@@ -472,10 +475,13 @@ def register(app: FastAPI) -> None:
         if problem:
             flash(request, problem, "error")
             return redirect("/account")
+        new_hash = hash_password(password)
         conn.execute(
             "UPDATE users SET password_hash = ? WHERE LOWER(username) = LOWER(?)",
-            (hash_password(password), user),
+            (new_hash, user),
         )
+        # Every other session (another browser, a stolen cookie) is signed out; this one stays.
+        request.session["pv"] = session_stamp(new_hash)
         db.audit(conn, user, "password_changed")
         flash(request, "Password changed.")
         return redirect("/account")

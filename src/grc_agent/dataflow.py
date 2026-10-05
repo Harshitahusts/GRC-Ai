@@ -334,5 +334,7 @@ def build(
         },
         "locations": LOCATIONS,
     }
-    data["version"] = hashlib.sha1(json.dumps(data, sort_keys=True).encode()).hexdigest()[:12]
+    data["version"] = hashlib.sha1(
+        json.dumps(data, sort_keys=True).encode(), usedforsecurity=False
+    ).hexdigest()[:12]
     return data

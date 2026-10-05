@@ -89,6 +89,9 @@ OUTCOME_LABELS = {
 }
 MAX_LOGIN_FAILURES = 5
 LOCKOUT_SECONDS = 300
+# Failed sign-ins from one address across all usernames, so a password can't be sprayed
+# over many accounts while each stays under its own limit.
+MAX_IP_FAILURES = 20
 SESSION_SECONDS = 8 * 3600
 
 
@@ -137,6 +140,23 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
     app.state.data_dir = data_dir
     app.state.demo_tenant = demo_tenant.is_demo(data_dir)
     app.state.secret_key = _secret_key(data_dir)
+
+    # Added before SessionMiddleware so it runs inside it, with the session loaded.
+    @app.middleware("http")
+    async def end_stale_sessions(request: Request, call_next):
+        """Sign out a session whose user was removed or whose password has changed since
+        it signed in. Sessions live in a signed cookie, so without this a removed user,
+        or someone holding a stolen cookie, keeps access until the cookie expires."""
+        user = request.session.get("user")
+        if user:
+            with db.connect(request.app.state.db_path) as c:
+                row = c.execute(
+                    "SELECT password_hash FROM users WHERE LOWER(username) = LOWER(?)", (user,)
+                ).fetchone()
+            if row is None or request.session.get("pv") != session_stamp(row["password_hash"]):
+                request.session.clear()
+        return await call_next(request)
+
     app.add_middleware(
         SessionMiddleware,
         secret_key=app.state.secret_key,
@@ -279,6 +299,19 @@ def get_conn(request: Request) -> Iterator[sqlite3.Connection]:
         conn.commit()
     finally:
         conn.close()
+
+
+def session_stamp(password_hash: str) -> str:
+    """A short fingerprint of the user's password hash, kept in their session. Changing
+    or resetting the password changes it, which signs out every other session."""
+    return hashlib.sha256(f"grc-session:{password_hash}".encode()).hexdigest()[:20]
+
+
+def start_session(request: Request, username: str, password_hash: str) -> None:
+    request.session.clear()  # new session on login
+    request.session["user"] = username
+    request.session["pv"] = session_stamp(password_hash)
+    request.session["csrf"] = new_csrf_token()
 
 
 def current_user(request: Request) -> str:
@@ -539,7 +572,11 @@ def _routes(app: FastAPI) -> None:
         count, window_start = failures.get(key, (0, 0.0))
         if time.monotonic() - window_start >= LOCKOUT_SECONDS:
             count, window_start = 0, time.monotonic()
-        if count >= MAX_LOGIN_FAILURES:
+        ip_key = f"ip:{request.client.host if request.client else '-'}"
+        ip_count, ip_start = failures.get(ip_key, (0, 0.0))
+        if time.monotonic() - ip_start >= LOCKOUT_SECONDS:
+            ip_count, ip_start = 0, time.monotonic()
+        if count >= MAX_LOGIN_FAILURES or ip_count >= MAX_IP_FAILURES:
             return render(
                 request,
                 "login.html",
@@ -554,6 +591,7 @@ def _routes(app: FastAPI) -> None:
         ok = verify_password(password, row["password_hash"] if row else DUMMY_HASH) and row
         if not ok:
             failures[key] = (count + 1, window_start)
+            failures[ip_key] = (ip_count + 1, ip_start)
             db.audit(conn, username or "-", "login_failed")
             return render(
                 request,
@@ -564,9 +602,7 @@ def _routes(app: FastAPI) -> None:
             )
 
         failures.pop(key, None)
-        request.session.clear()  # new session on login
-        request.session["user"] = row["username"]
-        request.session["csrf"] = new_csrf_token()
+        start_session(request, row["username"], row["password_hash"])
         db.audit(conn, row["username"], "login")
         return redirect("/")
 
