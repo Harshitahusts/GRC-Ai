@@ -354,10 +354,9 @@ def register(app: FastAPI) -> None:
         return get_engagement(conn, eid)
 
     def open_engagement(conn, eid):
-        eng = agent_engagement(conn, eid)
-        if eng["delivered_at"]:
-            raise HTTPException(status_code=400, detail="This engagement is delivered and locked.")
-        return eng
+        # Delivery locks the assessment and its documents, not the day-to-day records:
+        # breaches, requests and the rest keep their legal clocks after delivery.
+        return agent_engagement(conn, eid)
 
     def people(conn) -> list[str]:
         return [r[0] for r in conn.execute("SELECT username FROM users ORDER BY username")]

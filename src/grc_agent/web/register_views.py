@@ -209,10 +209,9 @@ def register(app: FastAPI) -> None:
         return get_engagement(conn, eid)
 
     def open_engagement(conn, eid):
-        eng = agent_engagement(conn, eid)
-        if eng["delivered_at"]:
-            raise HTTPException(status_code=400, detail="This engagement is delivered and locked.")
-        return eng
+        # Delivery locks the assessment and its documents, not the day-to-day records:
+        # breaches, requests and the rest keep their legal clocks after delivery.
+        return agent_engagement(conn, eid)
 
     def get_record(conn, eid: int, spec: RegisterSpec, rid: int) -> sqlite3.Row:
         row = conn.execute(

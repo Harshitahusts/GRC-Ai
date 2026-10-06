@@ -15,7 +15,13 @@
       {% endfor %}
     </ul>
     {% if eng.delivered_at %}
-    <p class="flash flash-info">Delivered {{ eng.delivered_at[:16].replace("T", " ") }} UTC. Intake, assessment and documents are locked.</p>
+    <p class="flash flash-info">Delivered {{ eng.delivered_at[:16].replace("T", " ") }} UTC. Intake, assessment and documents are locked. Registers, risks, controls and evidence stay open for day-to-day work.</p>
+    {% if is_admin %}
+    <form method="post" action="/engagements/{{ eng.id }}/reopen">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="small">Reopen to rework the assessment</button>
+    </form>
+    {% endif %}
     {% else %}
     <form method="post" action="/engagements/{{ eng.id }}/deliver">
       <input type="hidden" name="csrf" value="{{ csrf }}">

@@ -93,7 +93,7 @@
   </table>
 </section>
 
-{% if not eng.delivered_at %}
+{% if not read_only %}
 <details class="card add-system">
   <summary><strong>{{ icon("i-plus") }} Add a system or vendor the intake missed</strong></summary>
   <form method="post" action="/engagements/{{ eng.id }}/dataflow/nodes" class="add-system-form">

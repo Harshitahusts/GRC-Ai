@@ -305,9 +305,7 @@ def analyst_tools(app: FastAPI, user: str = "", can_act: bool = False) -> list[T
         if obligation_id and obligation_id not in obligations:
             raise ToolError(f"Unknown obligation {obligation_id}; use search_obligations.")
         with connect() as conn:
-            e = _engagement(conn, engagement_id)
-            if e["delivered_at"]:
-                raise ToolError("This engagement is delivered and locked; no new tasks.")
+            _engagement(conn, engagement_id)
             for r in conn.execute(
                 "SELECT id, ref, title, status FROM records WHERE engagement_id = ? "
                 "AND register = 'tasks'",
@@ -510,9 +508,12 @@ def analyst_tools(app: FastAPI, user: str = "", can_act: bool = False) -> list[T
 
 
 def queue(conn: sqlite3.Connection, app: FastAPI) -> list[dict[str, Any]]:
-    """The analyst's to-do list across clients: the top open risks, overdue first."""
+    """The analyst's to-do list across clients: the top open risks, overdue first.
+
+    Delivered engagements are included: delivery ends the assessment, not the risks.
+    """
     out = []
-    for e in conn.execute("SELECT * FROM engagements WHERE delivered_at IS NULL"):
+    for e in conn.execute("SELECT * FROM engagements"):
         for r in risks_for(conn, app, e["id"]):
             if r.status == "closed":
                 continue

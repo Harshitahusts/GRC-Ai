@@ -3,7 +3,8 @@
 {% block title %}{{ item.ref }} · {{ spec.title }} · {{ eng.client }}{% endblock %}
 {% block content %}
 {{ engagement_header(eng, s, tab) }}
-{% set locked = eng.delivered_at is not none %}
+{# Day-to-day records stay editable after delivery; only viewers are read-only. #}
+{% set locked = read_only %}
 {% set ob = obligations|selectattr("id", "equalto", item.obligation_id)|first %}
 
 <p class="crumb"><a href="/engagements/{{ eng.id }}/r/{{ spec.key }}">{{ spec.title }}</a> / {{ item.ref }}</p>

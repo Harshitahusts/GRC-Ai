@@ -3,7 +3,8 @@
 {% block title %}Controls · {{ eng.client }}{% endblock %}
 {% block content %}
 {{ engagement_header(eng, s, tab) }}
-{% set locked = eng.delivered_at is not none %}
+{# Day-to-day records stay editable after delivery; only viewers are read-only. #}
+{% set locked = read_only %}
 {% set assess_label = {"gap": "Gap", "open_item": "Open item", "compliant": "Met", "not_applicable": "N/A"} %}
 
 {{ page_intro("Controls", "For each DPDPA obligation, record where the client really is: not started, in progress, needs review, implemented, or not applicable. Implemented needs evidence or a description; not applicable needs a reason and an admin.") }}

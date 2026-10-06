@@ -109,8 +109,19 @@ def test_full_engagement_to_north_star(authed):
     assert "consultant_hours" not in record  # pilot-only fields are gone
     assert authed.get("/kpis").status_code == 404
 
-    # Delivered engagements are locked.
+    # Delivery locks the assessment and documents...
     assert post(authed, f"{base}/intake", {**ALL_YES, "action": "save"}).status_code == 400
+    # ...but not the day-to-day registers: a breach after delivery still has to be logged.
+    added = post(
+        authed,
+        f"{base}/r/breaches",
+        {"title": "Laptop stolen", "aware_at": "2026-10-06T08:00", "breach_type": "loss"},
+    )
+    assert added.status_code == 200 and "Added breach" in added.text
+    # An admin can reopen the delivery to rework the assessment.
+    assert "Reopen to rework" in authed.get(base).text
+    post(authed, f"{base}/reopen")
+    assert post(authed, f"{base}/intake", {**ALL_YES, "action": "save"}).status_code == 200
 
 
 def test_intake_change_marks_assessment_stale_and_blocks_delivery(authed):

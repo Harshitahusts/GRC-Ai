@@ -53,7 +53,7 @@
               {% if i.open_tasks %}· {{ i.open_tasks }} open task{{ '' if i.open_tasks == 1 else 's' }}{% endif %}</span>
           </span>
           {% if i.done %}<span class="muted small">{{ i.action }}</span>
-          {% elif not eng.delivered_at %}<a class="button small {{ 'primary' if st.key == current and loop.first }}" href="{{ i.href }}">{{ i.action }}</a>{% endif %}
+          {% elif not read_only %}<a class="button small {{ 'primary' if st.key == current and loop.first }}" href="{{ i.href }}">{{ i.action }}</a>{% endif %}
         </li>
         {% endfor %}
       </ul>

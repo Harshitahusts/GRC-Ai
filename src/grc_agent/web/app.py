@@ -405,6 +405,7 @@ def render(request: Request, name: str, status_code: int = 200, **context: Any) 
     if user:
         with db.connect(request.app.state.db_path) as c:
             unread = notify.unread_count(c, user)
+    context.setdefault("read_only", user_role(request) == "viewer")
     context.update(
         request=request,
         user=user,
@@ -748,6 +749,7 @@ def _routes(app: FastAPI) -> None:
             request,
             "engagement.html",
             eng=eng,
+            is_admin=user_role(request) == "admin",
             s=_summary(conn, eng),
             snapshot=snapshot,
             checks=checks,
@@ -781,6 +783,24 @@ def _routes(app: FastAPI) -> None:
             request, background, conn, eid, f"{eng['client']}: engagement delivered by {user}."
         )
         flash(request, "Engagement marked as delivered.")
+        return redirect(f"/engagements/{eid}")
+
+    @app.post("/engagements/{eid}/reopen")
+    async def engagement_reopen(
+        eid: int,
+        request: Request,
+        user: User,
+        conn: Conn,
+    ):
+        """Undo a delivery so the assessment and documents can be reworked (admins only)."""
+        await form_with_csrf(request)
+        if user_role(request) != "admin":
+            raise HTTPException(status_code=403, detail="Only an admin can reopen a delivery.")
+        eng = get_engagement(conn, eid)
+        if eng["delivered_at"]:
+            conn.execute("UPDATE engagements SET delivered_at = NULL WHERE id = ?", (eid,))
+            db.audit(conn, user, "reopened", eid, {"was_delivered_at": eng["delivered_at"]})
+            flash(request, "Reopened. The intake, assessment and documents can be edited again.")
         return redirect(f"/engagements/{eid}")
 
     @app.get("/engagements/{eid}/export.json")

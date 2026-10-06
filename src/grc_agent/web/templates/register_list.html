@@ -3,7 +3,8 @@
 {% block title %}{{ spec.title }} · {{ eng.client }}{% endblock %}
 {% block content %}
 {{ engagement_header(eng, s, tab) }}
-{% set locked = eng.delivered_at is not none %}
+{# Day-to-day records stay editable after delivery; only viewers are read-only. #}
+{% set locked = read_only %}
 
 <div class="register-head">
   {{ page_intro(spec.title, spec.intro, spec.provision) }}

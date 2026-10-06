@@ -449,14 +449,15 @@ def test_manual_inventory_records_and_csv_is_formula_safe(app, authed):
         assert conn.execute("SELECT COUNT(*) FROM data_inventory").fetchone()[0] == 0
 
 
-def test_delivered_engagement_is_read_only(app, authed):
+def test_discovery_stays_open_after_delivery(app, authed):
+    # Delivery locks the assessment, not day-to-day work such as scanning new systems.
     eid = create(authed)
     upload(authed, eid)
     with db(app) as conn:
         conn.execute("UPDATE engagements SET delivered_at = '2026-09-01T00:00:00+00:00'")
-    assert upload(authed, eid).status_code == 400
+    assert upload(authed, eid).status_code == 200
     page = authed.get(f"/engagements/{eid}/discovery")
-    assert "no new scans" in page.text
+    assert "Scan for personal data" in page.text
 
 
 def test_new_tables_are_catalogued_in_the_data_manager(authed):
