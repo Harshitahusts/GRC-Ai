@@ -1160,6 +1160,15 @@ def _routes(app: FastAPI) -> None:
             sector=eng["sector"],
             answers=answers_of(conn, eid),
             findings=[dict(f) for f in findings_of(conn, eid)],
+            audience=eng["audience"],
+            inventory=[
+                dict(r)
+                for r in conn.execute(
+                    "SELECT * FROM data_inventory WHERE engagement_id = ? ORDER BY id", (eid,)
+                )
+            ],
+            vendors=_register_rows(conn, eid, "vendors", skip=("offboarded",)),
+            dpias=_register_rows(conn, eid, "dpias"),
         )
         conn.execute("DELETE FROM documents WHERE engagement_id = ?", (eid,))
         generated = db.now()
@@ -1411,6 +1420,22 @@ def _routes(app: FastAPI) -> None:
         await form_with_csrf(request)
         request.app.state.agents.pop(user, None)
         return redirect("/assistant")
+
+
+def _register_rows(
+    conn: sqlite3.Connection, eid: int, register: str, skip: tuple[str, ...] = ()
+) -> list[dict[str, Any]]:
+    """A register's records as flat dicts (ref plus the record's fields), oldest first."""
+    rows = conn.execute(
+        "SELECT ref, status, data_json FROM records WHERE engagement_id = ? AND register = ? "
+        "ORDER BY id",
+        (eid, register),
+    )
+    return [
+        {"ref": r["ref"], "status": r["status"], **json.loads(r["data_json"] or "{}")}
+        for r in rows
+        if r["status"] not in skip
+    ]
 
 
 def _summary(conn: sqlite3.Connection, eng: sqlite3.Row) -> dict[str, Any]:

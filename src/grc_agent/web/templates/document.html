@@ -9,6 +9,7 @@
     {% for b in blocks %}
       {% if b.kind == "h1" %}<h1>{{ b.text }}</h1>
       {% elif b.kind == "h2" %}<h2>{{ b.text }}</h2>
+      {% elif b.kind == "h3" %}<h3>{{ b.text }}</h3>
       {% elif b.kind == "p" %}<p>{{ b.text }}</p>
       {% elif b.kind == "warning" %}<p class="flash flash-warn"><strong>{{ b.text }}</strong></p>
       {% elif b.kind == "bullets" %}<ul>{% for i in b.items %}<li>{{ i }}</li>{% endfor %}</ul>
