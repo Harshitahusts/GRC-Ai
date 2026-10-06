@@ -11,6 +11,7 @@ from grc_agent.documents import (
     SELF_BANNER,
     EngagementFacts,
     _lines,
+    _where,
     build_document,
     to_docx,
 )
@@ -139,6 +140,7 @@ def test_ropa_is_built_from_the_inventory_and_vendor_register():
     cells = " ".join(c for b in blocks if b.kind == "table" for row in b.rows for c in row)
     assert "Date of birth (dob)" in cells and "Video platform" in cells
     assert "Outside India · United States" in cells
+    assert _where({"location": "india", "countries": "India (Mumbai)"}) == "India (Mumbai)"
     gaps = next(b for b in blocks if b.kind == "bullets").items
     assert "CRM · aadhaar: no purpose, lawful ground, retention period, owner." in gaps
     assert "VEN-002 Chat vendor: no signed contract." in gaps

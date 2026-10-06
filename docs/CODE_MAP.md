@@ -36,6 +36,17 @@ little JavaScript in `web/static/`). There is no separate front-end build.
 5. **Every change** is written to the audit log with `db.audit()`. Each entry is chained
    to the previous one by a SHA-256 hash, so later edits to the log can be detected.
 
+## Workspaces and delivery
+
+- Each workspace (an "engagement" in the code) is for a client of a GRC partner or for the
+  company itself (`engagements.audience`: `client` or `self`). Only the wording changes:
+  rules, checks and gates are the same.
+- Delivery (sign-off, for a company's own workspace) locks the intake, assessment and
+  documents. The registers, risks, controls, evidence, discovery and data flow stay open,
+  because breaches and requests keep their legal clocks. An admin can reopen a delivery.
+- The generated documents (`documents.py`) draw on the data inventory, the vendor and DPIA
+  registers, and fall back to the intake answers when those are still empty.
+
 ## Folders and files
 
 ### The DPDPA logic (no web code)

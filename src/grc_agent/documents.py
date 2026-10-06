@@ -150,7 +150,10 @@ def _join(values) -> str:
 def _where(vendor: dict) -> str:
     """Where a vendor processes data: 'Outside India · United States'."""
     place = LOCATIONS.get(vendor.get("location", ""), "Location not known")
-    return " · ".join(x for x in (place, vendor.get("countries", "")) if x)
+    countries = (vendor.get("countries") or "").strip()
+    if countries.lower().startswith(place.lower()):  # "India (Mumbai)" already says it
+        return countries
+    return " · ".join(x for x in (place, countries) if x)
 
 
 def _gap_report(facts: EngagementFacts, register: Register) -> list[Block]:
