@@ -303,3 +303,20 @@ def test_serve_refuses_a_port_another_copy_is_using(tmp_path, monkeypatch, capsy
 
     code = web_cli.main(["--data-dir", str(tmp_path), "serve", "--port", str(port)])
     assert code == 0 and started  # free again: starts normally
+
+
+def test_own_company_workspace_speaks_to_the_company(authed):
+    page = post(
+        authed, "/engagements", {"client": "Our Co", "sector": "SaaS", "audience": "self"}
+    )
+    eid = int(page.url.path.rsplit("/", 1)[1])
+    base = f"/engagements/{eid}"
+    assert "Sign-off checklist" in page.text and "Sign off the assessment" in page.text
+    post(authed, f"{base}/intake", {**ALL_YES, "q_Q-BREACH": "no", "action": "submit"})
+    findings = post(authed, f"{base}/assess", {"mode": "rules"}).text
+    assert "You said this isn&#39;t in place." in findings
+    assert "Client says" not in findings and "Accuracy scoring" not in findings
+    # The same workspace can be switched back to partner wording.
+    post(authed, f"{base}/audience", {"audience": "client"})
+    assert "Delivery checklist" in authed.get(base).text
+    assert post(authed, f"{base}/audience", {"audience": "nobody"}).status_code == 400

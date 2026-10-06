@@ -5,9 +5,10 @@
 {{ engagement_header(eng, s, tab) }}
 {% for c in conflicts %}<div class="flash flash-error">{{ c }}</div>{% endfor %}
 
+{% set own = eng.audience == "self" %}
 <div class="grid-2">
   <section class="card">
-    <h2>Delivery checklist</h2>
+    <h2>{{ "Sign-off checklist" if own else "Delivery checklist" }}</h2>
     <p class="muted small">All checks must pass. There is no override.</p>
     <ul class="checks">
       {% for label, ok in checks %}
@@ -15,7 +16,7 @@
       {% endfor %}
     </ul>
     {% if eng.delivered_at %}
-    <p class="flash flash-info">Delivered {{ eng.delivered_at[:16].replace("T", " ") }} UTC. Intake, assessment and documents are locked. Registers, risks, controls and evidence stay open for day-to-day work.</p>
+    <p class="flash flash-info">{{ "Signed off" if own else "Delivered" }} {{ eng.delivered_at[:16].replace("T", " ") }} UTC. Intake, assessment and documents are locked. Registers, risks, controls and evidence stay open for day-to-day work.</p>
     {% if is_admin %}
     <form method="post" action="/engagements/{{ eng.id }}/reopen">
       <input type="hidden" name="csrf" value="{{ csrf }}">
@@ -25,7 +26,16 @@
     {% else %}
     <form method="post" action="/engagements/{{ eng.id }}/deliver">
       <input type="hidden" name="csrf" value="{{ csrf }}">
-      <button class="primary" {% if not can_deliver %}disabled{% endif %}>Mark as delivered</button>
+      <button class="primary" {% if not can_deliver %}disabled{% endif %}>{{ "Sign off the assessment" if own else "Mark as delivered" }}</button>
+    </form>
+    {% endif %}
+    {% if not read_only %}
+    <form method="post" action="/engagements/{{ eng.id }}/audience" class="inline-form small">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label class="inline">This workspace is for
+        <select name="audience">{% for key, label in audiences.items() %}<option value="{{ key }}" {% if eng.audience == key %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+      </label>
+      <button class="small">Change</button>
     </form>
     {% endif %}
   </section>

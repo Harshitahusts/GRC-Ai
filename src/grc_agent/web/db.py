@@ -35,6 +35,8 @@ CREATE TABLE IF NOT EXISTS engagements (
     stale INTEGER NOT NULL DEFAULT 0,
     draft_pack_ready_at TEXT,
     delivered_at TEXT,
+    -- 'client': a GRC partner assessing a client; 'self': a company assessing itself.
+    audience TEXT NOT NULL DEFAULT 'client',
     -- No longer used (pilot measurements); kept so older workspaces still load and migrate.
     consultant_hours REAL,
     intake_completed_unaided INTEGER,
@@ -429,6 +431,8 @@ MIGRATIONS = {
         "edited_at": "TEXT",
     },
     "ai_providers": {"models_json": "TEXT NOT NULL DEFAULT '[]'"},
+    # Who the workspace is for; changes the wording, not the rules (see AUDIENCES in app.py).
+    "engagements": {"audience": "TEXT NOT NULL DEFAULT 'client'"},
     # AI relevance check of an evidence file (see grc_agent.evidence_check).
     "evidence_files": {
         "ai_check": "TEXT NOT NULL DEFAULT ''",

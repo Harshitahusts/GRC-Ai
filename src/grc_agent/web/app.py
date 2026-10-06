@@ -83,6 +83,11 @@ HERE = Path(__file__).parent
 FOCUS = "[Focus: "  # prefix on questions asked with a client selected
 
 SECTORS = ["EdTech", "BFSI", "Healthcare", "SaaS", "Retail", "Other"]
+# Who a workspace is for. Only the wording changes; rules, checks and gates are the same.
+AUDIENCES = {
+    "client": "A client (we're their GRC partner)",
+    "self": "Our own company",
+}
 OUTCOME_LABELS = {
     "usable": "Usable as is (wording-only edits)",
     "minor_edits": "Minor edits (no material changes)",
@@ -705,6 +710,7 @@ def _routes(app: FastAPI) -> None:
             "engagements.html",
             summaries=[_summary(conn, e) for e in rows],
             sectors=SECTORS,
+            audiences=AUDIENCES,
         )
 
     @app.post("/engagements")
@@ -716,13 +722,14 @@ def _routes(app: FastAPI) -> None:
         form = await form_with_csrf(request)
         client = str(form.get("client", "")).strip()
         sector = form.get("sector")
-        if not client or sector not in SECTORS:
-            flash(request, "Enter a client name and choose a sector.", "error")
+        audience = form.get("audience") or "client"
+        if not client or sector not in SECTORS or audience not in AUDIENCES:
+            flash(request, "Enter a name and choose a sector.", "error")
             return redirect("/engagements")
         cur = conn.execute(
-            "INSERT INTO engagements (client, sector, mode, created_by, created_at) "
-            "VALUES (?,?,'agent',?,?)",
-            (client, sector, user, db.now()),
+            "INSERT INTO engagements (client, sector, mode, audience, created_by, created_at) "
+            "VALUES (?,?,'agent',?,?,?)",
+            (client, sector, audience, user, db.now()),
         )
         db.audit(conn, user, "engagement_created", cur.lastrowid)
         return redirect(f"/engagements/{cur.lastrowid}")
@@ -750,6 +757,7 @@ def _routes(app: FastAPI) -> None:
             "engagement.html",
             eng=eng,
             is_admin=user_role(request) == "admin",
+            audiences=AUDIENCES,
             s=_summary(conn, eng),
             snapshot=snapshot,
             checks=checks,
@@ -782,7 +790,30 @@ def _routes(app: FastAPI) -> None:
         connector_views.queue_notification(
             request, background, conn, eid, f"{eng['client']}: engagement delivered by {user}."
         )
-        flash(request, "Engagement marked as delivered.")
+        flash(
+            request,
+            "Assessment signed off."
+            if eng["audience"] == "self"
+            else "Engagement marked as delivered.",
+        )
+        return redirect(f"/engagements/{eid}")
+
+    @app.post("/engagements/{eid}/audience")
+    async def engagement_audience(
+        eid: int,
+        request: Request,
+        user: User,
+        conn: Conn,
+    ):
+        """Switch who the workspace is for. Takes effect on the next assessment and documents."""
+        form = await form_with_csrf(request)
+        get_engagement(conn, eid)
+        audience = form.get("audience")
+        if audience not in AUDIENCES:
+            raise HTTPException(status_code=400, detail="Unknown audience")
+        conn.execute("UPDATE engagements SET audience = ? WHERE id = ?", (audience, eid))
+        db.audit(conn, user, "audience_changed", eid, {"audience": audience})
+        flash(request, f"This workspace is now for: {AUDIENCES[audience].lower()}.")
         return redirect(f"/engagements/{eid}")
 
     @app.post("/engagements/{eid}/reopen")
@@ -910,7 +941,9 @@ def _routes(app: FastAPI) -> None:
                 return redirect(f"/engagements/{eid}/findings")
             try:
                 assessor = request.app.state.make_assessor(corpus)
-                results = await run_in_threadpool(assessor.assess, register, answers)
+                results = await run_in_threadpool(
+                    assessor.assess, register, answers, eng["audience"]
+                )
             except (TypeError, anthropic.CredentialsError) as exc:
                 if isinstance(exc, TypeError) and "authentication method" not in str(exc):
                     raise
@@ -927,7 +960,7 @@ def _routes(app: FastAPI) -> None:
                 )
                 return redirect(f"/engagements/{eid}/findings")
         else:
-            results = assess(register, answers, request.app.state.index)
+            results = assess(register, answers, request.app.state.index, eng["audience"])
         conn.execute("DELETE FROM findings WHERE engagement_id = ?", (eid,))
         conn.executemany(
             "INSERT INTO findings (engagement_id, obligation_id, status, severity, citation, "
@@ -1383,10 +1416,11 @@ def _routes(app: FastAPI) -> None:
 def _summary(conn: sqlite3.Connection, eng: sqlite3.Row) -> dict[str, Any]:
     findings = [dict(f) for f in findings_of(conn, eng["id"])]
     docs = documents_of(conn, eng["id"])
+    own = eng["audience"] == "self"
     if eng["delivered_at"]:
-        stage = "Delivered"
+        stage = "Signed off" if own else "Delivered"
     elif docs and all(d["reviewed_at"] for d in docs):
-        stage = "Ready to deliver"
+        stage = "Ready to sign off" if own else "Ready to deliver"
     elif docs:
         stage = "In review"
     elif eng["assessed_at"]:

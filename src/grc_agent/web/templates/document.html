@@ -36,7 +36,7 @@
         {% endfor %}
       </fieldset>
       <label class="inline block"><input type="checkbox" name="confirm" required> I read the whole document and checked every provision it cites.</label>
-      {% if doc.type == "dpa" %}<p class="small muted">A DPA also needs a lawyer's sign-off before it goes to the client.</p>{% endif %}
+      {% if doc.type == "dpa" %}<p class="small muted">A DPA also needs a lawyer's sign-off before {{ "you sign it with a vendor" if eng.audience == "self" else "it goes to the client" }}.</p>{% endif %}
       <button class="primary">Record review</button>
     </form>
     {% endif %}

@@ -305,7 +305,7 @@ def analyst_tools(app: FastAPI, user: str = "", can_act: bool = False) -> list[T
         if obligation_id and obligation_id not in obligations:
             raise ToolError(f"Unknown obligation {obligation_id}; use search_obligations.")
         with connect() as conn:
-            _engagement(conn, engagement_id)
+            e = _engagement(conn, engagement_id)
             for r in conn.execute(
                 "SELECT id, ref, title, status FROM records WHERE engagement_id = ? "
                 "AND register = 'tasks'",
