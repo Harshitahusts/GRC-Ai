@@ -82,6 +82,15 @@ class Detector:
 _OCTET = r"(?:25[0-5]|2[0-4]\d|1?\d?\d)"
 
 
+_HEALTH_WORDS = re.compile(
+    r"\b(diagnos(?:ed|is)|dyslexi[ac]|adhd|autis(?:m|tic)|asthma|diabet(?:es|ic)|epilep(?:sy|tic)"
+    r"|allerg(?:y|ic)|disabilit(?:y|ies)|disabled|pregnan(?:t|cy)|hiv|cancer|chemotherapy"
+    r"|depression|anxiety disorder|mental health|medication|prescri(?:bed|ption)|therapy"
+    r"|blood group|surgery|hospitali[sz]ed)\b",
+    re.IGNORECASE,
+)
+
+
 def _digits(s: str) -> str:
     return re.sub(r"\D", "", s)
 
@@ -129,6 +138,9 @@ DETECTORS: tuple[Detector, ...] = (
     ),
     Detector("UPI_ID", re.compile(r"[A-Za-z0-9._-]{2,64}@[A-Za-z]{2,32}"), 0.8),
     Detector("IP_ADDRESS", re.compile(rf"(?:{_OCTET}\.){{3}}{_OCTET}"), 0.7),
+    # Health details typed into free text (notes, comments). Only clear medical words, so
+    # ordinary notes don't trip it; a person confirms every finding anyway.
+    Detector("HEALTH", _HEALTH_WORDS, 0.6, anywhere=True),
 )
 
 

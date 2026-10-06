@@ -291,10 +291,9 @@ def register(app: FastAPI) -> None:
         return get_engagement(conn, eid)
 
     def open_engagement(conn, eid):
-        eng = agent_engagement(conn, eid)
-        if eng["delivered_at"]:
-            raise HTTPException(status_code=400, detail="This engagement is delivered and locked.")
-        return eng
+        # Delivery locks the assessment and its documents, not the day-to-day records:
+        # breaches, requests and the rest keep their legal clocks after delivery.
+        return agent_engagement(conn, eid)
 
     def get_finding(conn, eid: int, fid: int) -> sqlite3.Row:
         row = conn.execute(
@@ -647,6 +646,8 @@ def register(app: FastAPI) -> None:
     @app.get("/engagements/{eid}/inventory.csv")
     def inventory_csv(eid: int, request: Request, user: User, conn: Conn):
         eng = agent_engagement(conn, eid)
+        # Same references as the page: "Section 5(1)", not the register's internal IDs.
+        sources = {o.id: o.source for o in request.app.state.register.obligations}
         header = [
             "Source",
             "Field",
@@ -679,7 +680,7 @@ def register(app: FastAPI) -> None:
                 i["storage_location"],
                 i["recipients"],
                 i["owner"],
-                " ".join(i["obligations"]),
+                "; ".join(sources.get(o, o) for o in i["obligations"]),
                 "; ".join(i["gaps"]),
             ]
             for i in inventory_rows(conn, eid)

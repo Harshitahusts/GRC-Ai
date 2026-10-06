@@ -70,6 +70,7 @@ from grc_agent.web import (
     register_views,
     risk_views,
 )
+from grc_agent.web.registers import REGISTERS, is_overdue
 from grc_agent.web.security import (
     DUMMY_HASH,
     csrf_matches,
@@ -83,6 +84,11 @@ HERE = Path(__file__).parent
 FOCUS = "[Focus: "  # prefix on questions asked with a client selected
 
 SECTORS = ["EdTech", "BFSI", "Healthcare", "SaaS", "Retail", "Other"]
+# Who a workspace is for. Only the wording changes; rules, checks and gates are the same.
+AUDIENCES = {
+    "client": "A client (we're their GRC partner)",
+    "self": "Our own company",
+}
 OUTCOME_LABELS = {
     "usable": "Usable as is (wording-only edits)",
     "minor_edits": "Minor edits (no material changes)",
@@ -405,6 +411,7 @@ def render(request: Request, name: str, status_code: int = 200, **context: Any) 
     if user:
         with db.connect(request.app.state.db_path) as c:
             unread = notify.unread_count(c, user)
+    context.setdefault("read_only", user_role(request) == "viewer")
     context.update(
         request=request,
         user=user,
@@ -463,6 +470,55 @@ def is_ai_drafted(finding) -> bool:
     return finding["drafted_by"] not in ("rules", "demo")
 
 
+CONTROL_DOUBTS = {
+    "not_started": "Control marked 'not started'.",
+    "needs_review": "Control marked 'needs review'.",
+}
+
+
+def contradictions(
+    conn: sqlite3.Connection, eid: int, obligations: dict[str, Any]
+) -> dict[str, list[str]]:
+    """Reasons the workspace's own records cast doubt on a finding marked compliant.
+
+    A "yes" at intake is a claim. These records can contradict it: the obligation's
+    control isn't started or needs review, an open breach or an overdue request is
+    linked to it, and any open breach undermines a claim of security safeguards.
+    """
+    compliant = {f["obligation_id"] for f in findings_of(conn, eid) if f["status"] == "compliant"}
+    found: dict[str, list[str]] = {}
+    for c in conn.execute(
+        "SELECT obligation_id, status FROM controls WHERE engagement_id = ?", (eid,)
+    ):
+        if c["obligation_id"] in compliant and c["status"] in CONTROL_DOUBTS:
+            found.setdefault(c["obligation_id"], []).append(CONTROL_DOUBTS[c["status"]])
+    open_breaches = []
+    for r in conn.execute(
+        "SELECT register, ref, title, status, due, obligation_id FROM records "
+        "WHERE engagement_id = ? AND register IN ('breaches', 'requests')",
+        (eid,),
+    ):
+        spec = REGISTERS[r["register"]]
+        if r["status"] not in spec.open_statuses:
+            continue
+        if r["register"] == "breaches":
+            open_breaches.append(r)
+            reason = f"Open breach {r['ref']}: {r['title']}."
+        elif is_overdue(r["due"] or "", r["status"], spec):
+            reason = f"Overdue request {r['ref']}: {r['title']}."
+        else:
+            continue
+        if r["obligation_id"] in compliant:
+            found.setdefault(r["obligation_id"], []).append(reason)
+    security = {oid for oid, o in obligations.items() if getattr(o, "source", "") == "Section 8(5)"}
+    for oid in security & compliant:
+        for b in open_breaches:
+            reason = f"Open breach {b['ref']}: {b['title']}."
+            if reason not in found.get(oid, []):
+                found.setdefault(oid, []).append(reason)
+    return found
+
+
 def delivery_checks(conn: sqlite3.Connection, eng: sqlite3.Row) -> list[tuple[str, bool]]:
     """The hard stop. Every check must pass before delivery; there is no override."""
     findings = findings_of(conn, eng["id"])
@@ -504,7 +560,7 @@ def delivery_checks(conn: sqlite3.Connection, eng: sqlite3.Row) -> list[tuple[st
 def engagement_record(
     conn: sqlite3.Connection, eng: sqlite3.Row, register_size: int
 ) -> dict[str, Any]:
-    """An engagement's findings and documents as JSON, for export."""
+    """An engagement as JSON, for export: findings, documents and every record behind them."""
     record: dict[str, Any] = {
         "id": f"ENG-{eng['id']:03d}",
         "client": eng["client"],
@@ -534,6 +590,44 @@ def engagement_record(
             }
             for d in documents_of(conn, eng["id"])
         ],
+    )
+    # Everything else the workspace recorded, so a company can take all of it with it.
+    eid = eng["id"]
+
+    def rows(sql: str) -> list[dict[str, Any]]:
+        return [dict(r) for r in conn.execute(sql, (eid,))]
+
+    record.update(
+        sector=eng["sector"],
+        audience=eng["audience"],
+        intake=answers_of(conn, eid),
+        finding_details=[
+            {k: f[k] for k in ("obligation_id", "status", "severity", "summary", "remediation")}
+            for f in findings_of(conn, eid)
+        ],
+        inventory=rows(
+            "SELECT source_name, field, kind, category, risk, children, purpose, principals, "
+            "legal_basis, retention, storage_location, recipients, owner "
+            "FROM data_inventory WHERE engagement_id = ? ORDER BY id"
+        ),
+        registers={key: _register_rows(conn, eid, key) for key in REGISTERS},
+        controls=rows(
+            "SELECT obligation_id, status, owner, notes, review_date FROM controls "
+            "WHERE engagement_id = ? ORDER BY obligation_id"
+        ),
+        risk_edits=rows(
+            "SELECT risk_key, likelihood, impact, treatment, owner, due, status, notes "
+            "FROM risk_edits WHERE engagement_id = ? ORDER BY risk_key"
+        ),
+        evidence_files=rows(
+            "SELECT title, category, obligation_id, filename, size_bytes, sha256, version, "
+            "status, uploaded_by, uploaded_at FROM evidence_files WHERE engagement_id = ? "
+            "ORDER BY id"
+        ),
+        dataflow_nodes=rows(
+            "SELECT name, stage, location, categories FROM dataflow_nodes "
+            "WHERE engagement_id = ? ORDER BY id"
+        ),
     )
     return record
 
@@ -704,6 +798,7 @@ def _routes(app: FastAPI) -> None:
             "engagements.html",
             summaries=[_summary(conn, e) for e in rows],
             sectors=SECTORS,
+            audiences=AUDIENCES,
         )
 
     @app.post("/engagements")
@@ -715,13 +810,14 @@ def _routes(app: FastAPI) -> None:
         form = await form_with_csrf(request)
         client = str(form.get("client", "")).strip()
         sector = form.get("sector")
-        if not client or sector not in SECTORS:
-            flash(request, "Enter a client name and choose a sector.", "error")
+        audience = form.get("audience") or "client"
+        if not client or sector not in SECTORS or audience not in AUDIENCES:
+            flash(request, "Enter a name and choose a sector.", "error")
             return redirect("/engagements")
         cur = conn.execute(
-            "INSERT INTO engagements (client, sector, mode, created_by, created_at) "
-            "VALUES (?,?,'agent',?,?)",
-            (client, sector, user, db.now()),
+            "INSERT INTO engagements (client, sector, mode, audience, created_by, created_at) "
+            "VALUES (?,?,'agent',?,?,?)",
+            (client, sector, audience, user, db.now()),
         )
         db.audit(conn, user, "engagement_created", cur.lastrowid)
         return redirect(f"/engagements/{cur.lastrowid}")
@@ -748,6 +844,8 @@ def _routes(app: FastAPI) -> None:
             request,
             "engagement.html",
             eng=eng,
+            is_admin=user_role(request) == "admin",
+            audiences=AUDIENCES,
             s=_summary(conn, eng),
             snapshot=snapshot,
             checks=checks,
@@ -780,7 +878,48 @@ def _routes(app: FastAPI) -> None:
         connector_views.queue_notification(
             request, background, conn, eid, f"{eng['client']}: engagement delivered by {user}."
         )
-        flash(request, "Engagement marked as delivered.")
+        flash(
+            request,
+            "Assessment signed off."
+            if eng["audience"] == "self"
+            else "Engagement marked as delivered.",
+        )
+        return redirect(f"/engagements/{eid}")
+
+    @app.post("/engagements/{eid}/audience")
+    async def engagement_audience(
+        eid: int,
+        request: Request,
+        user: User,
+        conn: Conn,
+    ):
+        """Switch who the workspace is for. Takes effect on the next assessment and documents."""
+        form = await form_with_csrf(request)
+        get_engagement(conn, eid)
+        audience = form.get("audience")
+        if audience not in AUDIENCES:
+            raise HTTPException(status_code=400, detail="Unknown audience")
+        conn.execute("UPDATE engagements SET audience = ? WHERE id = ?", (audience, eid))
+        db.audit(conn, user, "audience_changed", eid, {"audience": audience})
+        flash(request, f"This workspace is now for: {AUDIENCES[audience].lower()}.")
+        return redirect(f"/engagements/{eid}")
+
+    @app.post("/engagements/{eid}/reopen")
+    async def engagement_reopen(
+        eid: int,
+        request: Request,
+        user: User,
+        conn: Conn,
+    ):
+        """Undo a delivery so the assessment and documents can be reworked (admins only)."""
+        await form_with_csrf(request)
+        if user_role(request) != "admin":
+            raise HTTPException(status_code=403, detail="Only an admin can reopen a delivery.")
+        eng = get_engagement(conn, eid)
+        if eng["delivered_at"]:
+            conn.execute("UPDATE engagements SET delivered_at = NULL WHERE id = ?", (eid,))
+            db.audit(conn, user, "reopened", eid, {"was_delivered_at": eng["delivered_at"]})
+            flash(request, "Reopened. The intake, assessment and documents can be edited again.")
         return redirect(f"/engagements/{eid}")
 
     @app.get("/engagements/{eid}/export.json")
@@ -890,7 +1029,9 @@ def _routes(app: FastAPI) -> None:
                 return redirect(f"/engagements/{eid}/findings")
             try:
                 assessor = request.app.state.make_assessor(corpus)
-                results = await run_in_threadpool(assessor.assess, register, answers)
+                results = await run_in_threadpool(
+                    assessor.assess, register, answers, eng["audience"]
+                )
             except (TypeError, anthropic.CredentialsError) as exc:
                 if isinstance(exc, TypeError) and "authentication method" not in str(exc):
                     raise
@@ -907,7 +1048,7 @@ def _routes(app: FastAPI) -> None:
                 )
                 return redirect(f"/engagements/{eid}/findings")
         else:
-            results = assess(register, answers, request.app.state.index)
+            results = assess(register, answers, request.app.state.index, eng["audience"])
         conn.execute("DELETE FROM findings WHERE engagement_id = ?", (eid,))
         conn.executemany(
             "INSERT INTO findings (engagement_id, obligation_id, status, severity, citation, "
@@ -1005,6 +1146,7 @@ def _routes(app: FastAPI) -> None:
             corpus_ready=request.app.state.corpus is not None,
             index_source=request.app.state.index_source,
             obligations=obligations,
+            doubts=contradictions(conn, eid, obligations),
             verdicts=sorted(VERDICTS),
             tab="findings",
         )
@@ -1107,6 +1249,15 @@ def _routes(app: FastAPI) -> None:
             sector=eng["sector"],
             answers=answers_of(conn, eid),
             findings=[dict(f) for f in findings_of(conn, eid)],
+            audience=eng["audience"],
+            inventory=[
+                dict(r)
+                for r in conn.execute(
+                    "SELECT * FROM data_inventory WHERE engagement_id = ? ORDER BY id", (eid,)
+                )
+            ],
+            vendors=_register_rows(conn, eid, "vendors", skip=("offboarded",)),
+            dpias=_register_rows(conn, eid, "dpias"),
         )
         conn.execute("DELETE FROM documents WHERE engagement_id = ?", (eid,))
         generated = db.now()
@@ -1360,13 +1511,30 @@ def _routes(app: FastAPI) -> None:
         return redirect("/assistant")
 
 
+def _register_rows(
+    conn: sqlite3.Connection, eid: int, register: str, skip: tuple[str, ...] = ()
+) -> list[dict[str, Any]]:
+    """A register's records as flat dicts (ref plus the record's fields), oldest first."""
+    rows = conn.execute(
+        "SELECT ref, status, data_json FROM records WHERE engagement_id = ? AND register = ? "
+        "ORDER BY id",
+        (eid, register),
+    )
+    return [
+        {"ref": r["ref"], "status": r["status"], **json.loads(r["data_json"] or "{}")}
+        for r in rows
+        if r["status"] not in skip
+    ]
+
+
 def _summary(conn: sqlite3.Connection, eng: sqlite3.Row) -> dict[str, Any]:
     findings = [dict(f) for f in findings_of(conn, eng["id"])]
     docs = documents_of(conn, eng["id"])
+    own = eng["audience"] == "self"
     if eng["delivered_at"]:
-        stage = "Delivered"
+        stage = "Signed off" if own else "Delivered"
     elif docs and all(d["reviewed_at"] for d in docs):
-        stage = "Ready to deliver"
+        stage = "Ready to sign off" if own else "Ready to deliver"
     elif docs:
         stage = "In review"
     elif eng["assessed_at"]:

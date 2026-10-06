@@ -187,3 +187,15 @@ def test_read_the_text_the_app_extracted(authed, app):
     # Another engagement can't read it.
     other = create(authed)
     assert authed.get(f"/engagements/{other}/evidence/{fid}/text").status_code == 404
+
+
+def test_evidence_holding_personal_data_gets_a_warning(authed):
+    eid = create(authed)
+    rows = "name,email,aadhaar\n" + "".join(
+        f"Person {i},p{i}@example.in,2830 1661 3185\n" for i in range(10)
+    )
+    page = _upload(authed, eid, name="export.csv", data=rows.encode()).text
+    assert "Uploaded Breach procedure." in page
+    assert "holds personal data (Aadhaar number, Email address" in page
+    # Ordinary policy text gets no warning.
+    assert "holds personal data" not in _upload(authed, eid).text

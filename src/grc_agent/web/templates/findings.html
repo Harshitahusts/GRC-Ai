@@ -65,6 +65,11 @@
       </div>
       <h3>{{ o.obligation if o else f.obligation_id }}</h3>
       <p class="text-2">{{ f.summary }}</p>
+      {% if doubts.get(f.obligation_id) %}
+      <div class="flash flash-warn small"><strong>⚠ Your own records don't support this.</strong>
+        <ul>{% for d in doubts[f.obligation_id] %}<li>{{ d }}</li>{% endfor %}</ul>
+        Check the evidence before relying on this finding.</div>
+      {% endif %}
       {% if f.remediation %}<p class="next-step"><strong>Next step:</strong> {{ f.remediation }}</p>{% endif %}
       {% if not eng.delivered_at %}
       <details class="finding-edit" {% if f.verdict == "wrong" and not f.edited_at %}open{% endif %}>
@@ -96,6 +101,7 @@
       </div>
       {% endfor %}
       {% if f.drafted_by not in ("demo", "rules") and f.provisions %}<details class="small"><summary>Provisions shown</summary>{{ f.provisions|join(", ") }}</details>{% endif %}
+      {% if eng.audience != "self" or f.drafted_by not in ("demo", "rules") %}
       <form method="post" action="/engagements/{{ eng.id }}/findings/{{ f.id }}" class="verdict">
         <input type="hidden" name="csrf" value="{{ csrf }}">
         <p class="tile-label">{{ "Your review" if f.drafted_by not in ("demo", "rules") else "Accuracy scoring" }}</p>
@@ -107,6 +113,7 @@
         <label class="inline small"><input type="checkbox" name="hallucination" {% if f.hallucination %}checked{% endif %}> Hallucination</label>
         <button class="small">Save</button>
       </form>
+      {% endif %}
     </div>
   </article>
   {% endfor %}
@@ -116,7 +123,7 @@
 {% if not eng.delivered_at %}
 <form method="post" action="/engagements/{{ eng.id }}/documents/generate" class="action-bar">
   <input type="hidden" name="csrf" value="{{ csrf }}">
-  <span class="muted small">{% if s.documents %}Regenerating clears existing reviews.{% else %}Next: turn these findings into the client's draft document pack.{% endif %}</span>
+  <span class="muted small">{% if s.documents %}Regenerating clears existing reviews.{% else %}Next: turn these findings into {{ "your" if eng.audience == "self" else "the client's" }} draft document pack.{% endif %}</span>
   <button class="primary" {% if s.stale %}disabled{% endif %}>{{ "Regenerate draft pack" if s.documents else "Generate draft pack" }} {{ icon("i-arrow") }}</button>
 </form>
 {% endif %}

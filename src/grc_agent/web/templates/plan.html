@@ -4,7 +4,8 @@
 {% block content %}
 {{ engagement_header(eng, s, tab) }}
 
-{{ page_intro("Readiness plan", "The client's DPDPA obligations as steps, in working order, each with one next action. Progress is worked out from the real state every time you open this page, so nothing here can be ticked off by hand. The readiness score at the top comes from the client's answers; this plan tracks the work that proves them: controls implemented with evidence.") }}
+{% set whose = "Your" if eng.audience == "self" else "The client's" %}
+{{ page_intro("Readiness plan", whose ~ " DPDPA obligations as steps, in working order, each with one next action. Progress is worked out from the real state every time you open this page, so nothing here can be ticked off by hand. The readiness score at the top comes from " ~ ("your" if eng.audience == "self" else "the client's") ~ " answers; this plan tracks the work that proves them: controls implemented with evidence.") }}
 
 <section class="card plan-summary">
   <div>
@@ -16,7 +17,7 @@
     {% if current %}{% set cur = steps|selectattr("key", "equalto", current)|first %}
     Start here: <a href="#step-{{ current }}"><strong>{{ cur.title }}</strong></a>, {{ cur.completed }} of {{ cur.total }} done.
     {% else %}Every step is done.{% endif %}
-    <br><span class="muted">Stuck on a step? Ask the <a href="/assistant">GRC Analyst</a>: it reads this client's data and cites the Act.</span>
+    <br><span class="muted">Stuck on a step? Ask the <a href="/assistant">GRC Analyst</a>: it reads {{ "your" if eng.audience == "self" else "this client's" }} data and cites the Act.</span>
   </p>
 </section>
 
@@ -53,7 +54,7 @@
               {% if i.open_tasks %}· {{ i.open_tasks }} open task{{ '' if i.open_tasks == 1 else 's' }}{% endif %}</span>
           </span>
           {% if i.done %}<span class="muted small">{{ i.action }}</span>
-          {% elif not eng.delivered_at %}<a class="button small {{ 'primary' if st.key == current and loop.first }}" href="{{ i.href }}">{{ i.action }}</a>{% endif %}
+          {% elif not read_only %}<a class="button small {{ 'primary' if st.key == current and loop.first }}" href="{{ i.href }}">{{ i.action }}</a>{% endif %}
         </li>
         {% endfor %}
       </ul>

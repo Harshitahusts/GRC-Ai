@@ -4,7 +4,8 @@
 {% block content %}
 {{ engagement_header(eng, s, tab) }}
 {% set level_label = {"critical": "Critical", "high": "High", "medium": "Medium", "low": "Low"} %}
-{% set locked = eng.delivered_at is not none %}
+{# Day-to-day records stay editable after delivery; only viewers are read-only. #}
+{% set locked = read_only %}
 
 <section class="tiles risk-tiles" aria-label="Risk summary">
   <div class="tile"><p class="tile-label">Open risks</p><p class="tile-value">{{ rs.open }}</p><p class="muted small">{{ rs.closed }} closed</p></div>

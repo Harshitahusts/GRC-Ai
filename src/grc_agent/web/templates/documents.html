@@ -8,7 +8,7 @@
   <div class="card-head">
     <div>
       <h2>Draft pack and review gate</h2>
-      <p class="muted small" style="margin:0">Read each document in full and record a review. A document can't be exported until it's reviewed, and the engagement can't be delivered until all of them are.</p>
+      <p class="muted small" style="margin:0">Read each document in full and record a review. A document can't be exported until it's reviewed, and the assessment can't be {{ "signed off" if eng.audience == "self" else "delivered" }} until all of them are.</p>
     </div>
     {% if documents %}
     <div class="review-progress">

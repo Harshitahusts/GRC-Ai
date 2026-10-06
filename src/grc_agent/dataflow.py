@@ -4,7 +4,8 @@ Sources, in order of trust:
 - connector evidence (e.g. AWS shows buckets in us-east-1),
 - intake answers (what data is collected, which tools hold it, retention),
 - findings (each gap or open item is pinned to the step of the flow it affects),
-- systems a consultant adds by hand.
+- the vendor register, when it has entries (it names each processor and where it works),
+- systems added by hand on the map.
 
 The result is plain data (nodes, edges, issues, plan) that the page draws and
 re-fetches, so the map changes as soon as the intake, the assessment or a
@@ -16,6 +17,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -55,7 +57,8 @@ _INDIAN = (
     "zoho", "razorpay", "tally", "keka", "darwinbox", "paytm", "phonepe", "cashfree", "msg91",
     "exotel", "gupshup", "greythr", "payu", "instamojo", "juspay", "setu", "digilocker",
 )  # fmt: skip
-_SPLIT = re.compile(r"[,;\n/]+|\band\b|\b&\b")
+_SEPARATORS = ",;\n/"
+_LAST_AND = re.compile(r"\s+(?:and|&)\s+")
 _FILLER = re.compile(r"^(e\.?g\.?|like|such as|our|we use)\s+", re.I)
 
 
@@ -93,9 +96,45 @@ class Edge:
     status: str = "ok"
 
 
+def _depths(text: str) -> list[int]:
+    """Bracket depth at each character, so separators inside brackets can be skipped."""
+    depth, out = 0, []
+    for ch in text:
+        depth += ch in "([{"
+        out.append(depth)
+        depth -= ch in ")]}" and depth > 0
+    return out
+
+
+def _split(text: str) -> list[str]:
+    """Split a list written in prose: "A (x and y), B, C and D" -> A (x and y), B, C, D.
+
+    Separators inside brackets are ignored, and "and" only splits the last item of a list,
+    so "an email and office suite" in the middle of a list stays one item.
+    """
+    depth = _depths(text)
+    parts, start = [], 0
+    for i, ch in enumerate(text):
+        if ch in _SEPARATORS and depth[i] == 0:
+            parts.append(text[start:i])
+            start = i + 1
+    parts.append(text[start:])
+    parts = [p.strip() for p in parts if p.strip()]
+    if not parts:
+        return []
+    last = re.sub(r"^(?:and|&)\s+", "", parts.pop())
+    depth, start = _depths(last), 0
+    for m in _LAST_AND.finditer(last):
+        if depth[m.start()] == 0:
+            parts.append(last[start : m.start()])
+            start = m.end()
+    parts.append(last[start:])
+    return parts
+
+
 def _items(text: str, limit: int = 10) -> list[str]:
     out: list[str] = []
-    for part in _SPLIT.split(text or ""):
+    for part in _split(text or ""):
         item = _FILLER.sub("", part.strip(" .:-\t"))
         item = item.strip(" .")
         if 1 < len(item) <= 60 and item.lower() not in {x.lower() for x in out}:
@@ -107,12 +146,25 @@ def _slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:40] or "item"
 
 
+# Places named in a description ("run from the US", "Mumbai region").
+_ABROAD_WORDS = re.compile(
+    r"\b(the us|usa|u\.s\.|united states|uk|europe|eu|ireland|singapore|abroad|outside india)\b"
+)
+_INDIA_WORDS = re.compile(
+    r"\b(india|indian|mumbai|delhi|bengaluru|bangalore|chennai|hyderabad|pune|kolkata)\b"
+)
+
+
 def vendor_location(name: str) -> str:
     low = name.lower()
     if any(re.search(rf"\b{re.escape(k)}\b", low) for k in _INDIAN):
         return "india"
     if any(re.search(rf"\b{re.escape(k)}\b", low) for k in _FOREIGN):
         return "outside"
+    if _ABROAD_WORDS.search(low):
+        return "outside"
+    if _INDIA_WORDS.search(low):
+        return "india"
     return "unknown"
 
 
@@ -139,8 +191,13 @@ def build(
     evidence: list[dict[str, Any]],
     custom: list[dict[str, Any]],
     assessed: bool,
+    vendors: Sequence[dict[str, Any]] = (),
 ) -> dict[str, Any]:
-    """The flow map for one engagement, as JSON-ready data."""
+    """The flow map for one engagement, as JSON-ready data.
+
+    `vendors` is the vendor register (name, location, countries, data_shared). When it
+    has entries it replaces the vendors named at intake, because it says where each works.
+    """
     yes = lambda q: answers.get(q) in ("yes", "not_sure")  # noqa: E731
     cats = _items(answers.get("INFO-DATA", "")) or ["Personal data"]
     nodes: dict[str, Node] = {}
@@ -172,11 +229,20 @@ def build(
     link("collect", "core")
     link("rights", "core", [], "Requests handled")
 
-    # Outside companies named at intake.
-    vendors = _items(answers.get("INFO-TOOLS", ""), limit=8)
-    if not vendors and yes("CTX-VENDORS"):
-        vendors = ["Outside companies (not listed yet)"]
+    # Outside companies: from the vendor register if it has entries, else the intake.
+    registered = {_slug(v["name"]) for v in vendors if v.get("name")}
     for v in vendors:
+        if not v.get("name"):
+            continue
+        where = {"both": "outside"}.get(v.get("location", ""), v.get("location") or "unknown")
+        note = f"{v['ref']}: {v.get('countries') or LOCATIONS.get(where, 'Not known')}"
+        shared = _items(v.get("data_shared", "")) or cats
+        n = add(Node(f"vendor-{_slug(v['name'])}", v["name"], "vendors", where, shared, note=note))
+        link("core", n.id, shared)
+    named = [] if vendors else _items(answers.get("INFO-TOOLS", ""), limit=8)
+    if not vendors and not named and yes("CTX-VENDORS"):
+        named = ["Outside companies (not listed yet)"]
+    for v in named:
         n = add(Node(f"vendor-{_slug(v)}", v, "vendors", vendor_location(v), cats))
         link("core", n.id)
 
@@ -199,11 +265,11 @@ def build(
 
     # Where data ends up.
     retention = answers.get("INFO-RETENTION", "")
-    note = f"Client says: {retention}" if retention else "Retention not described yet."
+    note = f"As described: {retention}" if retention else "Retention not described yet."
     add(Node("deletion", "Deletion & retention", "destinations", "india", [], note=note))
     link("core", "deletion", [], "End of purpose")
 
-    # Custom systems a consultant added.
+    # Systems added by hand on the map.
     default_source = {
         "principals": "",
         "collection": "customers",
@@ -219,7 +285,11 @@ def build(
                 c["stage"],
                 c["location"],
                 _items(c["categories"]),
-                note="Added by the consultant",
+                note=(
+                    "Added on the map. Not in the vendor register yet: add it there."
+                    if c["stage"] == "vendors" and vendors and _slug(c["name"]) not in registered
+                    else "Added on the map"
+                ),
                 custom_id=c["id"],
             )
         )

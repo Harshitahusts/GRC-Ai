@@ -38,6 +38,7 @@ def _builtin_scanner(monkeypatch):
         ("priya99@okaxis", "UPI_ID"),
         ("49.36.12.200", "IP_ADDRESS"),
         ("Call me on 9876543210 after 6", "PHONE_NUMBER"),
+        ("Diagnosed with dyslexia, extra time in tests", "HEALTH"),
     ],
 )
 def test_detectors_find(value, entity):
@@ -54,6 +55,7 @@ def test_detectors_find(value, entity):
         ("12345", "PHONE_NUMBER"),
         ("priya.sharma@example.in", "UPI_ID"),  # an email is not a UPI ID
         ("SKU-TSHIRT-M", "IN_PAN"),
+        ("Needs help with fractions", "HEALTH"),
     ],
 )
 def test_detectors_reject(value, entity):
@@ -289,7 +291,8 @@ def test_upload_scan_review_and_inventory(app, authed):
     # Exports.
     csv_ = authed.get(f"/engagements/{eid}/inventory.csv")
     assert csv_.headers["content-type"].startswith("text/csv")
-    assert "Send order updates and invoices" in csv_.text and "OBL-011" in csv_.text
+    assert "Send order updates and invoices" in csv_.text and "Section 9(1)" in csv_.text
+    assert "OBL-011" not in csv_.text  # the same section references as the page
     assert "aadhaar_no" in authed.get(f"/engagements/{eid}/discovery/findings.csv").text
 
 
@@ -449,14 +452,15 @@ def test_manual_inventory_records_and_csv_is_formula_safe(app, authed):
         assert conn.execute("SELECT COUNT(*) FROM data_inventory").fetchone()[0] == 0
 
 
-def test_delivered_engagement_is_read_only(app, authed):
+def test_discovery_stays_open_after_delivery(app, authed):
+    # Delivery locks the assessment, not day-to-day work such as scanning new systems.
     eid = create(authed)
     upload(authed, eid)
     with db(app) as conn:
         conn.execute("UPDATE engagements SET delivered_at = '2026-09-01T00:00:00+00:00'")
-    assert upload(authed, eid).status_code == 400
+    assert upload(authed, eid).status_code == 200
     page = authed.get(f"/engagements/{eid}/discovery")
-    assert "no new scans" in page.text
+    assert "Scan for personal data" in page.text
 
 
 def test_new_tables_are_catalogued_in_the_data_manager(authed):

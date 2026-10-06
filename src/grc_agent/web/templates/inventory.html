@@ -4,7 +4,8 @@
 {% block content %}
 {{ engagement_header(eng, s, tab) }}
 {{ personal_tabs(eng, subtab, ds) }}
-{% set locked = eng.delivered_at is not none %}
+{# Day-to-day records stay editable after delivery; only viewers are read-only. #}
+{% set locked = read_only %}
 
 <section class="tiles dash-tiles" aria-label="Inventory at a glance">
   <div class="tile"><p class="tile-label">Fields with personal data</p><p class="tile-value">{{ ds.inventory }}</p><p class="muted small">across {{ items|map(attribute="source_name")|unique|list|length }} source{{ '' if items|map(attribute="source_name")|unique|list|length == 1 else 's' }}</p></div>

@@ -27,7 +27,7 @@
 ] %}
 <nav class="stepper" aria-label="Engagement workflow">
   <a href="/engagements/{{ eng.id }}" class="step-overview" {% if tab == "overview" %}aria-current="page"{% endif %}>
-    <span class="step-dot"><svg class="icon" aria-hidden="true"><use href="#i-home"/></svg></span><span class="step-text"><strong>Overview</strong><small>{{ "Delivered" if eng.delivered_at else "Delivery checklist" }}</small></span></a>
+    <span class="step-dot"><svg class="icon" aria-hidden="true"><use href="#i-home"/></svg></span><span class="step-text"><strong>Overview</strong><small>{% if eng.audience == "self" %}{{ "Signed off" if eng.delivered_at else "Sign-off checklist" }}{% else %}{{ "Delivered" if eng.delivered_at else "Delivery checklist" }}{% endif %}</small></span></a>
   {% for key, href, label, done, note in steps %}
   <a href="{{ href }}" class="{{ 'done' if done }}" {% if tab == key %}aria-current="page"{% endif %}>
     <span class="step-dot">{% if done %}<svg class="icon" aria-hidden="true"><use href="#i-check"/></svg><span class="sr-only">Done:</span>{% else %}{{ loop.index }}{% endif %}</span>

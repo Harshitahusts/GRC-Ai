@@ -9,6 +9,7 @@
     {% for b in blocks %}
       {% if b.kind == "h1" %}<h1>{{ b.text }}</h1>
       {% elif b.kind == "h2" %}<h2>{{ b.text }}</h2>
+      {% elif b.kind == "h3" %}<h3>{{ b.text }}</h3>
       {% elif b.kind == "p" %}<p>{{ b.text }}</p>
       {% elif b.kind == "warning" %}<p class="flash flash-warn"><strong>{{ b.text }}</strong></p>
       {% elif b.kind == "bullets" %}<ul>{% for i in b.items %}<li>{{ i }}</li>{% endfor %}</ul>
@@ -36,7 +37,7 @@
         {% endfor %}
       </fieldset>
       <label class="inline block"><input type="checkbox" name="confirm" required> I read the whole document and checked every provision it cites.</label>
-      {% if doc.type == "dpa" %}<p class="small muted">A DPA also needs a lawyer's sign-off before it goes to the client.</p>{% endif %}
+      {% if doc.type == "dpa" %}<p class="small muted">A DPA also needs a lawyer's sign-off before {{ "you sign it with a vendor" if eng.audience == "self" else "it goes to the client" }}.</p>{% endif %}
       <button class="primary">Record review</button>
     </form>
     {% endif %}

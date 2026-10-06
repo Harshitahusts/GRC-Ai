@@ -3,7 +3,8 @@
 {% block title %}Evidence · {{ eng.client }}{% endblock %}
 {% block content %}
 {{ engagement_header(eng, s, tab) }}
-{% set locked = eng.delivered_at is not none %}
+{# Day-to-day records stay editable after delivery; only viewers are read-only. #}
+{% set locked = read_only %}
 {% set ob_by_id = {} %}{% for o in obligations %}{% set _ = ob_by_id.update({o.id: o}) %}{% endfor %}
 
 {{ page_intro("Evidence", "Files that prove a control works: policies, screenshots, contracts, training records, exports. Link each to the obligation it supports. With an AI provider set up, the AI reads each linked file and flags one that isn't about its obligation, so it doesn't count by mistake; a person decides in the end. Connector checks are collected automatically on the Connectors tab.") }}

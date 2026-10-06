@@ -7,6 +7,7 @@ from helpers import ALL_YES, create, post
 
 from grc_agent import risk
 from grc_agent.register import load_register
+from grc_agent.web import db as webdb
 
 OBLIGATIONS = {o.id: o for o in load_register().obligations}
 
@@ -158,3 +159,11 @@ def test_overview_and_dashboard_show_risks(assessed):
     dashboard = client.get("/").text
     assert "Top risks" in dashboard and "Critical &amp; high risks" in dashboard
     assert "Pilot KPIs" not in dashboard and "North Star" not in dashboard
+
+
+def test_delivered_engagements_keep_their_risks_on_the_dashboard(assessed, app):
+    client, eid = assessed
+    with webdb.connect(app.state.db_path) as conn:
+        conn.execute("UPDATE engagements SET delivered_at = '2026-09-01T00:00:00+00:00'")
+    dashboard = client.get("/").text
+    assert f"/engagements/{eid}/risks#finding:OBL-004" in dashboard

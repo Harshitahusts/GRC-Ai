@@ -223,13 +223,15 @@ class ClaudeAssessor:
             provisions=tuple(c.ref for c in provisions),
         )
 
-    def assess(self, register: Register, answers: dict[str, str]) -> list[AssessedFinding]:
+    def assess(
+        self, register: Register, answers: dict[str, str], audience: str = "client"
+    ) -> list[AssessedFinding]:
         """Rules first, then Claude drafts every finding that isn't not_applicable.
 
         All-or-nothing: if any obligation fails, AssessmentError is raised and the
         caller keeps whatever it had before.
         """
-        base = assess(register, answers, self.corpus.index)
+        base = assess(register, answers, self.corpus.index, audience)
         obligations = {o.id: o for o in register.obligations}
         todo = [f for f in base if f.status != "not_applicable"]
         with ThreadPoolExecutor(max_workers=self.workers) as pool:

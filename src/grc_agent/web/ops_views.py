@@ -31,6 +31,8 @@ from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
 
 from grc_agent import evidence_check, plan
+from grc_agent.discovery import engine as discovery_engine
+from grc_agent.discovery import scanner
 from grc_agent.web import (
     ai_views,
     auth_views,
@@ -354,10 +356,9 @@ def register(app: FastAPI) -> None:
         return get_engagement(conn, eid)
 
     def open_engagement(conn, eid):
-        eng = agent_engagement(conn, eid)
-        if eng["delivered_at"]:
-            raise HTTPException(status_code=400, detail="This engagement is delivered and locked.")
-        return eng
+        # Delivery locks the assessment and its documents, not the day-to-day records:
+        # breaches, requests and the rest keep their legal clocks after delivery.
+        return agent_engagement(conn, eid)
 
     def people(conn) -> list[str]:
         return [r[0] for r in conn.execute("SELECT username FROM users ORDER BY username")]
@@ -511,6 +512,16 @@ def register(app: FastAPI) -> None:
             ai_ready=ai_ready(request.app),
         )
 
+    def personal_data_in(filename: str, data: bytes) -> list[str]:
+        """What personal data a CSV or JSON evidence file holds, found with the built-in
+        scanner, so the uploader can be told to use a masked sample instead."""
+        try:
+            table = scanner.read_table(filename, data)
+        except scanner.ScanInputError:
+            return []
+        found = scanner.scan_table(table, discovery_engine.BUILTIN)
+        return list(dict.fromkeys(r.label for r in found if r.confidence != "low"))
+
     @app.post("/engagements/{eid}/evidence")
     async def evidence_upload(
         eid: int, request: Request, user: User, conn: Conn, background: BackgroundTasks
@@ -617,6 +628,15 @@ def register(app: FastAPI) -> None:
             + (f" (version {version})." if version > 1 else ".")
             + (" The AI is checking that it's about the linked obligation." if auto else ""),
         )
+        personal = personal_data_in(upload.filename, data) if ext in (".csv", ".json") else []
+        if personal:
+            flash(
+                request,
+                f"{title} holds personal data ({', '.join(personal[:5])}). Evidence only needs "
+                "to show the control works: replace it with a masked sample or a summary "
+                "where you can.",
+                "warn",
+            )
         return redirect(back)
 
     def get_file(conn, eid: int, fid: int) -> sqlite3.Row:

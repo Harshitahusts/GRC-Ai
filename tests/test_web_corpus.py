@@ -111,7 +111,7 @@ def test_failed_claude_run_keeps_previous_findings(with_corpus):
     post(client, f"/engagements/{eid}/assess", {"mode": "rules"})
 
     class Broken:
-        def assess(self, register, answers):
+        def assess(self, register, answers, audience="client"):
             raise AssessmentError("OBL-002: unusable output after a retry (not json).")
 
     app.state.make_assessor = lambda corpus: Broken()

@@ -50,7 +50,7 @@ def test_intake_answers_become_the_flow():
     assert n["vendor-mailchimp"]["location"] == "outside"
     assert n["vendor-local-accountant"]["location"] == "unknown"
     assert flow["categories"] == ["Emails", "Names", "Phone numbers"]
-    assert n["deletion"]["note"] == "Client says: Five years after the account closes"
+    assert n["deletion"]["note"] == "As described: Five years after the account closes"
     pairs = {(e["source"], e["target"]) for e in flow["edges"]}
     assert ("core", "vendor-mailchimp") in pairs and ("vendor-mailchimp", "abroad") in pairs
     assert ("vendor-zoho-crm", "abroad") not in pairs
@@ -223,3 +223,57 @@ def test_safe_cell():
     assert safe_cell("=HYPERLINK(1)") == "'=HYPERLINK(1)"
     assert safe_cell("@SUM(A1)") == "'@SUM(A1)" and safe_cell("-1+1") == "'-1+1"
     assert safe_cell("Mailchimp") == "Mailchimp" and safe_cell(3) == 3
+
+
+def test_vendor_lists_in_prose_split_sensibly():
+    tools = (
+        "Cloud hosting in the Mumbai region (servers and database), an email and office "
+        "suite run from the US, and a payroll provider"
+    )
+    vendors = [
+        n for n in build({**ANSWERS, "INFO-TOOLS": tools})["nodes"] if n["stage"] == "vendors"
+    ]
+    assert [(n["name"], n["location"]) for n in vendors] == [
+        ("Cloud hosting in the Mumbai region (servers and database)", "india"),
+        ("An email and office suite run from the US", "outside"),
+        ("A payroll provider", "unknown"),
+    ]
+
+
+def test_vendor_register_replaces_intake_vendors_and_places_them():
+    register = [
+        {
+            "ref": "VEN-001",
+            "name": "Helpdesk",
+            "location": "outside",
+            "countries": "Ireland",
+            "data_shared": "Emails",
+        },
+        {
+            "ref": "VEN-002",
+            "name": "Chat vendor",
+            "location": "both",
+            "countries": "",
+            "data_shared": "",
+        },
+    ]
+    custom = [
+        {
+            "id": 1,
+            "name": "Analytics SDK",
+            "stage": "vendors",
+            "location": "outside",
+            "categories": "",
+            "source": "",
+        }
+    ]
+    flow = dataflow.build(1, ANSWERS, [], {}, [], custom, assessed=True, vendors=register)
+    n = nodes(flow)
+    assert (
+        n["vendor-helpdesk"]["location"] == "outside" and "Ireland" in n["vendor-helpdesk"]["note"]
+    )
+    assert n["vendor-chat-vendor"]["location"] == "outside"
+    assert not any(
+        k.startswith("vendor-") and k not in ("vendor-helpdesk", "vendor-chat-vendor") for k in n
+    )
+    assert "Not in the vendor register" in n["custom-1"]["note"]

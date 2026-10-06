@@ -38,14 +38,39 @@ class AssessedFinding:
         return bool(self.citations) and not self.unresolved
 
 
+# How a finding's summary is worded. The status is the same either way; only the voice
+# changes: a GRC partner writes about "the client", a company about itself.
+WORDING = {
+    "client": {
+        "unclear": "Can't tell whether this applies: the client didn't answer clearly.",
+        "not_applicable": "Doesn't apply, based on the client's answers.",
+        "compliant": "Client says this is in place. Check the evidence before relying on it.",
+        "gap": "Client says this isn't in place.",
+        "not_sure": "Client wasn't sure. Follow up on the clarification call.",
+        "skipped": "Question skipped. Follow up with the client.",
+    },
+    "self": {
+        "unclear": "Can't tell whether this applies: the answer wasn't clear.",
+        "not_applicable": "Doesn't apply, based on your answers.",
+        "compliant": "You said this is in place. Upload evidence that proves it.",
+        "gap": "You said this isn't in place.",
+        "not_sure": "You weren't sure. Check with the team that runs this.",
+        "skipped": "Question skipped. Answer it in the intake.",
+    },
+}
+
+
 def assess(
-    register: Register, answers: dict[str, str], index: CorpusIndex
+    register: Register, answers: dict[str, str], index: CorpusIndex, audience: str = "client"
 ) -> list[AssessedFinding]:
-    return [_assess_one(o, answers, index) for o in register.obligations]
+    words = WORDING.get(audience, WORDING["client"])
+    return [_assess_one(o, answers, index, words) for o in register.obligations]
 
 
-def _assess_one(o: Obligation, answers: dict[str, str], index: CorpusIndex) -> AssessedFinding:
-    status, summary = _status(o, answers)
+def _assess_one(
+    o: Obligation, answers: dict[str, str], index: CorpusIndex, words: dict[str, str]
+) -> AssessedFinding:
+    status, summary = _status(o, answers, words)
     return AssessedFinding(
         obligation_id=o.id,
         status=status,
@@ -57,22 +82,22 @@ def _assess_one(o: Obligation, answers: dict[str, str], index: CorpusIndex) -> A
     )
 
 
-def _status(o: Obligation, answers: dict[str, str]) -> tuple[str, str]:
+def _status(o: Obligation, answers: dict[str, str], words: dict[str, str]) -> tuple[str, str]:
     if o.applies_if:
         trigger = answers.get(o.applies_if.question)
         if trigger is None or trigger == "not_sure":
-            return "open_item", "Can't tell whether this applies: the client didn't answer clearly."
+            return "open_item", words["unclear"]
         if trigger != o.applies_if.equals:
-            return "not_applicable", "Doesn't apply, based on the client's answers."
+            return "not_applicable", words["not_applicable"]
 
     answer = answers.get(o.question)
     if answer == "yes":
-        return "compliant", "Client says this is in place. Check the evidence before relying on it."
+        return "compliant", words["compliant"]
     if answer == "no":
-        return "gap", "Client says this isn't in place."
+        return "gap", words["gap"]
     if answer == "not_sure":
-        return "open_item", "Client wasn't sure. Follow up on the clarification call."
-    return "open_item", "Question skipped. Follow up with the client."
+        return "open_item", words["not_sure"]
+    return "open_item", words["skipped"]
 
 
 def readiness_score(findings: list[AssessedFinding] | list[dict]) -> int | None:
