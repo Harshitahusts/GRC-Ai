@@ -185,21 +185,25 @@ def summary(conn: sqlite3.Connection, eid: int | None = None) -> dict:
     """Counts for the dashboard and tabs. eid=None sums over every agent engagement."""
     where, args = ("WHERE engagement_id = ?", (eid,)) if eid is not None else ("", ())
     pending = conn.execute(
-        f"SELECT COUNT(*) FROM scan_findings {where}{' AND' if where else ' WHERE'} "
+        # Safe: the SQL text holds only names from this code; values are ? parameters.
+        f"SELECT COUNT(*) FROM scan_findings {where}{' AND' if where else ' WHERE'} "  # nosec B608  # noqa: S608
         "status = 'pending'",
         args,
     ).fetchone()[0]
-    inv = conn.execute(f"SELECT * FROM data_inventory {where}", args).fetchall()
+    # Safe: the SQL text holds only names from this code; values are ? parameters.
+    inv = conn.execute(f"SELECT * FROM data_inventory {where}", args).fetchall()  # nosec B608  # noqa: S608
     incomplete = sum(1 for r in inv if any(not r[k] for k in REQUIRED))
     scans = conn.execute(
-        "SELECT COUNT(*), SUM(CASE WHEN status IN ('queued', 'running') THEN 1 ELSE 0 END) "
+        # Safe: the SQL text holds only names from this code; values are ? parameters.
+        "SELECT COUNT(*), SUM(CASE WHEN status IN ('queued', 'running') THEN 1 ELSE 0 END) "  # nosec B608  # noqa: S608
         f"FROM scan_jobs {where}",
         args,
     ).fetchone()
     # Children's data the reviewer hasn't decided on yet counts too: it is the most
     # urgent thing to look at.
     pending_children = conn.execute(
-        f"SELECT COUNT(*) FROM scan_findings {where}{' AND' if where else ' WHERE'} "
+        # Safe: the SQL text holds only names from this code; values are ? parameters.
+        f"SELECT COUNT(*) FROM scan_findings {where}{' AND' if where else ' WHERE'} "  # nosec B608  # noqa: S608
         "status = 'pending' AND minors > 0",
         args,
     ).fetchone()[0]
@@ -319,7 +323,8 @@ def register(app: FastAPI) -> None:
         statuses = ("pending", "confirmed", "rejected", "superseded", "all")
         show = show if show in statuses else "pending"
         rows = conn.execute(
-            "SELECT * FROM scan_findings WHERE engagement_id = ? "
+            # Safe: the SQL text holds only names from this code; values are ? parameters.
+            "SELECT * FROM scan_findings WHERE engagement_id = ? "  # nosec B608  # noqa: S608
             + ("" if show == "all" else "AND status = ? ")
             + "ORDER BY source_name, CASE risk WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, "
             "CASE confidence WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, id",
@@ -599,7 +604,8 @@ def register(app: FastAPI) -> None:
             raise HTTPException(status_code=400, detail="Unknown data principal category")
         children = 1 if item["children"] or values["principals"] == "Children" else 0
         conn.execute(
-            "UPDATE data_inventory SET "
+            # Safe: the SQL text holds only names from this code; values are ? parameters.
+            "UPDATE data_inventory SET "  # nosec B608  # noqa: S608
             + ", ".join(f"{k} = ?" for k in EDITABLE)
             + ", children = ?, updated_by = ?, updated_at = ? WHERE id = ?",
             (*values.values(), children, user, db.now(), iid),

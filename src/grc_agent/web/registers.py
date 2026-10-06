@@ -586,10 +586,9 @@ def clean(spec: RegisterSpec, form: dict) -> tuple[dict, list[str]]:
         if f.required and not v:
             errors.append(f"{f.label} is required.")
         data[f.name] = v
-    if spec.key == "requests" and data.get("response_days"):
-        if int(data["response_days"]) > 90:
-            errors.append("Days to respond: Rule 14(3) allows at most 90 days.")
-            data["response_days"] = "90"
+    if spec.key == "requests" and data.get("response_days") and int(data["response_days"]) > 90:
+        errors.append("Days to respond: Rule 14(3) allows at most 90 days.")
+        data["response_days"] = "90"
     return data, errors
 
 

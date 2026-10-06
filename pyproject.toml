@@ -23,6 +23,7 @@ dependencies = [
     "cryptography>=42",
     "boto3>=1.34",
     "httpx>=0.27",  # talks to the OpenAI-compatible AI providers (grc_agent.llm)
+    "argon2-cffi>=23.1",  # password hashing (Argon2id), grc_agent.web.security
 ]
 
 [project.optional-dependencies]
@@ -50,8 +51,13 @@ line-length = 100
 target-version = "py310"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP"]
+# S = flake8-bandit security rules (the same checks as Bandit), so CI fails on a new
+# risky pattern. Real false positives are marked in place with `# nosec ... # noqa: S...`
+# and a comment saying why they're safe.
+select = ["E", "F", "I", "B", "UP", "S"]
 
 [tool.ruff.lint.per-file-ignores]
+# Tests use assert, fixed test passwords, sample SQL and seeded randomness by design.
+"tests/**" = ["S101", "S104", "S105", "S106", "S311", "S608"]
 # The connector catalog is a data table of descriptions; wrapping them hurts readability.
 "src/grc_agent/connectors/catalog.py" = ["E501"]

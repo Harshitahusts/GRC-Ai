@@ -202,7 +202,8 @@ def analyst_tools(app: FastAPI, user: str = "", can_act: bool = False) -> list[T
             rows = connector_views.evidence_rows(conn, engagement_id)
             findings = [dict(f) for f in findings_of(conn, engagement_id)]
             files = conn.execute(
-                f"SELECT title, category, obligation_id, version, uploaded_at, ai_check, "
+                # Safe: the SQL text holds only names from this code; values are ? parameters.
+                f"SELECT title, category, obligation_id, version, uploaded_at, ai_check, "  # nosec B608  # noqa: S608
                 f"ai_check_reason, check_overruled_by, {COUNTS_AS_EVIDENCE} AS counts "
                 "FROM evidence_files WHERE engagement_id = ? AND status = 'current' "
                 "ORDER BY id",

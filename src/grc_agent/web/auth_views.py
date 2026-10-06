@@ -27,7 +27,8 @@ from grc_agent.web.security import hash_password, verify_password
 
 # Stored as the password hash of an account that has no password (invited, or Google /
 # Microsoft only). verify_password() can never match it.
-NO_PASSWORD = "!none"
+# Not a password: a fixed marker or public value, named like one.
+NO_PASSWORD = "!none"  # nosec B105  # noqa: S105
 MIN_PASSWORD = 10
 INVITE_HOURS = 7 * 24
 RESET_HOURS = 1

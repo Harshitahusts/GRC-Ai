@@ -17,6 +17,7 @@ Whenever HTTPS is on, the session cookie is marked Secure (never sent over plain
 HTTP) and browsers are told to use HTTPS for this site from then on (HSTS).
 """
 
+import contextlib
 import datetime as dt
 import ipaddress
 import os
@@ -201,10 +202,8 @@ def self_signed_cert(folder: Path, extra_hosts: list[str]) -> tuple[str, str]:
             serialization.NoEncryption(),
         )
     )
-    try:
+    with contextlib.suppress(OSError):  # Windows: file permissions work differently
         key_path.chmod(0o600)
-    except OSError:  # Windows: file permissions work differently
-        pass
     cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
     return str(cert_path), str(key_path)
 

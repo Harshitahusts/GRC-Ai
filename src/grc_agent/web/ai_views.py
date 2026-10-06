@@ -215,7 +215,8 @@ def check(app: FastAPI, conn: sqlite3.Connection) -> tuple[bool, str]:
             (settings.provider, "", "system", db.now()),
         )
     conn.execute(
-        "UPDATE ai_providers SET status = ?, message = ?, tested_at = ?"
+        # Safe: the SQL text holds only names from this code; values are ? parameters.
+        "UPDATE ai_providers SET status = ?, message = ?, tested_at = ?"  # nosec B608  # noqa: S608
         + (", model = ?" if used else "")
         + (", models_json = ?" if models is not None else "")
         + " WHERE active = 1",

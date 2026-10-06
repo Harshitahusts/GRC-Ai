@@ -38,6 +38,13 @@ jobs:
       run: |
         ruff check .
         ruff format --check .
+    # Known vulnerabilities (PyPI advisories, with CVE ids) in every installed library.
+    # The dependency set is the same on every platform, so one run is enough.
+    - name: Dependency vulnerabilities
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+      run: |
+        pip install --upgrade pip setuptools pip-audit
+        pip-audit --skip-editable
     - name: Tests
       run: pytest -q
     # Run start.bat itself on Windows, as a user would: it creates its own .venv,

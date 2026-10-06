@@ -35,7 +35,8 @@ log = logging.getLogger(__name__)
 
 MARKER = "DEMO_TENANT"
 DEMO_USER = "demo"
-DEMO_PASSWORD = "grc-demo-2026"  # sample data only; the demo runs on this machine
+# Not a secret: the demo workspace's published sign-in (sample data only).
+DEMO_PASSWORD = "grc-demo-2026"  # nosec B105  # noqa: S105
 COLLEAGUES = ("priya.sharma", "arjun.mehta")
 LIVE_SECONDS = 40  # how often a colleague does something in the live demo
 
@@ -331,9 +332,11 @@ def _add_connection(conn, app, eid: int, connector: str, config: dict, checks: l
 
 def resync(conn, row, rng: random.Random | None = None) -> str:
     """A simulated connector sync: refresh the evidence, sometimes flipping one check."""
-    rng = rng or random.Random()
+    # Made-up demo data, not security: a seeded random is right here.
+    rng = rng or random.Random()  # nosec B311  # noqa: S311
     rows = conn.execute(
-        "SELECT id, check_key, status FROM evidence WHERE connection_id = ? "
+        # Safe: the SQL text holds only names from this code; values are ? parameters.
+        "SELECT id, check_key, status FROM evidence WHERE connection_id = ? "  # nosec B608  # noqa: S608
         f"AND check_key IN ({','.join('?' * len(FLIP))})",
         (row["id"], *FLIP),
     ).fetchall()
@@ -444,7 +447,8 @@ def seed(data_dir: Path, reset: bool = False) -> Path:
 def _login(client, user: str, password: str):
     token = _csrf(client, "/login")
     r = client.post("/login", data={"username": user, "password": password, "csrf": token})
-    assert r.url.path == "/", f"demo login failed for {user}"
+    if r.url.path != "/":
+        raise RuntimeError(f"demo login failed for {user}")
     return client
 
 
@@ -454,7 +458,8 @@ def _csrf(client, path: str = "/") -> str:
 
 def _post(client, path: str, data: dict | None = None):
     r = client.post(path, data={**(data or {}), "csrf": _csrf(client)})
-    assert r.status_code < 400, f"{path}: {r.status_code}"
+    if r.status_code >= 400:
+        raise RuntimeError(f"{path}: {r.status_code}")
     return r
 
 
@@ -600,7 +605,8 @@ def _seed_scan(app, lead, other, clock: _Clock, eid: int, source: str, sample: s
         data={"csrf": _csrf(lead), "source_name": source},
         files={"file": (sample, sample_bytes(sample), SAMPLE_FILES[sample][0])},
     )
-    assert r.status_code < 400, f"demo scan failed: {r.status_code}"
+    if r.status_code >= 400:
+        raise RuntimeError(f"demo scan failed: {r.status_code}")
     clock.tick(35)
     _post(other, f"/engagements/{eid}/discovery/confirm-high")
     if how != "documented":
@@ -935,7 +941,8 @@ def _risk(key, treatment, status, owner, clock: _Clock, due_in_days: int, notes:
 
 def live_step(db_path: Path, rng: random.Random | None = None) -> str | None:
     """One thing a colleague does. Returns a short description, or None if nothing to do."""
-    rng = rng or random.Random()
+    # Made-up demo data, not security: a seeded random is right here.
+    rng = rng or random.Random()  # nosec B311  # noqa: S311
     user = rng.choice(COLLEAGUES)
     conn = db.connect(db_path)
     try:
@@ -1037,7 +1044,8 @@ def _obligation_title(obligation_id: str) -> str:
 
 
 async def live_loop(db_path: Path, seconds: float) -> None:
-    rng = random.Random()
+    # Made-up demo data, not security: a seeded random is right here.
+    rng = random.Random()  # nosec B311  # noqa: S311
     while True:
         await asyncio.sleep(seconds * rng.uniform(0.7, 1.3))
         try:

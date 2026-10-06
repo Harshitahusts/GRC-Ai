@@ -109,7 +109,8 @@ def register(app: FastAPI) -> None:
     def api_keys_page(request: Request, user: User, conn: Conn):
         is_admin = user_role(request) == "admin"
         rows = conn.execute(
-            "SELECT * FROM api_keys "
+            # Safe: the SQL text holds only names from this code; values are ? parameters.
+            "SELECT * FROM api_keys "  # nosec B608  # noqa: S608
             + ("" if is_admin else "WHERE LOWER(username) = LOWER(?) ")
             + "ORDER BY revoked_at IS NOT NULL, id DESC",
             () if is_admin else (user,),

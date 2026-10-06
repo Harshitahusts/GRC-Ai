@@ -304,7 +304,8 @@ def _denied(key: str, title: str, code: str | None) -> Check:
 
 # ---- Google Cloud (service account key, JWT bearer flow)
 
-GCP_TOKEN_URI = "https://oauth2.googleapis.com/token"
+# Not a password: a fixed marker or public value, named like one.
+GCP_TOKEN_URI = "https://oauth2.googleapis.com/token"  # nosec B105  # noqa: S105
 GCP_SCOPE = "https://www.googleapis.com/auth/devstorage.read_only"
 
 

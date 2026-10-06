@@ -73,6 +73,8 @@ from grc_agent.web import (
 from grc_agent.web.security import (
     DUMMY_HASH,
     csrf_matches,
+    hash_password,
+    needs_rehash,
     new_csrf_token,
     verify_password,
 )
@@ -602,7 +604,14 @@ def _routes(app: FastAPI) -> None:
             )
 
         failures.pop(key, None)
-        start_session(request, row["username"], row["password_hash"])
+        password_hash = row["password_hash"]
+        if needs_rehash(password_hash):  # an older hash: replace it now that we know the password
+            password_hash = hash_password(password)
+            conn.execute(
+                "UPDATE users SET password_hash = ? WHERE username = ?",
+                (password_hash, row["username"]),
+            )
+        start_session(request, row["username"], password_hash)
         db.audit(conn, row["username"], "login")
         return redirect("/")
 
@@ -1280,7 +1289,8 @@ def _routes(app: FastAPI) -> None:
         history = []
         for role, text in merged:
             if role == "assistant":
-                history.append((role, Markup(_chat_html(text)), ""))
+                # Safe: Markdown is rendered with raw HTML off, so the text is escaped.
+                history.append((role, Markup(_chat_html(text)), ""))  # nosec B704  # noqa: S704
             else:
                 focus, _, question = (
                     text.partition("\n") if text.startswith(FOCUS) else ("", "", text)

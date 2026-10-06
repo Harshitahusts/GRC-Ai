@@ -136,7 +136,8 @@ def controls_for(conn: sqlite3.Connection, app, eid: int) -> list[dict]:
     }
     files: dict[str, int] = {}
     for r in conn.execute(
-        "SELECT obligation_id, COUNT(*) AS n FROM evidence_files WHERE engagement_id = ? "
+        # Safe: the SQL text holds only names from this code; values are ? parameters.
+        "SELECT obligation_id, COUNT(*) AS n FROM evidence_files WHERE engagement_id = ? "  # nosec B608  # noqa: S608
         f"AND status = 'current' AND obligation_id != '' AND {COUNTS_AS_EVIDENCE} "
         "GROUP BY obligation_id",
         (eid,),
@@ -215,7 +216,8 @@ def readiness_plan(conn: sqlite3.Connection, app, eng) -> list[plan.Step]:
     flagged = {
         r["obligation_id"]: r["n"]
         for r in conn.execute(
-            "SELECT obligation_id, COUNT(*) AS n FROM evidence_files WHERE engagement_id = ? "
+            # Safe: the SQL text holds only names from this code; values are ? parameters.
+            "SELECT obligation_id, COUNT(*) AS n FROM evidence_files WHERE engagement_id = ? "  # nosec B608  # noqa: S608
             f"AND status = 'current' AND obligation_id != '' AND NOT {COUNTS_AS_EVIDENCE} "
             "GROUP BY obligation_id",
             (eid,),
@@ -407,7 +409,8 @@ def register(app: FastAPI) -> None:
             reviewed_by = user
         if status == "implemented":
             has_evidence = conn.execute(
-                "SELECT 1 FROM evidence_files WHERE engagement_id = ? AND obligation_id = ? "
+                # Safe: the SQL text holds only names from this code; values are ? parameters.
+                "SELECT 1 FROM evidence_files WHERE engagement_id = ? AND obligation_id = ? "  # nosec B608  # noqa: S608
                 f"AND status = 'current' AND {COUNTS_AS_EVIDENCE}",
                 (eid, oid),
             ).fetchone() or discovery_views_connector_counts(conn, request.app, eid).get(ob.source)
@@ -751,7 +754,8 @@ def register(app: FastAPI) -> None:
         out = csv.writer(buf)
         cols = ("id", "at", "username", "engagement_id", "action", "detail", "prev_hash", "hash")
         out.writerow(cols)
-        for r in conn.execute(f"SELECT {', '.join(cols)} FROM audit_log ORDER BY id"):
+        # Safe: the SQL text holds only names from this code; values are ? parameters.
+        for r in conn.execute(f"SELECT {', '.join(cols)} FROM audit_log ORDER BY id"):  # nosec B608  # noqa: S608
             out.writerow(["" if r[c] is None else r[c] for c in cols])
         db.audit(conn, user, "audit_log_exported")
         return Response(
@@ -787,9 +791,11 @@ def register(app: FastAPI) -> None:
         sql_where = ("WHERE " + " AND ".join(where)) if where else ""
         per = 50
         page = max(page, 1)
-        total = conn.execute(f"SELECT COUNT(*) FROM audit_log a {sql_where}", args).fetchone()[0]
+        # Safe: the SQL text holds only names from this code; values are ? parameters.
+        total = conn.execute(f"SELECT COUNT(*) FROM audit_log a {sql_where}", args).fetchone()[0]  # nosec B608  # noqa: S608
         rows = conn.execute(
-            f"SELECT a.*, e.client FROM audit_log a LEFT JOIN engagements e "
+            # Safe: the SQL text holds only names from this code; values are ? parameters.
+            f"SELECT a.*, e.client FROM audit_log a LEFT JOIN engagements e "  # nosec B608  # noqa: S608
             f"ON e.id = a.engagement_id {sql_where} ORDER BY a.id DESC LIMIT ? OFFSET ?",
             [*args, per, (page - 1) * per],
         ).fetchall()

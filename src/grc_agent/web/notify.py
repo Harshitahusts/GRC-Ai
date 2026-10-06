@@ -265,7 +265,8 @@ def listing(
         where.append("n.engagement_id = ?")
         args.append(engagement_id)
     rows = conn.execute(
-        "SELECT n.*, r.notification_id IS NOT NULL AS read FROM notifications n "
+        # Safe: the SQL text holds only names from this code; values are ? parameters.
+        "SELECT n.*, r.notification_id IS NOT NULL AS read FROM notifications n "  # nosec B608  # noqa: S608
         "LEFT JOIN notification_reads r ON r.notification_id = n.id AND r.username = ? "
         f"WHERE {' AND '.join(where)} ORDER BY n.id DESC LIMIT ?",
         (*args, limit),
