@@ -646,6 +646,8 @@ def register(app: FastAPI) -> None:
     @app.get("/engagements/{eid}/inventory.csv")
     def inventory_csv(eid: int, request: Request, user: User, conn: Conn):
         eng = agent_engagement(conn, eid)
+        # Same references as the page: "Section 5(1)", not the register's internal IDs.
+        sources = {o.id: o.source for o in request.app.state.register.obligations}
         header = [
             "Source",
             "Field",
@@ -678,7 +680,7 @@ def register(app: FastAPI) -> None:
                 i["storage_location"],
                 i["recipients"],
                 i["owner"],
-                " ".join(i["obligations"]),
+                "; ".join(sources.get(o, o) for o in i["obligations"]),
                 "; ".join(i["gaps"]),
             ]
             for i in inventory_rows(conn, eid)

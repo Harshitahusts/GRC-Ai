@@ -70,6 +70,7 @@ from grc_agent.web import (
     register_views,
     risk_views,
 )
+from grc_agent.web.registers import REGISTERS, is_overdue
 from grc_agent.web.security import (
     DUMMY_HASH,
     csrf_matches,
@@ -469,6 +470,55 @@ def is_ai_drafted(finding) -> bool:
     return finding["drafted_by"] not in ("rules", "demo")
 
 
+CONTROL_DOUBTS = {
+    "not_started": "Control marked 'not started'.",
+    "needs_review": "Control marked 'needs review'.",
+}
+
+
+def contradictions(
+    conn: sqlite3.Connection, eid: int, obligations: dict[str, Any]
+) -> dict[str, list[str]]:
+    """Reasons the workspace's own records cast doubt on a finding marked compliant.
+
+    A "yes" at intake is a claim. These records can contradict it: the obligation's
+    control isn't started or needs review, an open breach or an overdue request is
+    linked to it, and any open breach undermines a claim of security safeguards.
+    """
+    compliant = {f["obligation_id"] for f in findings_of(conn, eid) if f["status"] == "compliant"}
+    found: dict[str, list[str]] = {}
+    for c in conn.execute(
+        "SELECT obligation_id, status FROM controls WHERE engagement_id = ?", (eid,)
+    ):
+        if c["obligation_id"] in compliant and c["status"] in CONTROL_DOUBTS:
+            found.setdefault(c["obligation_id"], []).append(CONTROL_DOUBTS[c["status"]])
+    open_breaches = []
+    for r in conn.execute(
+        "SELECT register, ref, title, status, due, obligation_id FROM records "
+        "WHERE engagement_id = ? AND register IN ('breaches', 'requests')",
+        (eid,),
+    ):
+        spec = REGISTERS[r["register"]]
+        if r["status"] not in spec.open_statuses:
+            continue
+        if r["register"] == "breaches":
+            open_breaches.append(r)
+            reason = f"Open breach {r['ref']}: {r['title']}."
+        elif is_overdue(r["due"] or "", r["status"], spec):
+            reason = f"Overdue request {r['ref']}: {r['title']}."
+        else:
+            continue
+        if r["obligation_id"] in compliant:
+            found.setdefault(r["obligation_id"], []).append(reason)
+    security = {oid for oid, o in obligations.items() if getattr(o, "source", "") == "Section 8(5)"}
+    for oid in security & compliant:
+        for b in open_breaches:
+            reason = f"Open breach {b['ref']}: {b['title']}."
+            if reason not in found.get(oid, []):
+                found.setdefault(oid, []).append(reason)
+    return found
+
+
 def delivery_checks(conn: sqlite3.Connection, eng: sqlite3.Row) -> list[tuple[str, bool]]:
     """The hard stop. Every check must pass before delivery; there is no override."""
     findings = findings_of(conn, eng["id"])
@@ -510,7 +560,7 @@ def delivery_checks(conn: sqlite3.Connection, eng: sqlite3.Row) -> list[tuple[st
 def engagement_record(
     conn: sqlite3.Connection, eng: sqlite3.Row, register_size: int
 ) -> dict[str, Any]:
-    """An engagement's findings and documents as JSON, for export."""
+    """An engagement as JSON, for export: findings, documents and every record behind them."""
     record: dict[str, Any] = {
         "id": f"ENG-{eng['id']:03d}",
         "client": eng["client"],
@@ -540,6 +590,44 @@ def engagement_record(
             }
             for d in documents_of(conn, eng["id"])
         ],
+    )
+    # Everything else the workspace recorded, so a company can take all of it with it.
+    eid = eng["id"]
+
+    def rows(sql: str) -> list[dict[str, Any]]:
+        return [dict(r) for r in conn.execute(sql, (eid,))]
+
+    record.update(
+        sector=eng["sector"],
+        audience=eng["audience"],
+        intake=answers_of(conn, eid),
+        finding_details=[
+            {k: f[k] for k in ("obligation_id", "status", "severity", "summary", "remediation")}
+            for f in findings_of(conn, eid)
+        ],
+        inventory=rows(
+            "SELECT source_name, field, kind, category, risk, children, purpose, principals, "
+            "legal_basis, retention, storage_location, recipients, owner "
+            "FROM data_inventory WHERE engagement_id = ? ORDER BY id"
+        ),
+        registers={key: _register_rows(conn, eid, key) for key in REGISTERS},
+        controls=rows(
+            "SELECT obligation_id, status, owner, notes, review_date FROM controls "
+            "WHERE engagement_id = ? ORDER BY obligation_id"
+        ),
+        risk_edits=rows(
+            "SELECT risk_key, likelihood, impact, treatment, owner, due, status, notes "
+            "FROM risk_edits WHERE engagement_id = ? ORDER BY risk_key"
+        ),
+        evidence_files=rows(
+            "SELECT title, category, obligation_id, filename, size_bytes, sha256, version, "
+            "status, uploaded_by, uploaded_at FROM evidence_files WHERE engagement_id = ? "
+            "ORDER BY id"
+        ),
+        dataflow_nodes=rows(
+            "SELECT name, stage, location, categories FROM dataflow_nodes "
+            "WHERE engagement_id = ? ORDER BY id"
+        ),
     )
     return record
 
@@ -1058,6 +1146,7 @@ def _routes(app: FastAPI) -> None:
             corpus_ready=request.app.state.corpus is not None,
             index_source=request.app.state.index_source,
             obligations=obligations,
+            doubts=contradictions(conn, eid, obligations),
             verdicts=sorted(VERDICTS),
             tab="findings",
         )

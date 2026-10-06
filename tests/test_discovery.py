@@ -38,6 +38,7 @@ def _builtin_scanner(monkeypatch):
         ("priya99@okaxis", "UPI_ID"),
         ("49.36.12.200", "IP_ADDRESS"),
         ("Call me on 9876543210 after 6", "PHONE_NUMBER"),
+        ("Diagnosed with dyslexia, extra time in tests", "HEALTH"),
     ],
 )
 def test_detectors_find(value, entity):
@@ -54,6 +55,7 @@ def test_detectors_find(value, entity):
         ("12345", "PHONE_NUMBER"),
         ("priya.sharma@example.in", "UPI_ID"),  # an email is not a UPI ID
         ("SKU-TSHIRT-M", "IN_PAN"),
+        ("Needs help with fractions", "HEALTH"),
     ],
 )
 def test_detectors_reject(value, entity):
@@ -289,7 +291,8 @@ def test_upload_scan_review_and_inventory(app, authed):
     # Exports.
     csv_ = authed.get(f"/engagements/{eid}/inventory.csv")
     assert csv_.headers["content-type"].startswith("text/csv")
-    assert "Send order updates and invoices" in csv_.text and "OBL-011" in csv_.text
+    assert "Send order updates and invoices" in csv_.text and "Section 9(1)" in csv_.text
+    assert "OBL-011" not in csv_.text  # the same section references as the page
     assert "aadhaar_no" in authed.get(f"/engagements/{eid}/discovery/findings.csv").text
 
 

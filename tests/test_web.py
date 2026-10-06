@@ -88,8 +88,9 @@ def test_full_engagement_to_north_star(authed):
     docs = document_ids(authed, eid)
     assert len(docs) == 5
 
-    # The review gate: no export before review.
-    assert authed.get(f"{base}/documents/{docs[0]}/download").status_code == 403
+    # The review gate: no export before review, and the page says why.
+    blocked = authed.get(f"{base}/documents/{docs[0]}/download")
+    assert blocked.status_code == 403 and "Review this document before exporting it" in blocked.text
     # Review needs the confirmation tick.
     post(authed, f"{base}/documents/{docs[0]}/review", {"outcome": "usable"})
     assert authed.get(f"{base}/documents/{docs[0]}/download").status_code == 403
@@ -118,6 +119,9 @@ def test_full_engagement_to_north_star(authed):
         {"title": "Laptop stolen", "aware_at": "2026-10-06T08:00", "breach_type": "loss"},
     )
     assert added.status_code == 200 and "Added breach" in added.text
+    exported = authed.get(f"{base}/export.json").json()
+    assert exported["registers"]["breaches"][0]["title"] == "Laptop stolen"
+    assert exported["intake"]["INFO-DATA"] == ALL_YES["q_INFO-DATA"]
     # An admin can reopen the delivery to rework the assessment.
     assert "Reopen to rework" in authed.get(base).text
     post(authed, f"{base}/reopen")
@@ -306,9 +310,7 @@ def test_serve_refuses_a_port_another_copy_is_using(tmp_path, monkeypatch, capsy
 
 
 def test_own_company_workspace_speaks_to_the_company(authed):
-    page = post(
-        authed, "/engagements", {"client": "Our Co", "sector": "SaaS", "audience": "self"}
-    )
+    page = post(authed, "/engagements", {"client": "Our Co", "sector": "SaaS", "audience": "self"})
     eid = int(page.url.path.rsplit("/", 1)[1])
     base = f"/engagements/{eid}"
     assert "Sign-off checklist" in page.text and "Sign off the assessment" in page.text
@@ -320,3 +322,21 @@ def test_own_company_workspace_speaks_to_the_company(authed):
     post(authed, f"{base}/audience", {"audience": "client"})
     assert "Delivery checklist" in authed.get(base).text
     assert post(authed, f"{base}/audience", {"audience": "nobody"}).status_code == 400
+
+
+def test_records_that_contradict_a_compliant_finding_are_flagged(authed):
+    eid = create(authed)
+    base = f"/engagements/{eid}"
+    post(authed, f"{base}/intake", {**ALL_YES, "action": "submit"})
+    page = post(authed, f"{base}/assess", {"mode": "rules"}).text
+    assert "records don&#39;t support this" not in page
+    # Security was answered "yes", but a breach is open: the claim is in doubt.
+    post(
+        authed,
+        f"{base}/r/breaches",
+        {"title": "Shared login leaked", "aware_at": "2026-10-01T09:00", "breach_type": "loss"},
+    )
+    post(authed, f"{base}/controls/OBL-008", {"status": "needs_review"})
+    page = authed.get(f"{base}/findings").text
+    assert "Open breach BRE-001: Shared login leaked." in page
+    assert "Control marked &#39;needs review&#39;." in page

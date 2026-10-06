@@ -65,6 +65,11 @@
       </div>
       <h3>{{ o.obligation if o else f.obligation_id }}</h3>
       <p class="text-2">{{ f.summary }}</p>
+      {% if doubts.get(f.obligation_id) %}
+      <div class="flash flash-warn small"><strong>⚠ Your own records don't support this.</strong>
+        <ul>{% for d in doubts[f.obligation_id] %}<li>{{ d }}</li>{% endfor %}</ul>
+        Check the evidence before relying on this finding.</div>
+      {% endif %}
       {% if f.remediation %}<p class="next-step"><strong>Next step:</strong> {{ f.remediation }}</p>{% endif %}
       {% if not eng.delivered_at %}
       <details class="finding-edit" {% if f.verdict == "wrong" and not f.edited_at %}open{% endif %}>
