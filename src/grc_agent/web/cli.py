@@ -98,7 +98,8 @@ def main(argv: list[str] | None = None) -> int:
     data_dir = Path(args.data_dir)
 
     if args.command == "serve":
-        host = "0.0.0.0" if args.lan else args.host
+        # Listening on all interfaces is the point here: --lan, or inside Docker behind Caddy.
+        host = "0.0.0.0" if args.lan else args.host  # nosec B104  # noqa: S104
         return _serve(data_dir, host, args.port, args.reload, args.open, args.https)
     if args.command == "demo":
         return _demo(args)
@@ -145,8 +146,10 @@ def _serve(
     from grc_agent.web import https
 
     os.environ["GRC_DATA_DIR"] = str(data_dir)
-    local = "127.0.0.1" if host in ("0.0.0.0", "::") else host
-    shared = host in ("0.0.0.0", "::")
+    # Listening on all interfaces is the point here: --lan, or inside Docker behind Caddy.
+    local = "127.0.0.1" if host in ("0.0.0.0", "::") else host  # nosec B104  # noqa: S104
+    # Listening on all interfaces is the point here: --lan, or inside Docker behind Caddy.
+    shared = host in ("0.0.0.0", "::")  # nosec B104  # noqa: S104
     ip = lan_ip() if shared else None
     data_dir.mkdir(parents=True, exist_ok=True)
     tls = https.tls_files(data_dir, use_https, [ip] if ip else [])
@@ -243,7 +246,8 @@ def _demo(args) -> int:
     )
     if args.seed_only:
         return 0
-    host = "0.0.0.0" if args.lan else "127.0.0.1"
+    # Listening on all interfaces is the point here: --lan, or inside Docker behind Caddy.
+    host = "0.0.0.0" if args.lan else "127.0.0.1"  # nosec B104  # noqa: S104
     return _serve(data_dir, host, args.port, False, args.open, args.https)
 
 

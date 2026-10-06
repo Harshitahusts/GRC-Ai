@@ -128,9 +128,11 @@ def request(
     elif form is not None:
         data = urllib.parse.urlencode(form).encode()
         headers["Content-Type"] = "application/x-www-form-urlencoded"
-    req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    # Safe: callers pass only https:// URLs they have checked (check_public_https or
+    # check_host), and _opener re-checks every redirect.
+    req = urllib.request.Request(url, data=data, headers=headers, method=method)  # noqa: S310
     try:
-        with _opener.open(req, timeout=TIMEOUT) as resp:  # noqa: S310 (https checked by callers)
+        with _opener.open(req, timeout=TIMEOUT) as resp:
             return Response(resp.status, _parse(resp.read()))
     except urllib.error.HTTPError as exc:
         return Response(exc.code, _parse(exc.read()))

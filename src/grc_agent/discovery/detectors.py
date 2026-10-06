@@ -144,9 +144,8 @@ def detect(value: str) -> dict[str, float]:
                 if d.check is None or d.check(m.group(0)):
                     found[d.entity] = max(found.get(d.entity, 0), d.score)
                     break
-        else:
-            if d.pattern.fullmatch(text) and (d.check is None or d.check(text)):
-                found[d.entity] = max(found.get(d.entity, 0), d.score)
+        elif d.pattern.fullmatch(text) and (d.check is None or d.check(text)):
+            found[d.entity] = max(found.get(d.entity, 0), d.score)
     # An Aadhaar number also looks like a card number or phone digits; keep the checksummed one.
     if "IN_AADHAAR" in found:
         found.pop("CREDIT_CARD", None)

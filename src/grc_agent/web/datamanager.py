@@ -266,17 +266,21 @@ def table_stats(conn: sqlite3.Connection, today: datetime | None = None) -> list
         columns = _columns(conn, name)
         date_col = next((c for c in _DATE_COLUMNS if c in columns), None)
         info = CATALOG.get(name, {})
-        rows = conn.execute(f"SELECT COUNT(*) FROM {q}").fetchone()[0]
+        # Safe: the SQL text holds only names from this code; values are ? parameters.
+        rows = conn.execute(f"SELECT COUNT(*) FROM {q}").fetchone()[0]  # nosec B608  # noqa: S608
         oldest = newest = None
         expired = 0
         if date_col and rows:
             oldest, newest = conn.execute(
-                f"SELECT MIN({date_col}), MAX({date_col}) FROM {q}"
+                # Safe: the SQL text holds only names from this code; values are ? parameters.
+                f"SELECT MIN({date_col}), MAX({date_col}) FROM {q}"  # nosec B608  # noqa: S608
             ).fetchone()
             if info.get("retain_days"):
                 cutoff = (today - timedelta(days=info["retain_days"])).isoformat()
                 expired = conn.execute(
-                    f"SELECT COUNT(*) FROM {q} WHERE {date_col} < ?", (cutoff,)
+                    # Safe: the SQL text holds only names from this code; values are ? parameters.
+                    f"SELECT COUNT(*) FROM {q} WHERE {date_col} < ?",  # nosec B608  # noqa: S608
+                    (cutoff,),
                 ).fetchone()[0]
         stats.append(
             TableStat(

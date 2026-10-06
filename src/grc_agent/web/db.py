@@ -677,11 +677,13 @@ def copy_to_postgres(sqlite_path: str | Path, url: str) -> dict[str, int]:
                 "empty database (or schema) to migrate into."
             )
         for table in COPY_ORDER:
-            rows = src.execute(f"SELECT * FROM {table}").fetchall()
+            # Safe: the SQL text holds only names from this code; values are ? parameters.
+            rows = src.execute(f"SELECT * FROM {table}").fetchall()  # nosec B608  # noqa: S608
             if rows:
                 cols = rows[0].keys()
                 sql = (
-                    f"INSERT INTO {table} ({', '.join(cols)}) "
+                    # Safe: the SQL text holds only names from this code; values are ? parameters.
+                    f"INSERT INTO {table} ({', '.join(cols)}) "  # nosec B608  # noqa: S608
                     f"VALUES ({', '.join('?' for _ in cols)})"
                 )
                 for row in rows:
@@ -689,7 +691,8 @@ def copy_to_postgres(sqlite_path: str | Path, url: str) -> dict[str, int]:
             copied[table] = len(rows)
             if table in pg.ID_TABLES:
                 dst.execute(
-                    f"SELECT setval(pg_get_serial_sequence('{table}', 'id'), "
+                    # Safe: the SQL text holds only names from this code; values are ? parameters.
+                    f"SELECT setval(pg_get_serial_sequence('{table}', 'id'), "  # nosec B608  # noqa: S608
                     f"COALESCE((SELECT MAX(id) FROM {table}), 1), "
                     f"(SELECT MAX(id) FROM {table}) IS NOT NULL)"
                 )

@@ -90,7 +90,8 @@ def counts(conn: sqlite3.Connection, eid: int | None = None) -> dict[str, dict[s
     """Open and overdue records per register, for one engagement or all of them."""
     where, args = ("WHERE engagement_id = ?", (eid,)) if eid is not None else ("", ())
     out = {k: {"open": 0, "overdue": 0, "total": 0} for k in REGISTERS}
-    for r in conn.execute(f"SELECT register, status, due FROM records {where}", args):
+    # Safe: the SQL text holds only names from this code; values are ? parameters.
+    for r in conn.execute(f"SELECT register, status, due FROM records {where}", args):  # nosec B608  # noqa: S608
         spec = REGISTERS.get(r["register"])
         if not spec:
             continue

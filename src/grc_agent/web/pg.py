@@ -228,5 +228,4 @@ class Connection:
 def pg_schema(schema_sql: str) -> str:
     """The app's SQLite schema rewritten for PostgreSQL."""
     out = schema_sql.replace("INTEGER PRIMARY KEY", "SERIAL PRIMARY KEY")
-    out = out.replace(" COLLATE NOCASE", "")
-    return out
+    return out.replace(" COLLATE NOCASE", "")

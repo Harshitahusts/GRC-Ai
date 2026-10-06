@@ -73,3 +73,27 @@ def test_connector_redirect_into_private_network_is_refused():
     for target in ("http://169.254.169.254/latest/meta-data/", "https://127.0.0.1/admin"):
         with pytest.raises(ConnectorError):
             handler.redirect_request(req, None, 302, "Found", {}, target)
+
+
+def test_passwords_are_argon2id_and_old_scrypt_hashes_still_work(app, client):
+    from grc_agent.web.security import hash_password, needs_rehash, verify_password
+
+    new = hash_password("a long passphrase")
+    assert new.startswith("$argon2id$") and verify_password("a long passphrase", new)
+    assert not verify_password("wrong", new) and not needs_rehash(new)
+    assert not verify_password("anything", "!none") and not needs_rehash("!none")
+
+    # A hash made by the previous version (scrypt) signs in, and is upgraded on the way.
+    import hashlib
+
+    salt = bytes(16)
+    digest = hashlib.scrypt(PASSWORD.encode(), salt=salt, n=2**14, r=8, p=1)
+    old = f"scrypt${2**14}$8$1${salt.hex()}${digest.hex()}"
+    with db.connect(app.state.db_path) as conn:
+        conn.execute("UPDATE users SET password_hash = ? WHERE username = 'harshit'", (old,))
+        conn.commit()
+    assert login(client).status_code == 303
+    with db.connect(app.state.db_path) as conn:
+        stored = conn.execute("SELECT password_hash FROM users WHERE username = 'harshit'")
+        stored = stored.fetchone()[0]
+    assert stored.startswith("$argon2id$") and verify_password(PASSWORD, stored)
