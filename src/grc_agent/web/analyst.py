@@ -39,7 +39,7 @@ def risks_for(conn: sqlite3.Connection, app: FastAPI, eid: int) -> list[risk.Ris
 
 
 def flow_for(conn: sqlite3.Connection, app: FastAPI, eng: sqlite3.Row) -> dict[str, Any]:
-    from grc_agent.web.app import answers_of, findings_of
+    from grc_agent.web.app import _register_rows, answers_of, findings_of
 
     eid = eng["id"]
     custom = conn.execute("SELECT * FROM dataflow_nodes WHERE engagement_id = ?", (eid,))
@@ -51,6 +51,7 @@ def flow_for(conn: sqlite3.Connection, app: FastAPI, eng: sqlite3.Row) -> dict[s
         connector_views.evidence_rows(conn, eid),
         [dict(c) for c in custom],
         assessed=bool(eng["assessed_at"]),
+        vendors=_register_rows(conn, eid, "vendors", skip=("offboarded",)),
     )
 
 
