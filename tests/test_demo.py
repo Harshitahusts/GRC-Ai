@@ -31,7 +31,11 @@ def test_mode_switch(monkeypatch):
     "question, tool, expected",
     [
         ("Score a risk with likelihood 4 and impact 3", "score_risk", "Risk score 12"),
-        ("What does DPDPA require for consent?", "search_obligations", "OBL-002 (Section 6(1)"),
+        (
+            "What does the DPDP Act require for consent?",
+            "search_obligations",
+            "OBL-002 (Section 6(1)",
+        ),
         ("What does it say about grievances?", "search_obligations", "OBL-008"),
     ],
 )
@@ -48,7 +52,7 @@ def test_other_frameworks_are_out_of_scope():
 
 def test_assistant_keeps_conversation():
     agent = Agent(settings=DEMO)
-    agent.ask("What does DPDPA require for consent?")
+    agent.ask("What does the DPDP Act require for consent?")
     agent.ask("Score a risk with likelihood 2 and impact 2")
     assert [m["role"] for m in agent.messages].count("user") == 4  # 2 questions + 2 tool results
 
@@ -109,7 +113,9 @@ def test_web_banner_assistant_and_delivery_block(demo_app):
     assert banner not in demo_app.get("/").text
     assert banner in demo_app.get("/assistant").text
 
-    page = post(demo_app, "/assistant", {"question": "What does DPDPA require for consent?"}).text
+    page = post(
+        demo_app, "/assistant", {"question": "What does the DPDP Act require for consent?"}
+    ).text
     assert "OBL-002" in page and "Tools used: search_obligations" in page
 
     eid = create(demo_app)

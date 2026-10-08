@@ -32,7 +32,7 @@ MAX_PROVISIONS = 5
 SEARCH_EXTRA = 3
 
 SYSTEM_PROMPT = """\
-You draft findings for a DPDPA (India's Digital Personal Data Protection Act 2023 and
+You draft findings for a DPDP (India's Digital Personal Data Protection Act 2023 and
 Rules 2025) gap assessment. A consultant reviews every finding before a client sees it.
 
 For each request you get one obligation, its status (already decided by rules from the

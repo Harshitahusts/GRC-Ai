@@ -1,6 +1,6 @@
 """Compliance controls, the evidence library, the audit log, the work queue and the team.
 
-- Controls: the client's own status for every obligation in the DPDPA register, with an
+- Controls: the client's own status for every obligation in the DPDP register, with an
   owner, notes and a review date. "Not applicable" needs a reason and an admin.
 - Evidence: uploaded files linked to an obligation or a register record. Files are
   checked (type, size, content signature), stored outside the web root under a random
@@ -211,7 +211,7 @@ def controls_summary(items: list[dict]) -> dict:
 
 
 def readiness_plan(conn: sqlite3.Connection, app, eng) -> list[plan.Step]:
-    """The engagement's DPDPA readiness plan, worked out from its current state."""
+    """The engagement's DPDP readiness plan, worked out from its current state."""
     from grc_agent.web.app import delivery_checks
 
     eid = eng["id"]

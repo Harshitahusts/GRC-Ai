@@ -144,7 +144,7 @@ Resources:
   GrcAgentReadOnlyRole:
     Type: AWS::IAM::Role
     Properties:
-      Description: Read-only access for GRC Flow's DPDPA assessment
+      Description: Read-only access for GRC Flow's DPDP assessment
       MaxSessionDuration: 3600
       AssumeRolePolicyDocument:
         Version: "2012-10-17"

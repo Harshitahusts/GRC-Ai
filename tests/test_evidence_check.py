@@ -1,4 +1,4 @@
-"""The AI checks that an evidence file is about the DPDPA obligation it's linked to."""
+"""The AI checks that an evidence file is about the DPDP obligation it's linked to."""
 
 import io
 import json

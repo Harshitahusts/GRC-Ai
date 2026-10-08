@@ -1,4 +1,4 @@
-"""The DPDPA corpus: ingestion (H2), retrieval (H3) and provision lookup.
+"""The DPDP corpus: ingestion (H2), retrieval (H3) and provision lookup.
 
 Sources (the Act and the Rules as published by MeitY) are listed in
 corpus/manifest.json. Ingestion splits them into chunks that each carry a

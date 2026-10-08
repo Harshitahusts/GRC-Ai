@@ -37,7 +37,7 @@
     </div>
     {% endif %}
     <div class="span-2">
-      <label for="f-obligation">DPDPA obligation it relates to</label>
+      <label for="f-obligation">DPDP obligation it relates to</label>
       <select id="f-obligation" name="obligation_id">
         <option value="">None</option>
         {% for o in obligations %}<option value="{{ o.id }}" {% if o.id == obligation_id %}selected{% endif %}>{{ o.source }}: {{ o.obligation[:90] }}</option>{% endfor %}

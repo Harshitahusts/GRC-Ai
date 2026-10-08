@@ -13,7 +13,7 @@ from grc_agent.tools import (
 TOOLS_BY_NAME = {tool.name: tool for tool in TOOLS}
 
 
-def test_only_dpdpa_tools():
+def test_only_dpdp_tools():
     assert set(TOOLS_BY_NAME) == {"search_obligations", "get_provision", "score_risk"}
 
 

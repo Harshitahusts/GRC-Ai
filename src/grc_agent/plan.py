@@ -1,4 +1,4 @@
-"""The DPDPA readiness plan: a client's obligations grouped into steps, in working order.
+"""The DPDP readiness plan: a client's obligations grouped into steps, in working order.
 
 Nothing here is stored. Every time the plan is shown it is worked out again from the
 engagement's real state (intake, findings, controls, evidence, tasks, delivery checks),

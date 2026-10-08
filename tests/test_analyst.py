@@ -1,4 +1,4 @@
-"""The GRC Analyst: tools over the workspace's data, DPDPA only; one gated action."""
+"""The GRC Analyst: tools over the workspace's data, DPDP only; one gated action."""
 
 import json
 import shutil
@@ -50,7 +50,7 @@ READ_TOOLS = {
 }
 
 
-def test_tool_set_is_dpdpa_and_read_only(workspace):
+def test_tool_set_is_dpdp_and_read_only(workspace):
     _, _, tools = workspace
     assert set(tools) == READ_TOOLS
     for t in tools.values():

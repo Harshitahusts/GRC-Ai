@@ -1,4 +1,4 @@
-# DPDPA corpus
+# DPDP corpus
 
 The authoritative texts the agent cites (tickets S1, H2 and H3 in the build plan).
 

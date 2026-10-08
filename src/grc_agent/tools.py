@@ -46,7 +46,7 @@ def _register():
 
 
 def search_obligations(query: str) -> dict[str, Any]:
-    """DPDPA obligations in the register matching all keywords (or all, for an empty query)."""
+    """DPDP obligations in the register matching all keywords (or all, for an empty query)."""
     terms = query.lower().split()
     out = []
     for o in _register().obligations:
@@ -72,7 +72,7 @@ def get_provision(ref: str) -> dict[str, Any]:
     corpus = load_corpus()
     if corpus is None:
         raise ToolError(
-            "The DPDPA corpus isn't built on this computer, so provision text isn't available. "
+            "The DPDP corpus isn't built on this computer, so provision text isn't available. "
             "Answer from the obligations register and say the text wasn't checked."
         )
     chunks = corpus.provision(ref)
@@ -110,7 +110,7 @@ BASE_TOOLS: list[Tool] = [
     Tool(
         name="search_obligations",
         description=(
-            "Search the DPDPA obligations register by keywords (all must match; an empty "
+            "Search the DPDP obligations register by keywords (all must match; an empty "
             "string returns every obligation). Each result has the obligation id, the "
             "provision it comes from, severity, the evidence to request, and the remediation."
         ),

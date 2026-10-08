@@ -391,7 +391,7 @@ def analyst_tools(app: FastAPI, user: str = "", can_act: bool = False) -> list[T
         Tool(
             name="get_findings",
             description=(
-                "An engagement's findings against the DPDPA obligations register: status, "
+                "An engagement's findings against the DPDP obligations register: status, "
                 "severity, provision, what the client said, the remediation and the evidence "
                 "to request. Filter by status."
             ),
@@ -412,7 +412,7 @@ def analyst_tools(app: FastAPI, user: str = "", can_act: bool = False) -> list[T
         Tool(
             name="get_risk_register",
             description=(
-                "An engagement's DPDPA risk register: each risk's threat, vulnerability, "
+                "An engagement's DPDP risk register: each risk's threat, vulnerability, "
                 "likelihood and impact (1-5), score and level, treatment, owner, due date and "
                 "status, plus totals by level, overdue and unowned counts."
             ),
@@ -457,7 +457,7 @@ def analyst_tools(app: FastAPI, user: str = "", can_act: bool = False) -> list[T
         Tool(
             name="get_readiness_plan",
             description=(
-                "An engagement's DPDPA readiness plan: its obligations grouped into steps "
+                "An engagement's DPDP readiness plan: its obligations grouped into steps "
                 "(scope, notice and consent, security and breaches, rights, retention, "
                 "processors, transfers, accountability, delivery), what is done, where to "
                 "start and the next action for each obligation. Worked out from live data."

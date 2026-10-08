@@ -17,7 +17,7 @@ from pathlib import Path
 from grc_agent.web import pg
 
 # What each table is for. `personal` means it holds personal data about
-# people (users, client contacts, intake answers), which DPDPA cares about.
+# people (users, client contacts, intake answers), which the DPDP Act cares about.
 # `retain_days` is a suggested retention period, not an enforced one.
 CATALOG: dict[str, dict] = {
     "users": {
@@ -42,7 +42,7 @@ CATALOG: dict[str, dict] = {
         "retention": "Contract term + 3 years",
     },
     "findings": {
-        "purpose": "Assessment findings per DPDPA obligation",
+        "purpose": "Assessment findings per DPDP obligation",
         "category": "Client data",
         "personal": False,
         "retain_days": None,
