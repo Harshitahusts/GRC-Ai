@@ -2,7 +2,7 @@
 
 Each register is declared once here: its fields, its status workflow, which statuses
 need which fields filled in, how its due date is worked out, and which obligations in
-the DPDPA register it serves. One set of routes and templates (register_views.py)
+the DPDP register it serves. One set of routes and templates (register_views.py)
 serves them all, so every register gets the same list, form, detail page, status
 history, comments and evidence attachments.
 

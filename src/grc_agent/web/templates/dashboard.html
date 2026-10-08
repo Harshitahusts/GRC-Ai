@@ -16,7 +16,7 @@
 
 {% set steps = [
   ("Create your first engagement", total > 0, "/engagements#new", "Add a client and pick their sector."),
-  ("Complete a client intake", pipeline|rejectattr("stage", "equalto", "Intake")|sum(attribute="count") > 0, "/engagements", "Answer the DPDPA questionnaire with the client."),
+  ("Complete a client intake", pipeline|rejectattr("stage", "equalto", "Intake")|sum(attribute="count") > 0, "/engagements", "Answer the DPDP questionnaire with the client."),
   ("Connect an evidence source", connections_total > 0, "/connectors", "Read-only GitHub or AWS checks back the findings."),
   ("Deliver an assessment", delivered > 0, "/engagements", "Review findings and documents, then deliver."),
 ] %}
@@ -64,7 +64,7 @@
   <a class="tile tile-link" href="/engagements">
     <p class="tile-label">Delivered</p>
     <p class="tile-value">{{ delivered }}</p>
-    <p class="muted small">DPDPA assessments</p>
+    <p class="muted small">DPDP assessments</p>
   </a>
   <div class="tile">
     <p class="tile-label">Average readiness</p>

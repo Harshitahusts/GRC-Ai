@@ -3,7 +3,7 @@
 MCP (the Model Context Protocol) is how AI apps such as Claude Desktop, Claude Code or
 Cursor plug into other tools. This endpoint offers them the GRC Analyst's read-only
 tools (clients, findings, risks, data flows, evidence, readiness plans, the obligations
-register and the text of the Act), so a consultant can ask about their DPDPA work from
+register and the text of the Act), so a consultant can ask about their DPDP work from
 the AI app they already use.
 
 - Read-only: no MCP tool changes anything. The analyst's create_task action is not offered.
@@ -37,7 +37,7 @@ from grc_agent.web.https import is_local_host
 KEY_PREFIX = "grcf_"
 PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")
 INSTRUCTIONS = (
-    "GRC Flow: a DPDPA (India's Digital Personal Data Protection Act 2023 and DPDP Rules "
+    "GRC Flow: a DPDP (India's Digital Personal Data Protection Act 2023 and DPDP Rules "
     "2025) compliance workspace. Start with list_engagements to find client ids. All tools "
     "read live workspace data and change nothing. Findings and documents for clients come "
     "from the app's assessment and human review, not from chat."

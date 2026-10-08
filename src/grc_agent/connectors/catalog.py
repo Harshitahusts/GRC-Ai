@@ -1,7 +1,7 @@
 """Every connector the app knows about: what it needs, what it checks, and why.
 
 "available" connectors work now. "planned" ones show as "Coming soon", so the
-roadmap is visible in the app; they follow the categories GRC and DPDPA platforms connect
+roadmap is visible in the app; they follow the categories GRC and DPDP platforms connect
 to (cloud, identity, HR, code, ticketing, devices, and data stores for
 personal-data discovery).
 """
@@ -31,7 +31,7 @@ class Connector:
     name: str
     category: str
     summary: str
-    why: str  # why it matters for DPDPA work
+    why: str  # why it matters for DPDP work
     status: str = "available"  # available | planned (shown as "Coming soon")
     kind: str = "evidence"  # evidence (collects checks) | notify (posts messages)
     flow: str = "form"  # form (paste credentials) | github_app | aws_role (client authorises)

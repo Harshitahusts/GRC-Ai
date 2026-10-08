@@ -1,4 +1,4 @@
-"""Is this evidence file actually about the DPDPA obligation it's linked to?
+"""Is this evidence file actually about the DPDP obligation it's linked to?
 
 Before anyone relies on an uploaded file, the AI reads it and answers one narrow
 question: does this document address this obligation? A résumé uploaded as a breach
@@ -37,7 +37,7 @@ READABLE = (".txt", ".md", ".csv", ".json", ".pdf", ".docx")
 REJECTED = ("not_relevant", "too_little_content")
 
 SYSTEM_PROMPT = """\
-You check evidence files for a DPDPA (India's Digital Personal Data Protection Act 2023
+You check evidence files for a DPDP (India's Digital Personal Data Protection Act 2023
 and DPDP Rules 2025) compliance review. You get one obligation and the text of one file a
 consultant linked to it. Answer one question: is this document about that obligation?
 

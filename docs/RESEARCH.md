@@ -41,7 +41,7 @@ under the names we tried, so they aren't covered here.
 - **DPIA fields.** Probo's DPIA: description, necessity and proportionality, potential
   risk, mitigations, residual risk. Ours uses the same, for Section 10(2)(c).
 
-## What we did differently, for DPDPA
+## What we did differently, for the DPDP Act
 
 - Request types follow the Act: access (s.11), correction and erasure (s.12), grievance
   (s.13), nomination (s.14), withdrawal of consent (s.6(4)). The response clock defaults
@@ -57,5 +57,5 @@ under the names we tried, so they aren't covered here.
 
 - Multi-organisation tenancy and SSO (Probo, Openlane). This app is built for a
   consultancy working on client engagements; a self-serve SaaS needs that decision first.
-- Trust centres, cookie banners and access reviews (Probo): outside DPDPA's core.
+- Trust centres, cookie banners and access reviews (Probo): outside the DPDP Act's core.
 - Workflow engines and approvals quorums (Openlane): a single approver is enough for now.

@@ -1,10 +1,10 @@
-"""The DPDPA risk register for an engagement.
+"""The DPDP risk register for an engagement.
 
 Risk = likelihood x impact (1-5 each, the 5x5 matrix). Each open problem becomes a
 risk with a threat (what could happen), a vulnerability (what's missing), a
 starting score, and a treatment. Sources:
 
-- findings: every gap or open item against a DPDPA obligation,
+- findings: every gap or open item against a DPDP obligation,
 - connector evidence: every failed or warning check.
 
 Starting scores follow the rules, not guesswork: a gap is likely (4), an open

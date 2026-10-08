@@ -1,4 +1,4 @@
-"""`grc-corpus`: build and query the DPDPA corpus.
+"""`grc-corpus`: build and query the DPDP corpus.
 
 grc-corpus ingest                 parse corpus/manifest.json sources into corpus/build/
 grc-corpus search "breach"        top provisions for a question

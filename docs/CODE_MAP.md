@@ -8,7 +8,7 @@ Every Python file also starts with a short description of its own job.
 ```
 Browser ──HTTPS──► Caddy ──► FastAPI app (src/grc_agent/web/) ──► SQLite or PostgreSQL
                                │
-                               ├─ assessment, risk, plan, documents  (the DPDPA logic)
+                               ├─ assessment, risk, plan, documents  (the DPDP logic)
                                ├─ corpus + citations                 (text of the Act and Rules)
                                ├─ discovery                          (finds personal data in files)
                                ├─ connectors                         (read-only AWS, GitHub, ...)
@@ -49,7 +49,7 @@ little JavaScript in `web/static/`). There is no separate front-end build.
 
 ## Folders and files
 
-### The DPDPA logic (no web code)
+### The DPDP logic (no web code)
 
 | File | Job |
 |---|---|

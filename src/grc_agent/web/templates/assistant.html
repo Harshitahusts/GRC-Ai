@@ -17,14 +17,14 @@
   {% set suggestions = [
     "What should I work on today across all clients?",
     "Which clients have critical or high risks?",
-    "What does DPDPA require for consent?",
+    "What does the DPDP Act require for consent?",
     "Score a risk with likelihood 4 and impact 5",
   ] %}
 {% endif %}
 <div class="page-head">
   <div>
     <h1>GRC Analyst</h1>
-    <p class="muted">Your DPDPA analyst. It works from this workspace's live data: engagements, findings, risks, evidence and data flows. Findings for clients still come from the assessment and human review.</p>
+    <p class="muted">Your DPDP analyst. It works from this workspace's live data: engagements, findings, risks, evidence and data flows. Findings for clients still come from the assessment and human review.</p>
   </div>
   {% if history %}
   <form method="post" action="/assistant/reset">
@@ -44,7 +44,7 @@
         {% for e in engagements %}<option value="{{ e.id }}" {% if focus and focus.id == e.id %}selected{% endif %}>{{ e.client }} (ENG-{{ '%03d' % e.id }})</option>{% endfor %}
       </select>
       <noscript><button class="small">Set</button></noscript>
-      <span class="muted small">DPDPA only</span>
+      <span class="muted small">DPDP only</span>
     </form>
     <div class="chat-log" id="chat-log" aria-live="polite">
       {% for role, text, about in history %}

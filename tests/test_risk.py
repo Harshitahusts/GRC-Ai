@@ -1,4 +1,4 @@
-"""DPDPA risk register: built from findings and evidence, scored L x I, editable."""
+"""DPDP risk register: built from findings and evidence, scored L x I, editable."""
 
 from datetime import date
 

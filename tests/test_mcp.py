@@ -48,7 +48,7 @@ def test_handshake_and_read_only_tool_list(mcp):
     init = _rpc(client, key, "initialize", {"protocolVersion": "2025-06-18"}).json()
     assert init["result"]["protocolVersion"] == "2025-06-18"
     assert init["result"]["serverInfo"]["name"] == "grc-flow"
-    assert "DPDPA" in init["result"]["instructions"]
+    assert "DPDP" in init["result"]["instructions"]
     assert _rpc(client, key, "notifications/initialized", rid=None).status_code == 202
 
     tools = _rpc(client, key, "tools/list").json()["result"]["tools"]

@@ -142,14 +142,14 @@ class _Messages:
         if words and "search_obligations" in tools:
             return _response(
                 "tool_use",
-                say("Searching the DPDPA obligations register."),
+                say("Searching the DPDP obligations register."),
                 _tool_use("search_obligations", {"query": words[-1]}),
             )
         return _response(
             "end_turn",
             say(
                 'Demo mode can only run the tools. Try "What should I work on today?", '
-                '"Summarise ENG-001", or "What does DPDPA say about consent?". Add an '
+                '"Summarise ENG-001", or "What does the DPDP Act say about consent?". Add an '
                 "ANTHROPIC_API_KEY for real answers."
             ),
         )
@@ -182,7 +182,7 @@ def _describe(data: Any) -> list[str]:
     if kind == "obligations":
         out = [f"- {len(data['results'])} matching obligation(s) in register {data['register']}:"]
         if not data["results"]:
-            out = ["- No matching obligations in the DPDPA register."]
+            out = ["- No matching obligations in the DPDP register."]
         for o in data["results"][:5]:
             out.append(
                 f"  - {o['id']} ({o['provision']}, {o['severity']}): {o['obligation']} "

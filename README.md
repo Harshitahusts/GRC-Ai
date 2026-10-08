@@ -2,10 +2,10 @@
 
 **[grc-flow.com](https://grc-flow.com)** · A GRC workspace for **India's Digital Personal
 Data Protection Act, 2023 and the DPDP Rules, 2025**. The AI parts run on Claude or on a
-free OpenAI-compatible provider (Groq, Gemini, ...). It covers DPDPA only for now; other
+free OpenAI-compatible provider (Groq, Gemini, ...). It covers the DPDP Act only for now; other
 frameworks come later.
 
-The GRC Analyst chats with you and, when it needs facts, calls tools: the DPDPA
+The GRC Analyst chats with you and, when it needs facts, calls tools: the DPDP
 obligations register, the text of the Act and Rules, 5x5 risk scoring, and (in the web
 app) read-only views of the workspace's engagements, findings, risks, evidence and data
 flows.
@@ -26,7 +26,7 @@ setting a key.
 
 ## Web app (local)
 
-A local web app for running DPDPA engagements end to end. You log in and work from a
+A local web app for running DPDP engagements end to end. You log in and work from a
 dashboard. Each engagement follows these steps:
 
 1. **Intake:** business-language questions, with follow-ups that appear only when relevant.
@@ -145,7 +145,7 @@ The **GRC Analyst** page is an AI analyst that works from the workspace's live d
 a client (or all clients) and ask: "What should I work on today?", "Summarise ENG-001 for
 management", "What evidence should I request?", "Draft the audit report". It follows an
 analyst's workflow (planning, fieldwork, evidence evaluation, risk assessment,
-reporting), fetches the data before answering, and cites DPDPA provisions from the
+reporting), fetches the data before answering, and cites DPDP provisions from the
 register and corpus. It also reads uploaded evidence (with the AI relevance check) and the
 readiness plan. Its one action is **create_task**: when you ask it to, it adds tasks to a
 client's Tasks register, labelled as drafted by the analyst and recorded under your name,
@@ -445,7 +445,7 @@ from grc_agent import Agent
 
 agent = Agent()
 print(agent.ask("Score a risk with likelihood 4 and impact 3").text)
-print(agent.ask("Which DPDPA obligation covers security safeguards?").text)  # same conversation
+print(agent.ask("Which DPDP obligation covers security safeguards?").text)  # same conversation
 ```
 
 ## Project layout
@@ -464,8 +464,8 @@ src/grc_agent/
   register.py       obligation register and intake questions
   assessment.py     rule-based gap assessment and readiness score
   documents.py      draft documents (gap report, RoPA, notice, playbook, DPA)
-  risk.py           DPDPA risk register (threats, likelihood x impact, treatments)
-  plan.py           DPDPA readiness plan: obligations as steps, next action for each
+  risk.py           DPDP risk register (threats, likelihood x impact, treatments)
+  plan.py           DPDP readiness plan: obligations as steps, next action for each
   evidence_check.py AI check that an evidence file is about its obligation
   web/mcp_views.py  API keys and the read-only MCP server (/mcp)
   discovery/        personal data scanner: India detectors, Presidio engine, file parsing

@@ -135,7 +135,7 @@ def hint_for(column: str) -> str | None:
     return None
 
 
-# Obligations (ids from the DPDPA register) that every inventory record touches, and
+# Obligations (ids from the DPDP register) that every inventory record touches, and
 # the extra ones a record's category or legal basis brings in.
 ALWAYS = ("OBL-001", "OBL-004", "OBL-005", "OBL-006")
 CONSENT = ("OBL-002", "OBL-003")

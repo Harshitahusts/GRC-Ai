@@ -1,4 +1,4 @@
-"""The DPDPA readiness plan is worked out from real state, never stored or ticked by hand."""
+"""The DPDP readiness plan is worked out from real state, never stored or ticked by hand."""
 
 import re
 

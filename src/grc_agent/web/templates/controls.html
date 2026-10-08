@@ -7,7 +7,7 @@
 {% set locked = read_only %}
 {% set assess_label = {"gap": "Gap", "open_item": "Open item", "compliant": "Met", "not_applicable": "N/A"} %}
 
-{{ page_intro("Controls", "For each DPDPA obligation, record where the client really is: not started, in progress, needs review, implemented, or not applicable. Implemented needs evidence or a description; not applicable needs a reason and an admin.") }}
+{{ page_intro("Controls", "For each DPDP obligation, record where the client really is: not started, in progress, needs review, implemented, or not applicable. Implemented needs evidence or a description; not applicable needs a reason and an admin.") }}
 
 <section class="tiles dash-tiles" aria-label="Controls at a glance">
   <div class="tile"><p class="tile-label">Implemented</p><p class="tile-value">{{ cs.implemented }}<small class="muted">/{{ cs.applicable }}</small></p>{{ meter(cs.implemented, cs.applicable or 1, "Implemented controls") }}</div>
