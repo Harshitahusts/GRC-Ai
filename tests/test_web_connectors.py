@@ -63,12 +63,14 @@ def test_pages_require_login(client):
 
 def test_catalog_page_shows_working_connectors_and_a_roadmap_line(authed):
     page = authed.get("/connectors").text
-    assert page.count('class="connector"') == 2  # GitHub and AWS
-    assert 'href="/connectors/github"' in page and 'href="/connectors/aws"' in page
+    assert page.count('class="connector"') == 10
+    for cid in ("github", "gitlab", "aws", "gcp", "azure", "entra_id", "slack", "teams"):
+        assert f'href="/connectors/{cid}"' in page
     assert "Coming soon" not in page
     roadmap = page.split("On the roadmap:")[1]
-    for name in ["GitLab", "Google Cloud", "Slack", "Okta", "Keka"]:
+    for name in ["Okta", "Keka", "Jira", "Google Workspace"]:
         assert name in roadmap
+    assert "GitLab" not in roadmap and "Microsoft Entra ID" not in roadmap
 
 
 def test_aws_role_connection_collects_evidence(app_with_fakes):
@@ -159,10 +161,12 @@ def test_sync_error_is_recorded_and_remove_deletes(app_with_fakes):
     assert "stored credentials deleted" in page and "Run checks again" not in page
 
 
-def test_coming_soon_connectors_cannot_be_added(authed):
+def test_roadmap_connectors_cannot_be_added_but_built_ones_can(authed):
     eid = create(authed)
-    for cid in ("slack", "gitlab", "gcp"):
+    for cid in ("okta", "jira", "keka"):
         assert authed.get(f"/engagements/{eid}/connectors/new?type={cid}").status_code == 404
+    for cid in ("slack", "gitlab", "gcp", "azure", "entra_id"):
+        assert authed.get(f"/engagements/{eid}/connectors/new?type={cid}").status_code == 200
 
 
 def test_detail_page_and_connect_flow(authed):

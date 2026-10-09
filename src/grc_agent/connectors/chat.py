@@ -21,8 +21,12 @@ TEAMS_HOSTS = (".environment.api.powerplatform.com", ".logic.azure.com")
 
 def _post(url: str, payload: dict, what: str) -> None:
     resp = request("POST", url, json_body=payload)
-    if resp.status in (401, 403, 404):
-        raise ConnectorError(f"{what} rejected the message. The webhook may have been deleted.")
+    if resp.status in (400, 401, 403, 404, 410):
+        # Wrong key or token in the URL, a cut-off paste, or a deleted webhook.
+        raise ConnectorError(
+            f"{what} rejected the message. Check the webhook URL was copied whole, "
+            "and that the webhook still exists."
+        )
     if not resp.ok:
         raise ConnectorError(f"{what} returned HTTP {resp.status}.")
 

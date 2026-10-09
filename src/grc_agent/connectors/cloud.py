@@ -339,6 +339,18 @@ def _gcp_token(key: dict) -> str:
             "assertion": gcp_jwt(key),
         },
     )
+    if resp.status in (400, 401):
+        # Google explains in the body, e.g. {"error": "invalid_grant", "error_description": ...}
+        body = resp.body if isinstance(resp.body, dict) else {}
+        if body.get("error") == "invalid_grant":
+            raise ConnectorError(
+                "Google rejected the service account key: it was deleted or disabled, the "
+                "service account was removed, or the JSON file was changed. Create a new key."
+            )
+        raise ConnectorError(
+            "Google Cloud sign-in failed"
+            + (f": {body['error_description']}" if body.get("error_description") else ".")
+        )
     return expect_ok(resp, "Google Cloud sign-in")["access_token"]
 
 
@@ -406,7 +418,8 @@ def gcp_collect(config: dict, secrets: dict) -> list[Check]:
 ARM = "https://management.azure.com"
 
 
-def _azure_token(secrets: dict) -> str:
+def microsoft_token(secrets: dict, scope: str, what: str = "Azure") -> str:
+    """An app-only token from Microsoft Entra ID (client credentials), for Azure or Graph."""
     tenant = secrets.get("tenant_id", "").strip()
     if not re.fullmatch(r"[A-Za-z0-9.-]{3,100}", tenant):
         raise ConnectorError("Enter the directory (tenant) ID.")
@@ -415,14 +428,18 @@ def _azure_token(secrets: dict) -> str:
         f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token",
         form={
             "grant_type": "client_credentials",
-            "client_id": secrets["client_id"],
-            "client_secret": secrets["client_secret"],
-            "scope": f"{ARM}/.default",
+            "client_id": secrets["client_id"].strip(),
+            "client_secret": secrets["client_secret"].strip(),
+            "scope": f"{scope}/.default",
         },
     )
     if resp.status in (400, 401):
-        raise ConnectorError("Azure rejected the tenant ID, client ID or secret.")
-    return expect_ok(resp, "Azure sign-in")["access_token"]
+        raise ConnectorError(f"{what} rejected the tenant ID, client ID or secret.")
+    return expect_ok(resp, f"{what} sign-in")["access_token"]
+
+
+def _azure_token(secrets: dict) -> str:
+    return microsoft_token(secrets, ARM)
 
 
 def _arm_list(url: str, token: str, pages: int = 5) -> list[dict]:

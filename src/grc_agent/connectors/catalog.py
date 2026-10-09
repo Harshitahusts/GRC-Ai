@@ -9,9 +9,9 @@ personal-data discovery).
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 
-from grc_agent.connectors import chat, cloud, vcs
+from grc_agent.connectors import chat, cloud, identity, vcs
 
 
 @dataclass(frozen=True)
@@ -252,6 +252,34 @@ CONNECTORS: tuple[Connector, ...] = (
         test=cloud.azure_test,
         collect=cloud.azure_collect,
     ),
+    # ---- Identity and access
+    Connector(
+        "entra_id",
+        "Microsoft Entra ID",
+        "Identity and access",
+        "Microsoft 365 sign-ins: MFA coverage, Conditional Access or security defaults, Global Administrators and guest accounts.",
+        "Access control is a named safeguard (Rule 6): who can sign in, and whether MFA protects them.",
+        fields=(
+            Field("tenant_id", "Directory (tenant) ID", secret=True),
+            Field("client_id", "Application (client) ID", secret=True),
+            Field("client_secret", "Client secret", secret=True),
+        ),
+        setup=(
+            "In the Microsoft Entra admin center (entra.microsoft.com): App registrations → "
+            "New registration, e.g. grc-flow-readonly. Single tenant. No redirect URI.",
+            "API permissions → Add a permission → Microsoft Graph → Application permissions: "
+            "User.Read.All, AuditLog.Read.All, Policy.Read.All and RoleManagement.Read.Directory. "
+            "Then click Grant admin consent.",
+            "Certificates & secrets → New client secret (6 to 12 months). Copy its Value.",
+            "Paste the Directory (tenant) ID and Application (client) ID from Overview, and the "
+            "secret, here. To remove access, delete the app registration.",
+        ),
+        permissions="Read-only Microsoft Graph application permissions: User.Read.All, "
+        "AuditLog.Read.All, Policy.Read.All, RoleManagement.Read.Directory. The MFA report "
+        "needs a Microsoft Entra ID P1 or P2 licence; without one that check is skipped.",
+        test=identity.entra_test,
+        collect=identity.entra_collect,
+    ),
     # ---- Communication
     Connector(
         "slack",
@@ -311,13 +339,6 @@ CONNECTORS: tuple[Connector, ...] = (
                 "Identity and access",
                 "Users, 2-step verification and admin roles.",
                 "Proves access control and finds ex-employees who still have access.",
-            ),
-            (
-                "entra_id",
-                "Microsoft Entra ID",
-                "Identity and access",
-                "Users, MFA and conditional access in Microsoft 365.",
-                "Proves access control and MFA coverage.",
             ),
             (
                 "okta",
@@ -414,10 +435,6 @@ CONNECTORS: tuple[Connector, ...] = (
     ),
 )
 
-# Built and tested, but switched off for now: GitHub and AWS use authorised
-# read-only access first; these follow once they have the same kind of flow.
-COMING_SOON = {"gitlab", "bitbucket", "gcp", "azure", "slack", "teams", "google_chat"}
-CONNECTORS = tuple(replace(c, status="planned") if c.id in COMING_SOON else c for c in CONNECTORS)
 
 BY_ID = {c.id: c for c in CONNECTORS}
 
