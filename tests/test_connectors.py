@@ -53,7 +53,18 @@ def test_catalog_is_consistent():
     ids = [c.id for c in CONNECTORS]
     assert len(ids) == len(set(ids))
     available = {c.id: c for c in CONNECTORS if c.status == "available"}
-    assert set(available) == {"github", "aws"}  # the rest are "Coming soon" for now
+    assert set(available) == {
+        "github",
+        "gitlab",
+        "bitbucket",
+        "aws",
+        "gcp",
+        "azure",
+        "entra_id",
+        "slack",
+        "teams",
+        "google_chat",
+    }
     assert available["github"].flow == "github_app"
     aws = available["aws"]
     assert aws.flow == "aws_role" and aws.test and aws.collect
@@ -121,7 +132,7 @@ def test_chat_rejects_wrong_host_and_deleted_webhook(monkeypatch):
     with pytest.raises(ConnectorError, match="Teams"):
         chat.teams_send({}, {"webhook_url": "https://outlook.office.com/webhook/x"}, "hi")
     patch_http(monkeypatch, chat, {"": Response(404, "no_service")})
-    with pytest.raises(ConnectorError, match="deleted"):
+    with pytest.raises(ConnectorError, match="rejected the message"):
         chat.slack_send({}, {"webhook_url": "https://hooks.slack.com/services/a"}, "hi")
 
 
@@ -459,9 +470,25 @@ def test_all_storage_in_india_passes():
     assert check.status == "pass"
 
 
-def test_coming_soon_connectors_keep_their_code():
-    assert BY_ID["gitlab"].status == "planned" and BY_ID["gitlab"].collect is vcs.gitlab_collect
-    assert BY_ID["teams"].status == "planned" and BY_ID["teams"].send is chat.teams_send
+def test_built_connectors_are_switched_on():
+    for cid in ("gitlab", "bitbucket", "gcp", "azure", "entra_id", "slack", "teams", "google_chat"):
+        assert BY_ID[cid].status == "available", cid
+    assert BY_ID["gitlab"].collect is vcs.gitlab_collect and BY_ID["teams"].send is chat.teams_send
+
+
+def test_google_explains_a_rejected_key(monkeypatch, gcp_key):
+    _, key = gcp_key
+    patch_http(
+        monkeypatch,
+        cloud,
+        {
+            "oauth2.googleapis.com/token": Response(
+                400, {"error": "invalid_grant", "error_description": "Invalid JWT Signature."}
+            )
+        },
+    )
+    with pytest.raises(ConnectorError, match="deleted or disabled"):
+        cloud.gcp_test({}, {"service_account_json": json.dumps(key)})
 
 
 def test_aws_access_keys_are_validated_and_root_keys_warned():

@@ -384,9 +384,21 @@ The client removes access by deleting the token, or the access key or IAM user.
 | GitHub | Installs the firm's GitHub App, picks which repositories to share, approves read-only access on GitHub |
 | AWS | Runs a CloudFormation template that creates a read-only role (AWS `SecurityAudit`) only the firm can use, then sends back the role ARN |
 
-Other connectors (GitLab, Bitbucket, Google Cloud, Azure, Slack, Teams, Google Chat, and
-identity, HR, ticketing, device and data-store systems) are on the roadmap and listed in
-one line on the Connectors page. Until then, collect that evidence by hand and upload it.
+**More connectors** (paste read-only credentials the client creates; each one's page lists
+the exact steps and permissions):
+
+| Connector | Checks | Credentials |
+|---|---|---|
+| GitLab | Project visibility, default branch protection (gitlab.com or self-managed) | Access token with `read_api` |
+| Bitbucket | Repository visibility, branch restrictions | Atlassian email + API token with read scopes |
+| Google Cloud | Where Cloud Storage data is stored, public access prevention, uniform access | Service account key with Browser + Storage Object Viewer |
+| Microsoft Azure | Where resources are located, public blob access, TLS on storage | App registration with the Reader role |
+| Microsoft Entra ID | MFA coverage (admins without MFA fail), security defaults or Conditional Access, number of Global Administrators, guest accounts | App registration with Graph application permissions `User.Read.All`, `AuditLog.Read.All`, `Policy.Read.All`, `RoleManagement.Read.Directory` (the MFA report needs Entra ID P1/P2) |
+| Slack, Teams, Google Chat | Post engagement updates (never client personal data) to a channel | Incoming webhook URL |
+
+A check the credentials can't run (missing permission or licence) shows as "Couldn't check",
+never as a pass. Identity, HR, ticketing, device and data-store systems are on the roadmap
+and listed in one line on the Connectors page; until then, collect that evidence by hand.
 
 One-time setup for the firm (advanced way only):
 
