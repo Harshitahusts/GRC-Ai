@@ -197,9 +197,15 @@ def test_only_a_super_admin_opens_the_console(app, authed):
     add(authed, "pat", "partner")
     for name in ("ada", "pat"):
         c = sign_in(app, name)
-        assert c.get("/dashboard").status_code == 403, name
-        assert post(c, "/dashboard/invite", {"email": "x@example.com"}).status_code == 403
-        assert 'href="/dashboard"' not in c.get("/engagements").text
+        # It doesn't exist for them: "not found", not "forbidden".
+        assert c.get("/dashboard").status_code == 404, name
+        assert post(c, "/dashboard/invite", {"email": "x@example.com"}).status_code == 404
+    # Nothing in the tool links to it, even for the super admin; signed out it's not found.
+    for page in ("/", "/engagements", "/team"):
+        assert 'href="/dashboard"' not in authed.get(page).text
+    assert TestClient(app).get("/dashboard", follow_redirects=False).status_code == 404
+    assert "noindex" in authed.get("/dashboard").text
+    assert 'class="sidebar"' not in authed.get("/dashboard").text
 
 
 def test_console_invites_a_poc_with_access_and_shows_the_link(app, authed):

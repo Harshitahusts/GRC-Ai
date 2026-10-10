@@ -179,6 +179,8 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
                     # its existence isn't revealed.
                     role = row["role"]
                     path = request.url.path
+                    if access.OWNER_PATHS.match(path) and role != "super_admin":
+                        return render(request, "error.html", status_code=404, message="Not found")
                     if not access.path_allowed(path, role):
                         return render(
                             request,
@@ -191,6 +193,9 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
                         return render(
                             request, "error.html", status_code=404, message="Engagement not found"
                         )
+        if not request.session.get("user") and access.OWNER_PATHS.match(request.url.path):
+            # The owner's page doesn't exist for anyone who isn't signed in as a super admin.
+            return render(request, "error.html", status_code=404, message="Not found")
         return await call_next(request)
 
     app.add_middleware(

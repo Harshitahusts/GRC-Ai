@@ -30,9 +30,6 @@
     {{ nav_link("/connectors", "i-plug", "Connectors", path.startswith("/connectors") or path.startswith("/settings/github")) }}
     {{ nav_link("/corpus", "i-book", "Corpus", path.startswith("/corpus")) }}
     {% if is_staff or api_role %}<p class="nav-group">Organisation</p>{% endif %}
-    {% if role == "super_admin" %}
-    {{ nav_link("/dashboard", "i-shield", "Super admin dashboard", path.startswith("/dashboard")) }}
-    {% endif %}
     {% if is_staff %}
     {{ nav_link("/team", "i-users", "Team & roles", path.startswith("/team")) }}
     {{ nav_link("/audit", "i-clock", "Audit log", path.startswith("/audit")) }}
@@ -129,7 +126,6 @@
       ("Pages", "API keys & MCP (connect Claude, Cursor...)", "/settings/api-keys", "i-plug", "" if api_role else "-"),
       ("Pages", "Audit log", "/audit", "i-clock", "" if is_staff else "-"),
       ("Pages", "Team & roles", "/team", "i-users", "" if is_staff else "-"),
-      ("Pages", "Super admin dashboard: invites, POCs, access", "/dashboard", "i-shield", "" if role == "super_admin" else "-"),
       ("Actions", "New engagement", "/engagements#new", "i-plus", "n"),
       ("Actions", "Ask the GRC Analyst", "/assistant", "i-spark", ""),
       ("Actions", "Unread notifications", "/notifications?show=unread", "i-bell", ""),
