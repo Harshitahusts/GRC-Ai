@@ -73,6 +73,7 @@ from grc_agent.web import (
     ops_views,
     register_views,
     risk_views,
+    training_views,
 )
 from grc_agent.web.registers import REGISTERS, is_overdue
 from grc_agent.web.security import (
@@ -216,6 +217,7 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
     register_views.register(app)
     ops_views.register(app)
     obligation_views.register(app)
+    training_views.register(app)
     console_views.register(app)
     ai_views.register(app)
     mcp_views.register(app)
@@ -329,6 +331,7 @@ def site_url() -> str:
 templates.env.globals["site_url"] = site_url
 # Google / Microsoft buttons on the sign-in page, for the providers set up in .env.
 templates.env.globals["sign_in_options"] = oauth.enabled
+templates.env.globals["training_on"] = training_views.enabled
 
 
 # ---------------------------------------------------------------- helpers

@@ -94,6 +94,7 @@ credentials with Fernet from the `cryptography` library.
 | `ops_views.py` | Controls, evidence library, audit log page, work queue, team |
 | `registers.py`, `register_views.py` | Tasks, consent, rights requests, breaches, erasure, drills, vendors, DPIAs, policies, systems, accepted gaps |
 | `obligation_views.py` (+ `grc_agent/obligations.py`) | Full DPDP obligations register, penalty exposure, readiness trend, re-checks due |
+| `training_views.py` (+ `grc_agent/training.py`, `connectors/hr.py`) | Employee training: HR import, personal links, no-skip lessons, quizzes, leaderboard |
 | `board_pack.py` | Board inquiry pack ZIP and the breach Board-report draft |
 | `discovery_views.py`, `dataflow_views.py`, `risk_views.py` | The pages for those features |
 | `connector_views.py`, `mcp_views.py` | Connector pages; API keys and the MCP server for AI apps |

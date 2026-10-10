@@ -117,6 +117,26 @@ without the facts it needs, a full history with comments, and evidence attachmen
 assigned work. The **Work queue** lists everything open across clients, most urgent
 first; the **Audit log** shows every change; **Team & roles** sets each person's role.
 
+### Training (in testing)
+
+DPDP awareness training for a client's employees, on the engagement's **Training** tab.
+It is switched on when the app runs without `GRC_DOMAIN` (a laptop or test machine) and
+off on the live server; `GRC_TRAINING=1` or `0` overrides that.
+
+- **Employees:** import a CSV exported from any HR system (Zoho People, Keka, Darwinbox,
+  greytHR, BambooHR; columns matched by name, only active people), connect Zoho People
+  directly (self-client refresh token, stored encrypted), or add people one by one.
+- **Personal links:** each employee gets a private `/learn/<token>` link (only its hash is
+  stored; a new link stops the old one). No account needed. Links can be emailed.
+- **Lessons:** six built-in DPDP lessons (`grc_agent/training.py`). Each is a reading
+  until you add a video: an uploaded MP4/WebM (your own recording) or a YouTube link.
+  Videos play at 0.5x, 1x, 1.5x or 2x and can't be skipped ahead: the server counts
+  watch time itself, never faster than 2x real time.
+- **Quiz:** after each lesson; 70% passes. Below that the lesson resets and must be
+  watched again before another try.
+- **Tracking:** completion, by department, a leaderboard, a CSV report, and acceptance
+  of the client's published policies.
+
 ### Organisations, teams and the owner's dashboard
 
 GRC Flow is used two ways: a company runs its own DPDP compliance, and a consultancy or

@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% from "_macros.html" import engagement_header, page_intro, icon, meter %}
+{% block title %}Training · {{ eng.client }}{% endblock %}
+{% block content %}
+{{ engagement_header(eng, s, tab) }}
+{% set locked = read_only or not can_lead %}
+
+{{ page_intro("Training", "DPDP awareness training for " ~ eng.client ~ "'s employees. Import your people, share each person's private link, and track who has finished. Lessons can't be skipped; each ends with a quiz and " ~ pass_mark ~ "% passes. Below that, the lesson is watched again.", "Section 8(4): organisational measures") }}
+<div class="flash flash-info" role="note">{{ icon("i-info") }} <strong>In testing.</strong> Training is switched on for this test setup only. It isn't on the live app yet.</div>
+
+{% if training_link %}
+<section class="card invite-link" role="status">
+  <h2>Training link for {{ training_link.name }}</h2>
+  <p class="muted small">Send it to them privately (email, WhatsApp, Slack). It's shown once; making a new link stops this one working. Anyone with it can take the training as them.</p>
+  <div class="copy-row">
+    <input id="training-link" value="{{ training_link.link }}" readonly aria-label="Training link">
+    <button type="button" class="primary" data-copy-field="training-link">Copy link</button>
+  </div>
+</section>
+<script>
+document.querySelectorAll("[data-copy-field]").forEach(b => b.addEventListener("click", () => {
+  const field = document.getElementById(b.dataset.copyField);
+  field.select();
+  navigator.clipboard.writeText(field.value).then(() => { b.textContent = "Copied"; });
+}));
+</script>
+{% endif %}
+
+<section class="tiles dash-tiles" aria-label="Training at a glance">
+  <div class="tile tile-hero"><p class="tile-label">Completed</p><p class="tile-value">{{ stats.pct }}<small>%</small></p>{{ meter(stats.done, stats.people or 1, "Employees who completed training") }}<p class="muted small">{{ stats.done }} of {{ stats.people }} people</p></div>
+  <div class="tile {{ 'is-warn' if stats.started }}"><p class="tile-label">In progress</p><p class="tile-value">{{ stats.started }}</p><p class="muted small">started, not finished</p></div>
+  <div class="tile {{ 'is-bad' if stats.not_started }}"><p class="tile-label">Not started</p><p class="tile-value">{{ stats.not_started }}</p><p class="muted small">no lesson opened yet</p></div>
+  <div class="tile"><p class="tile-label">Average score</p><p class="tile-value">{{ stats.avg if stats.avg is not none else "–" }}{% if stats.avg is not none %}<small>%</small>{% endif %}</p><p class="muted small">best score per lesson passed</p></div>
+</section>
+
+<div class="grid-2">
+  <section class="card" aria-labelledby="lb-h">
+    <h3 id="lb-h">{{ icon("i-star") }} Leaderboard</h3>
+    {% if board %}
+    <ol class="leaderboard">
+      {% for r in board %}
+      <li class="{{ 'top' if r.rank <= 3 }}"><span class="lb-rank">{{ r.rank }}</span><span class="lb-name"><strong>{{ r.name }}</strong><small class="muted">{{ r.department or "No department" }}</small></span><span class="lb-score">{{ r.passed }}/{{ r.total }} · {{ r.avg }}%</span></li>
+      {% endfor %}
+    </ol>
+    <p class="small muted">Ranked by lessons passed, then average score, then who finished first.</p>
+    {% else %}
+    <p class="muted">Nobody has passed a lesson yet.</p>
+    {% endif %}
+  </section>
+  <section class="card" aria-labelledby="dept-h">
+    <h3 id="dept-h">By department</h3>
+    {% if depts %}
+    <table class="table">
+      <thead><tr><th>Department</th><th class="num">People</th><th>Completed</th><th class="num">Avg</th></tr></thead>
+      <tbody>
+      {% for d in depts %}
+      <tr><td>{{ d.name }}</td><td class="num">{{ d.people }}</td><td>{{ meter(d.done, d.people, "Completed in " ~ d.name) }} <span class="small">{{ d.pct }}%</span></td><td class="num">{{ d.avg if d.avg is not none else "–" }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="muted">Import employees to see departments.</p>
+    {% endif %}
+  </section>
+</div>
+
+<section class="card" id="people" aria-labelledby="people-h">
+  <div class="card-head"><h3 id="people-h">Employees ({{ rows|length }})</h3>
+    <span>{% if rows %}<a class="button small" href="/engagements/{{ eng.id }}/training.csv">{{ icon("i-download") }} Report (CSV)</a>{% endif %}
+    {% if not locked and mail_ready and rows %}<form method="post" action="/engagements/{{ eng.id }}/training/links" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="button small">Email links to everyone not yet sent</button></form>{% endif %}</span>
+  </div>
+  {% if rows %}
+  <div class="table-scroll">
+  <table class="table">
+    <thead><tr><th>Name</th><th class="hide-sm">Department</th><th>Progress</th><th class="num">Avg</th><th class="hide-sm">Link</th>{% if not locked %}<th></th>{% endif %}</tr></thead>
+    <tbody>
+    {% for r in rows %}
+    <tr>
+      <td><strong>{{ r.name }}</strong><br><span class="small muted">{{ r.email }}</span></td>
+      <td class="hide-sm small">{{ r.department or "–" }}</td>
+      <td>{{ meter(r.passed, r.total, "Lessons passed by " ~ r.name) }} <span class="small">{{ r.passed }}/{{ r.total }}</span>{% if r.done %} <span class="badge badge-pass">Done</span>{% elif not r.started %} <span class="badge badge-none">Not started</span>{% endif %}</td>
+      <td class="num">{{ r.avg if r.avg is not none else "–" }}</td>
+      <td class="hide-sm small">{{ "Shared" if r.has_link else "Not yet" }}</td>
+      {% if not locked %}
+      <td class="nowrap">
+        <form method="post" action="/engagements/{{ eng.id }}/training/employees/{{ r.id }}/link" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="button small" title="Make a new link (the old one stops working)">Get link</button></form>
+        {% if mail_ready %}<form method="post" action="/engagements/{{ eng.id }}/training/employees/{{ r.id }}/link" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="send" value="1"><button class="button small">Email</button></form>{% endif %}
+        <form method="post" action="/engagements/{{ eng.id }}/training/employees/{{ r.id }}/remove" class="inline" onsubmit="return confirm('Remove {{ r.name|e }}? Their training record is kept.')"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="button small" aria-label="Remove {{ r.name }}">{{ icon("i-x") }}</button></form>
+      </td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="empty">{{ icon("i-users") }}<p><strong>No employees yet.</strong> Import them from your HR system below, or add one by hand.</p></div>
+  {% endif %}
+</section>
+
+{% if not locked %}
+<section class="card" id="import" aria-labelledby="import-h">
+  <h3 id="import-h">Add employees</h3>
+  <div class="grid-2">
+    <div>
+      <h4>From your HR system (CSV)</h4>
+      <p class="small muted">Export employees from Zoho People, Keka, Darwinbox, greytHR, BambooHR or a spreadsheet. Columns are matched by name: <code>Email</code>, <code>Name</code> (or <code>First name</code> + <code>Last name</code>), <code>Department</code>, <code>Manager</code>, <code>Employee ID</code>, <code>Status</code>. Only active employees are imported; re-importing updates people instead of duplicating them.</p>
+      <form method="post" action="/engagements/{{ eng.id }}/training/import" enctype="multipart/form-data" class="stack">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <label>CSV file <input type="file" name="file" accept=".csv,text/csv" required></label>
+        <p><button class="primary">{{ icon("i-plus") }} Import</button></p>
+      </form>
+      <h4>One person</h4>
+      <form method="post" action="/engagements/{{ eng.id }}/training/employees" class="stack">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <label>Name <input name="name" maxlength="120" required></label>
+        <label>Work email <input name="email" type="email" maxlength="200" required></label>
+        <label>Department <input name="department" maxlength="120"></label>
+        <p><button class="button">Add</button></p>
+      </form>
+    </div>
+    <div>
+      <h4>Zoho People (direct)</h4>
+      {% if hr_conn %}
+      <p>Connected{% if hr_conn.synced_at %}, last synced {{ hr_conn.synced_at[:16].replace("T", " ") }}{% endif %}.
+        {% if hr_conn.status == "error" %}<span class="badge badge-fail">Error</span> {{ hr_conn.message }}{% elif hr_conn.message %}<span class="muted">{{ hr_conn.message }}</span>{% endif %}</p>
+      <form method="post" action="/engagements/{{ eng.id }}/training/zoho/sync" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="button small primary">{{ icon("i-refresh") }} Sync now</button></form>
+      <form method="post" action="/engagements/{{ eng.id }}/training/zoho/remove" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="button small">Disconnect</button></form>
+      <details class="small"><summary>Replace credentials</summary>{% endif %}
+      <p class="small muted">In the <a href="https://api-console.zoho.in/" rel="noopener noreferrer" target="_blank">Zoho API console</a>, create a <em>Self Client</em>, generate a code with scope <code>ZOHOPEOPLE.forms.READ</code>, and exchange it for a refresh token. GRC Flow only reads employee records; the credentials are stored encrypted.</p>
+      <form method="post" action="/engagements/{{ eng.id }}/training/zoho" class="stack" autocomplete="off">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <label>Data centre <select name="dc">{% for k, label in zoho_dcs.items() %}<option value="{{ k }}">{{ label }}</option>{% endfor %}</select></label>
+        <label>Client ID <input name="client_id" required></label>
+        <label>Client secret <input name="client_secret" type="password" required></label>
+        <label>Refresh token <input name="refresh_token" type="password" required></label>
+        <p><button class="button">Connect and import</button></p>
+      </form>
+      {% if hr_conn %}</details>{% endif %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<section class="card" id="lessons" aria-labelledby="lessons-h">
+  <h3 id="lessons-h">Lessons</h3>
+  <p class="small muted">Each lesson works as a reading on its own. Add a video (your own recording as MP4/WebM, or a YouTube link) and the lesson becomes a video lesson: it can be played at 0.5x, 1x, 1.5x or 2x, but not skipped ahead.</p>
+  <ol class="lesson-admin">
+    {% for l in course %}
+    {% set m = media.get(l.id) %}
+    <li>
+      <div><strong>{{ l.title }}</strong> <span class="badge {{ 'badge-pass' if m else 'badge-none' }}">{{ ("Video · " ~ (m.duration_seconds // 60) ~ ":" ~ "%02d"|format(m.duration_seconds % 60)) if m else ("Reading · " ~ l.minutes ~ " min") }}</span>
+        <p class="small muted">{{ l.summary }} · {{ l.quiz|length }} questions{% if m and m.kind == "youtube" %} · <a href="https://www.youtube.com/watch?v={{ m.ref }}" target="_blank" rel="noopener noreferrer">YouTube video</a>{% elif m %} · <a href="/engagements/{{ eng.id }}/training/media/{{ l.id }}/preview" target="_blank">Preview video</a>{% endif %}</p>
+      </div>
+      {% if not locked %}
+      <details class="control-edit">
+        <summary class="button small">{{ "Change video" if m else "Add video" }}</summary>
+        <form method="post" action="/engagements/{{ eng.id }}/training/media/{{ l.id }}" enctype="multipart/form-data" class="stack video-form">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <label>Video file (MP4 or WebM, up to {{ max_video_mb }} MB) <input type="file" name="file" accept="video/mp4,video/webm" class="video-file"></label>
+          <label>or YouTube link <input name="youtube" placeholder="https://www.youtube.com/watch?v=..."></label>
+          <label>Length (mm:ss) <input name="duration" class="video-duration" placeholder="6:30" required pattern="[0-9:]+"></label>
+          <p><button class="button small primary">Save</button></p>
+        </form>
+        {% if m %}<form method="post" action="/engagements/{{ eng.id }}/training/media/{{ l.id }}/remove"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="button small">Remove video</button></form>{% endif %}
+      </details>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+</section>
+<script>
+// Fill in a chosen file's length automatically.
+document.querySelectorAll(".video-form").forEach(form => {
+  const file = form.querySelector(".video-file"), out = form.querySelector(".video-duration");
+  file.addEventListener("change", () => {
+    if (!file.files[0]) return;
+    const v = document.createElement("video"); v.preload = "metadata";
+    v.onloadedmetadata = () => { const s = Math.round(v.duration); out.value = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); URL.revokeObjectURL(v.src); };
+    v.src = URL.createObjectURL(file.files[0]);
+  });
+});
+</script>
+{% endblock %}

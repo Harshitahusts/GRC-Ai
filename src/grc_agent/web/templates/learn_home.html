@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, meter %}
+{% block title %}DPDP training{% endblock %}
+{% block content %}
+<div class="learn">
+  <header class="learn-head">
+    <p class="crumb">{{ emp.client }} · Data protection training</p>
+    <h1>Hello {{ emp.name.split(" ")[0] }}</h1>
+    <p class="muted">Short lessons on India's Digital Personal Data Protection Act, and what it means for your work. Each lesson ends with a quiz: {{ pass_mark }}% passes. You can pause and come back with the same link.</p>
+    <div class="learn-progress">{{ meter(passed, states|length, "Lessons passed") }}<span><strong>{{ passed }} of {{ states|length }}</strong> lessons passed</span></div>
+    {% if next_lesson %}<p><a class="button primary" href="/learn/{{ token }}/lesson/{{ next_lesson.lesson.id }}">{{ "Continue" if passed or next_lesson.watched else "Start" }}: {{ next_lesson.lesson.title }} {{ icon("i-arrow") }}</a></p>
+    {% else %}<div class="flash flash-success">{{ icon("i-check") }} <strong>All done.</strong> You've passed every lesson. Thank you.</div>{% endif %}
+  </header>
+
+  <ol class="learn-lessons">
+    {% for st in states %}
+    <li class="{{ 'is-done' if st.passed }}">
+      <span class="lesson-dot" aria-hidden="true">{% if st.passed %}{{ icon("i-check") }}{% else %}{{ loop.index }}{% endif %}</span>
+      <a href="/learn/{{ token }}/lesson/{{ st.lesson.id }}"><strong>{{ st.lesson.title }}</strong><small>{{ st.lesson.summary }}</small></a>
+      <span class="small">{% if st.passed %}<span class="badge badge-pass">Passed · {{ st.best_score }}%</span>{% elif st.ready %}<span class="badge badge-warn">Quiz ready</span>{% elif st.watched %}<span class="badge badge-none">{{ (100 * st.watched / st.duration)|round|int }}% watched</span>{% endif %}</span>
+    </li>
+    {% endfor %}
+  </ol>
+
+  {% if policies %}
+  <section class="card" id="policies">
+    <h2>Policies to read and accept</h2>
+    <ul class="plain">
+      {% for p in policies %}
+      <li class="file-row"><span><strong>{{ p.title }}</strong>{% if p.version %} <span class="muted">v{{ p.version }}</span>{% endif %}{% if p.link %} · <a href="{{ p.link }}" target="_blank" rel="noopener noreferrer">Read it</a>{% endif %}</span>
+        {% if p.accepted %}<span class="badge badge-pass">Accepted</span>{% else %}<form method="post" action="/learn/{{ token }}/policy/{{ p.id }}" class="inline"><button class="button small primary">I have read and accept this</button></form>{% endif %}</li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+  <p class="small muted">This link is personal to you; please don't share it. Questions? Ask your privacy team.</p>
+</div>
+{% endblock %}

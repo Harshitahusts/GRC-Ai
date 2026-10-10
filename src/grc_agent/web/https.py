@@ -38,6 +38,7 @@ CSP = "; ".join(
         "script-src 'self' 'unsafe-inline'",
         "style-src 'self' 'unsafe-inline'",
         "img-src 'self' data:",
+        "media-src 'self' blob:",
         "font-src 'self'",
         "connect-src 'self'",
         "object-src 'none'",
