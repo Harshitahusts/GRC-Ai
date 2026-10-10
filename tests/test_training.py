@@ -332,3 +332,20 @@ def finish(app, emp_id, lesson_id):
             "last_beat_at = ? WHERE employee_id = ? AND lesson_id = ?",
             (lesson.read_seconds, lesson.read_seconds, long_ago, emp_id, lesson_id),
         )
+
+
+def test_training_lives_under_organisation(app, authed):
+    eid = create(authed)
+    # One workspace: straight to it.
+    r = authed.get("/training", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == f"/engagements/{eid}/training"
+    side = authed.get("/").text
+    assert 'href="/training"' in side
+    # Not a tab inside the client any more.
+    assert f'href="/engagements/{eid}/training"' not in authed.get(f"/engagements/{eid}").text
+    # Several: an overview of each, with completion.
+    eid2 = create(authed)
+    import_people(authed, eid2)
+    page = authed.get("/training").text
+    assert f"/engagements/{eid}/training" in page and f"/engagements/{eid2}/training" in page
+    assert "0 of 3 people" in page

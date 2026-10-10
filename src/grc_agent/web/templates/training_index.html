@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, meter %}
+{% block title %}Training{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Training</h1>
+    <p class="muted">DPDP awareness training for employees. Each lesson ends with a quiz; {{ pass_mark }}% passes. Pick a workspace to import its people, share their links and see the leaderboard.</p>
+  </div>
+</div>
+<div class="flash flash-info" role="note">{{ icon("i-info") }} <strong>In testing.</strong> Training is switched on for this test setup only. It isn't on the live app yet.</div>
+
+<section class="tiles dash-tiles" aria-label="Training at a glance">
+  <div class="tile tile-hero"><p class="tile-label">Completed</p><p class="tile-value">{{ pct }}<small>%</small></p>{{ meter(done, total or 1, "Employees who completed training") }}<p class="muted small">{{ done }} of {{ total }} people</p></div>
+  <div class="tile"><p class="tile-label">Workspaces</p><p class="tile-value">{{ clients|length }}</p><p class="muted small">you can manage</p></div>
+</section>
+
+<section class="card">
+  {% if clients %}
+  <table class="table">
+    <thead><tr><th>Workspace</th><th class="num">People</th><th>Completed</th><th class="num">Avg score</th><th></th></tr></thead>
+    <tbody>
+    {% for c in clients %}
+    <tr>
+      <td><a class="strong-link" href="/engagements/{{ c.id }}/training">{{ c.client }}</a><br><span class="small muted">{{ c.sector }}</span></td>
+      <td class="num">{{ c.people }}</td>
+      <td>{{ meter(c.done, c.people or 1, "Completed in " ~ c.client) }} <span class="small">{{ c.pct }}%</span></td>
+      <td class="num">{{ c.avg if c.avg is not none else "–" }}</td>
+      <td><a class="button small" href="/engagements/{{ c.id }}/training">Open</a></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">{{ icon("i-users") }}<p><strong>No workspaces yet.</strong> Create an engagement first, then add its employees here.</p></div>
+  {% endif %}
+</section>
+{% endblock %}
