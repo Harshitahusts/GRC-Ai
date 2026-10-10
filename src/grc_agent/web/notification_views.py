@@ -30,10 +30,14 @@ def register(app: FastAPI) -> None:
         items = notify.listing(
             conn, user, unread_only=show == "unread", category=category, level=level
         )
+        seen, seen_args = notify.scope(conn, user)
         counts = {
             row["category"]: row["n"]
             for row in conn.execute(
-                "SELECT category, COUNT(*) AS n FROM notifications GROUP BY category"
+                # Safe: the SQL text holds only names and ? marks from this code.
+                f"SELECT category, COUNT(*) AS n FROM notifications n WHERE {seen} "  # nosec B608  # noqa: S608
+                "GROUP BY category",
+                seen_args,
             )
         }
         return render(

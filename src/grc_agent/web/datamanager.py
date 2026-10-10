@@ -167,6 +167,13 @@ CATALOG: dict[str, dict] = {
         "retain_days": 90,
         "retention": "90 days",
     },
+    "engagement_access": {
+        "purpose": "Who may open each client besides staff (partners and the client's people)",
+        "category": "Security",
+        "personal": True,
+        "retain_days": None,
+        "retention": "Until access is removed or the engagement is deleted",
+    },
     "api_keys": {
         "purpose": "Keys for AI apps (MCP); only a hash of each key is stored",
         "category": "Security",

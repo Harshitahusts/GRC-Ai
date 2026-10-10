@@ -7,7 +7,14 @@
 <div class="login-main">
   <div class="login-card card">
     <h1>Sign in</h1>
-    <p class="muted">Welcome back. Sign in to your workspace.</p>
+    {% set portal = portal or "client" %}
+    <div class="portal-choice" role="radiogroup" aria-label="Sign in as">
+      <label class="portal-option"><input type="radio" name="portal" value="client" form="login-form" {% if portal == "client" %}checked{% endif %}>
+        <span><strong>Company</strong><small>Your own DPDP compliance</small></span></label>
+      <label class="portal-option"><input type="radio" name="portal" value="partner" form="login-form" {% if portal == "partner" %}checked{% endif %}>
+        <span><strong>Partner</strong><small>DPDP work for your clients</small></span></label>
+    </div>
+    <p class="muted small">Your account decides what you see; this only sets where you start.</p>
     {% if demo_tenant %}<div class="flash flash-info demo-login" role="note"><strong>Demo tenant</strong> with sample data. Sign in as <code>{{ demo_login[0] }}</code> / <code>{{ demo_login[1] }}</code>.</div>{% endif %}
 
     {% if error %}<div class="flash flash-error login-error" id="login-err" role="alert">{{ icon("i-alert") }} {{ error }}</div>{% endif %}
@@ -35,7 +42,7 @@
     {% endif %}
     {% set website = site_url() %}
     {% if website %}<p class="login-site small"><a href="{{ website }}">&larr; Back to {{ website.split("://", 1)[1] }}</a></p>{% endif %}
-    <p class="login-alt small muted">No account yet? Ask an admin to invite you from <strong>Team &amp; roles</strong>.</p>
+    <p class="login-alt small muted">No account yet? Companies can ask for a free 14-day trial, and consultancies can apply to become a partner{% if website %}, at <a href="{{ website }}/contact">{{ website.split("://", 1)[1] }}/contact</a>{% endif %}. Joining a team? Ask its admin or partner to invite you.</p>
   </div>
 </div>
 {% endblock %}

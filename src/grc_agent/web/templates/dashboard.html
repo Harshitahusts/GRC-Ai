@@ -47,9 +47,9 @@
   <a class="quick-item" href="/engagements#new"><span class="quick-icon">{{ icon("i-plus") }}</span><span><strong>New engagement</strong><small>Start a client intake</small></span></a>
   <a class="quick-item" href="/assistant"><span class="quick-icon">{{ icon("i-spark") }}</span><span><strong>Ask the analyst</strong><small>Questions on any client</small></span></a>
   <a class="quick-item" href="/dataflows"><span class="quick-icon">{{ icon("i-flow") }}</span><span><strong>Data flows</strong><small>Where client data goes</small></span></a>
-  <a class="quick-item" href="/team"><span class="quick-icon">{{ icon("i-users") }}</span><span><strong>Add a teammate</strong><small>Team &amp; roles</small></span></a>
+  {% if is_staff %}<a class="quick-item" href="/team"><span class="quick-icon">{{ icon("i-users") }}</span><span><strong>Add a teammate</strong><small>Team &amp; roles</small></span></a>{% endif %}
   <a class="quick-item" href="/work"><span class="quick-icon">{{ icon("i-check") }}</span><span><strong>Work queue</strong><small>What's due across clients</small></span></a>
-  <a class="quick-item" href="/settings/ai"><span class="quick-icon">{{ icon("i-spark") }}</span><span><strong>AI provider</strong><small>Claude or a free model</small></span></a>
+  {% if is_staff %}<a class="quick-item" href="/settings/ai"><span class="quick-icon">{{ icon("i-spark") }}</span><span><strong>AI provider</strong><small>Claude or a free model</small></span></a>{% endif %}
 </section>
 
 {% set live_risks = risk_queue %}
@@ -191,7 +191,7 @@
     </ul>
     {% else %}<p class="muted">No open risks. They appear here once engagements are assessed.</p>{% endif %}
     <p class="small muted">Connectors healthy: <strong>{{ connections_ok }}/{{ connections_total }}</strong> · <a href="/connectors">Connectors</a></p>
-    <p class="small muted store-line"><span class="dot-status {{ 'ok' if store.healthy else 'bad' }}" aria-hidden="true"></span>Data store: <strong>{{ store.total_size }}</strong>, {{ "{:,}".format(store.rows) }} records, {{ store.watch|length }} to watch · <a href="/data-manager">Data manager</a></p>
+    {% if store %}<p class="small muted store-line"><span class="dot-status {{ 'ok' if store.healthy else 'bad' }}" aria-hidden="true"></span>Data store: <strong>{{ store.total_size }}</strong>, {{ "{:,}".format(store.rows) }} records, {{ store.watch|length }} to watch · <a href="/data-manager">Data manager</a></p>{% endif %}
   </section>
 </div>
 

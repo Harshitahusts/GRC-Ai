@@ -20,7 +20,7 @@ from itsdangerous import BadSignature, URLSafeTimedSerializer
 from grc_agent.citations import normalize_citation
 from grc_agent.connectors import ConnectorError, by_category, cloud, github_app, planned_names
 from grc_agent.connectors.secrets import mask
-from grc_agent.web import db, demo_tenant
+from grc_agent.web import access, db, demo_tenant
 
 log = logging.getLogger(__name__)
 
@@ -322,10 +322,13 @@ def register(app: FastAPI) -> None:
 
     @app.get("/connectors")
     def connectors_page(request: Request, user: User, conn: Conn):
-        rows = conn.execute(
-            "SELECT c.*, e.client FROM connections c JOIN engagements e ON e.id = c.engagement_id "
-            "ORDER BY c.id DESC"
-        ).fetchall()
+        rows = access.only(
+            conn.execute(
+                "SELECT c.*, e.client FROM connections c JOIN engagements e "
+                "ON e.id = c.engagement_id ORDER BY c.id DESC"
+            ).fetchall(),
+            access.visible_ids(conn, user),
+        )
         return render(
             request,
             "connectors.html",
@@ -339,14 +342,20 @@ def register(app: FastAPI) -> None:
         c = request.app.state.connectors.get(connector_id)
         if c is None or c.status != "available":
             raise HTTPException(status_code=404, detail="Unknown connector")
-        engagements = conn.execute(
-            "SELECT id, client, sector FROM engagements ORDER BY id DESC"
-        ).fetchall()
-        connections = conn.execute(
-            "SELECT c.*, e.client FROM connections c JOIN engagements e ON e.id = c.engagement_id "
-            "WHERE c.connector = ? ORDER BY c.id DESC",
-            (c.id,),
-        ).fetchall()
+        ids = access.visible_ids(conn, user)
+        engagements = access.only(
+            conn.execute("SELECT id, client, sector FROM engagements ORDER BY id DESC").fetchall(),
+            ids,
+            "id",
+        )
+        connections = access.only(
+            conn.execute(
+                "SELECT c.*, e.client FROM connections c JOIN engagements e "
+                "ON e.id = c.engagement_id WHERE c.connector = ? ORDER BY c.id DESC",
+                (c.id,),
+            ).fetchall(),
+            ids,
+        )
         return render(
             request,
             "connector_detail.html",
@@ -362,6 +371,8 @@ def register(app: FastAPI) -> None:
     ):
         """From the catalog: pick an engagement, then go to its setup form for this connector."""
         c = _connector(request, connector_id)
+        if not access.can_see(conn, user, engagement):
+            raise HTTPException(status_code=404, detail="Engagement not found")
         eng = get_engagement(conn, engagement)
         return redirect(f"/engagements/{eng['id']}/connectors/new?type={c.id}")
 

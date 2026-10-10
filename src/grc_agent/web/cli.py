@@ -315,9 +315,11 @@ def _set_password(data_dir: Path, username: str, from_stdin: bool, create: bool)
             print(f"error: no user {username!r} (use adduser)", file=sys.stderr)
             return 1
         if create:
+            # The first account owns the workspace; later ones from here are admins.
+            owner = conn.execute("SELECT 1 FROM users WHERE role = 'super_admin'").fetchone()
             conn.execute(
-                "INSERT INTO users (username, password_hash, created_at) VALUES (?,?,?)",
-                (username, hash_password(password), db.now()),
+                "INSERT INTO users (username, password_hash, created_at, role) VALUES (?,?,?,?)",
+                (username, hash_password(password), db.now(), "admin" if owner else "super_admin"),
             )
         else:
             conn.execute(

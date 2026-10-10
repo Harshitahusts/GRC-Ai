@@ -28,8 +28,9 @@ little JavaScript in `web/static/`). There is no separate front-end build.
    - security headers are added, and plain HTTP is redirected to HTTPS
 3. **The route** (a function decorated with `@app.get`/`@app.post`) runs:
    - `User` (a FastAPI dependency) requires a signed-in user; without one the request goes to `/login`.
-   - Every form post goes through `form_with_csrf()`, which checks the CSRF token and blocks viewers from changing anything.
-   - Admin-only actions call `require_admin()`.
+   - Before that, the middleware in `create_app()` refuses staff-only pages and answers "not found" for any `/engagements/<id>` the person can't open (`web/access.py`).
+   - Every form post goes through `form_with_csrf()`, which checks the CSRF token.
+   - Admin-only actions call `require_admin()`; an engagement lead's calls use `access.leads()`.
 4. **The database** is reached through `db.connect()`.
    - It returns SQLite or a PostgreSQL wrapper (`web/pg.py`); both take the same SQL.
    - User values always go in as `?` parameters.
@@ -106,7 +107,8 @@ credentials with Fernet from the `cryptography` library.
 | Passwords: Argon2id, old hashes upgraded at sign-in | `web/security.py`, `login()` in `web/app.py` |
 | Same response for unknown users; lockout per user and per address | `login()` in `web/app.py` |
 | Sessions end when a user is removed or changes password | `end_stale_sessions` in `web/app.py` |
-| CSRF on every form, viewers read-only | `form_with_csrf()` in `web/app.py` |
+| CSRF on every form | `form_with_csrf()` in `web/app.py` |
+| Partners and clients see only their own clients | `web/access.py`, `end_stale_sessions` in `web/app.py` |
 | No requests to private or cloud-metadata addresses | `connectors/base.py`, `insecure_url_problem()` in `web/https.py` |
 | Uploads: type checked against content, size limit, random names | `web/ops_views.py` |
 | Security headers, HTTPS only | `web/https.py`, `deploy/Caddyfile` |

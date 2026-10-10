@@ -103,8 +103,28 @@ Every register record has an owner, a due date, a status workflow that won't mov
 without the facts it needs, a full history with comments, and evidence attachments.
 "Create task" links on findings, risks, controls and inventory gaps turn a gap into
 assigned work. The **Work queue** lists everything open across clients, most urgent
-first; the **Audit log** shows every change; **Team & roles** sets who is an admin,
-member or read-only viewer.
+first; the **Audit log** shows every change; **Team & roles** sets each person's role.
+
+### Roles: companies and partners in one workspace
+
+GRC Flow is used two ways: a company runs its own DPDP compliance (**client**), and a
+consultancy or MSSP runs DPDP work for many companies (**partner**). The sign-in page asks
+which you are, but the account decides what each person can open
+(`web/access.py`):
+
+| Role | Sees | Can also |
+|---|---|---|
+| Super admin | Every client | Everything, including making admins (the first account) |
+| Admin | Every client | Team, AI provider, audit log, data manager; give non-staff roles |
+| Partner | The clients they created or were given | Invite each client's people, API keys and MCP (reads only their clients) |
+| Client | Their own company only | Run their own assessment; sign off engagements they set up |
+| Trial | Like a client, one engagement | Ends after 14 days (an admin can extend it) |
+
+Each engagement's **People with access** box lists who besides staff can open it; a
+partner invites the client's people there. Another partner's client answers "not found"
+everywhere: pages, lists, notifications, the GRC Analyst and MCP. Older workspaces upgrade
+on start: members become partners and viewers become clients, keeping the clients they
+saw, and the first admin becomes the super admin.
 
 The audit log is **tamper-evident**: each entry is sealed with a SHA-256 hash over its
 own fields and the hash of the entry before it. **Check integrity** on the Audit log page
@@ -149,8 +169,8 @@ reporting), fetches the data before answering, and cites DPDP provisions from th
 register and corpus. It also reads uploaded evidence (with the AI relevance check) and the
 readiness plan. Its one action is **create_task**: when you ask it to, it adds tasks to a
 client's Tasks register, labelled as drafted by the analyst and recorded under your name,
-for a person to check. It never marks a finding, control or delivery; read-only viewers
-don't get the action at all. The **Analyst queue** lists the highest open risks across
+for a person to check. It never marks a finding, control or delivery, and it only sees
+the clients the person asking can open. The **Analyst queue** lists the highest open risks across
 clients, overdue first.
 
 ### MCP: use GRC Flow from Claude Desktop, Claude Code or Cursor

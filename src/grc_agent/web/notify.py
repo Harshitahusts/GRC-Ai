@@ -233,11 +233,26 @@ def from_audit(
         )
 
 
+def scope(conn: sqlite3.Connection, user: str) -> tuple[str, list[Any]]:
+    """SQL limiting notifications to what this person may see: everything for staff;
+    otherwise only those about clients they can open (workspace-wide ones are for staff)."""
+    from grc_agent.web import access  # here to avoid a circular import
+
+    ids = access.visible_ids(conn, user)
+    if ids is None:
+        return "1 = 1", []
+    if not ids:
+        return "1 = 0", []
+    return f"n.engagement_id IN ({','.join('?' for _ in ids)})", sorted(ids)
+
+
 def unread_count(conn: sqlite3.Connection, user: str) -> int:
+    seen, seen_args = scope(conn, user)
     return conn.execute(
-        "SELECT COUNT(*) FROM notifications n WHERE NOT EXISTS (SELECT 1 FROM notification_reads r "
-        "WHERE r.notification_id = n.id AND r.username = ?)",
-        (user,),
+        # Safe: the SQL text holds only names and ? marks from this code.
+        "SELECT COUNT(*) FROM notifications n WHERE NOT EXISTS (SELECT 1 FROM notification_reads r "  # nosec B608  # noqa: S608
+        f"WHERE r.notification_id = n.id AND r.username = ?) AND {seen}",
+        (user, *seen_args),
     ).fetchone()[0]
 
 
@@ -252,7 +267,8 @@ def listing(
     after_id: int = 0,
     limit: int = 200,
 ) -> list[dict[str, Any]]:
-    where, args = ["n.id > ?"], [user, after_id]
+    seen, seen_args = scope(conn, user)
+    where, args = ["n.id > ?", seen], [user, after_id, *seen_args]
     if unread_only:
         where.append("r.notification_id IS NULL")
     if category:
@@ -276,15 +292,28 @@ def listing(
 
 def mark_read(conn: sqlite3.Connection, user: str, ids: list[int] | None = None) -> None:
     """Mark the given notifications read, or all of them."""
+    seen, seen_args = scope(conn, user)
     if ids is None:
         ids = [
             r[0]
             for r in conn.execute(
-                "SELECT n.id FROM notifications n WHERE NOT EXISTS (SELECT 1 FROM "
-                "notification_reads r WHERE r.notification_id = n.id AND r.username = ?)",
-                (user,),
+                # Safe: the SQL text holds only names and ? marks from this code.
+                "SELECT n.id FROM notifications n WHERE NOT EXISTS (SELECT 1 FROM "  # nosec B608  # noqa: S608
+                "notification_reads r WHERE r.notification_id = n.id AND r.username = ?) "
+                f"AND {seen}",
+                (user, *seen_args),
             )
         ]
+    else:
+        # Only notifications this person can see can be marked read by them.
+        visible = {
+            r[0]
+            for r in conn.execute(
+                f"SELECT n.id FROM notifications n WHERE {seen}",  # nosec B608  # noqa: S608
+                seen_args,
+            )
+        }
+        ids = [i for i in ids if i in visible]
     conn.executemany(
         "INSERT OR IGNORE INTO notification_reads (username, notification_id) VALUES (?, ?)",
         [(user, i) for i in ids],

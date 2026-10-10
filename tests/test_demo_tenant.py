@@ -186,7 +186,7 @@ def test_public_demo_switches_off_risky_settings(demo, monkeypatch):
         "/settings/ai": {"provider": "custom", "base_url": "http://169.254.169.254/"},
         "/settings/api-keys": {"name": "x"},
         "/team": {"username": "mallory", "password": "0123456789ab", "role": "admin"},
-        f"/team/{demo_tenant.DEMO_USER}/role": {"role": "viewer"},
+        f"/team/{demo_tenant.DEMO_USER}/role": {"role": "client"},
         "/engagements/1/connectors": {"connector": "aws", "method": "keys"},
     }
     for path, form in refused.items():
@@ -197,7 +197,7 @@ def test_public_demo_switches_off_risky_settings(demo, monkeypatch):
         role = conn.execute(
             "SELECT role FROM users WHERE username = ?", (demo_tenant.DEMO_USER,)
         ).fetchone()[0]
-        assert role == "admin"
+        assert role == "super_admin"  # the demo's only account owns its workspace
         assert not conn.execute("SELECT 1 FROM users WHERE username = 'mallory'").fetchone()
     assert demo.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "ping"}).status_code == 403
     # The workflow itself still works.

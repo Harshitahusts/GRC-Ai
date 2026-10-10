@@ -181,9 +181,16 @@ def inventory_rows(conn: sqlite3.Connection, eid: int) -> list[dict]:
     return out
 
 
-def summary(conn: sqlite3.Connection, eid: int | None = None) -> dict:
-    """Counts for the dashboard and tabs. eid=None sums over every agent engagement."""
-    where, args = ("WHERE engagement_id = ?", (eid,)) if eid is not None else ("", ())
+def summary(conn: sqlite3.Connection, eid: int | None = None, ids: set[int] | None = None) -> dict:
+    """Counts for the dashboard and tabs. eid=None sums over every engagement, or over
+    ``ids`` when given (the clients a person can open)."""
+    if eid is not None:
+        where, args = "WHERE engagement_id = ?", (eid,)
+    elif ids is not None:
+        marks = ",".join("?" for _ in ids) or "NULL"
+        where, args = f"WHERE engagement_id IN ({marks})", tuple(sorted(ids))
+    else:
+        where, args = "", ()
     pending = conn.execute(
         # Safe: the SQL text holds only names from this code; values are ? parameters.
         f"SELECT COUNT(*) FROM scan_findings {where}{' AND' if where else ' WHERE'} "  # nosec B608  # noqa: S608
@@ -219,8 +226,8 @@ def summary(conn: sqlite3.Connection, eid: int | None = None) -> dict:
     }
 
 
-def by_engagement(conn: sqlite3.Connection) -> list[dict]:
-    """Per-client discovery status for the dashboard, busiest first."""
+def by_engagement(conn: sqlite3.Connection, ids: set[int] | None = None) -> list[dict]:
+    """Per-client discovery status for the dashboard, busiest first (only ``ids`` if given)."""
     rows = conn.execute(
         "SELECT e.id, e.client, "
         "(SELECT COUNT(*) FROM scan_findings f WHERE f.engagement_id = e.id "
@@ -228,7 +235,11 @@ def by_engagement(conn: sqlite3.Connection) -> list[dict]:
         "(SELECT COUNT(*) FROM data_inventory i WHERE i.engagement_id = e.id) AS inventory "
         "FROM engagements e"
     ).fetchall()
-    out = [dict(r) for r in rows if r["pending"] or r["inventory"]]
+    out = [
+        dict(r)
+        for r in rows
+        if (r["pending"] or r["inventory"]) and (ids is None or r["id"] in ids)
+    ]
     for r in out:
         r["incomplete"] = summary(conn, r["id"])["incomplete"]
     return sorted(out, key=lambda r: (-r["pending"], -r["incomplete"], r["client"]))

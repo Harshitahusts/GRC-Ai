@@ -33,12 +33,17 @@
   <form method="post" action="/engagements" class="card" id="new">
     <h2>New engagement</h2>
     <input type="hidden" name="csrf" value="{{ csrf }}">
+    {% if role in ("client", "trial") %}
+    <input type="hidden" name="audience" value="self">
+    <p class="muted small">For your own company's DPDP compliance.</p>
+    {% else %}
     <fieldset class="stack">
       <legend>Who is this for?</legend>
       {% for key, label in audiences.items() %}
       <label class="inline"><input type="radio" name="audience" value="{{ key }}" {% if loop.first %}checked{% endif %}> {{ label }}</label>
       {% endfor %}
     </fieldset>
+    {% endif %}
     <label>Company or client name <input name="client" required maxlength="200"></label>
     <label>Sector
       <select name="sector" required>

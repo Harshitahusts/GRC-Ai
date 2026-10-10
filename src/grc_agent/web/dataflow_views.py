@@ -10,7 +10,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 
 from grc_agent import dataflow
-from grc_agent.web import db
+from grc_agent.web import access, db
 
 STAGE_CHOICES = [(k, label) for k, label in dataflow.STAGES]
 
@@ -44,7 +44,11 @@ def register(app: FastAPI) -> None:
 
     @app.get("/dataflows")
     def dataflow_index(request: Request, user: User, conn: Conn):
-        rows = conn.execute("SELECT * FROM engagements ORDER BY id DESC").fetchall()
+        rows = access.only(
+            conn.execute("SELECT * FROM engagements ORDER BY id DESC").fetchall(),
+            access.visible_ids(conn, user),
+            "id",
+        )
         maps = [{"eng": e, "flow": flow_for(request, conn, e)} for e in rows]
         return render(request, "dataflows.html", maps=maps)
 

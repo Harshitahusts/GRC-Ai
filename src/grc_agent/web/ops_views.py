@@ -34,6 +34,7 @@ from grc_agent import evidence_check, plan
 from grc_agent.discovery import engine as discovery_engine
 from grc_agent.discovery import scanner
 from grc_agent.web import (
+    access,
     ai_views,
     auth_views,
     datamanager,
@@ -59,10 +60,13 @@ CONTROL_BADGE = {
     "implemented": "badge-pass",
     "not_applicable": "badge-none",
 }
-ROLES = {
-    "admin": "Admin: everything, including the team",
-    "member": "Member: all client work",
-    "viewer": "Viewer: read-only",
+ROLES = access.ROLES
+ROLE_LABELS = {
+    "super_admin": "Super admin",
+    "admin": "Admin",
+    "partner": "Partner",
+    "client": "Client",
+    "trial": "Trial",
 }
 
 EVIDENCE_MAX_BYTES = int(float(os.getenv("GRC_EVIDENCE_MAX_MB", "10")) * 1024 * 1024)
@@ -360,8 +364,8 @@ def register(app: FastAPI) -> None:
         # breaches, requests and the rest keep their legal clocks after delivery.
         return agent_engagement(conn, eid)
 
-    def people(conn) -> list[str]:
-        return [r[0] for r in conn.execute("SELECT username FROM users ORDER BY username")]
+    def people(conn, eid: int) -> list[str]:
+        return access.assignable(conn, eid)
 
     # ---- controls
 
@@ -378,8 +382,8 @@ def register(app: FastAPI) -> None:
             items=items,
             cs=controls_summary(items),
             statuses=CONTROL_STATUSES,
-            people=people(conn),
-            is_admin=user_role(request) == "admin",
+            people=people(conn, eid),
+            is_admin=access.leads(conn, user, eid),
         )
 
     @app.post("/engagements/{eid}/controls/{oid}")
@@ -404,8 +408,12 @@ def register(app: FastAPI) -> None:
             if not reason:
                 flash(request, "Say why this obligation doesn't apply.", "error")
                 return redirect(f"/engagements/{eid}/controls#{oid}")
-            if user_role(request) != "admin":
-                flash(request, "Only an admin can mark an obligation not applicable.", "error")
+            if not access.leads(conn, user, eid):
+                flash(
+                    request,
+                    "Only the engagement lead can mark an obligation not applicable.",
+                    "error",
+                )
                 return redirect(f"/engagements/{eid}/controls#{oid}")
             reviewed_by = user
         if status == "implemented":
@@ -755,7 +763,8 @@ def register(app: FastAPI) -> None:
 
     @app.get("/work")
     def work_page(request: Request, user: User, conn: Conn, mine: str = ""):
-        items = register_views.queue(conn, limit=200)
+        ids = access.visible_ids(conn, user)
+        items = register_views.queue(conn, limit=200, ids=ids)
         if mine:
             items = [i for i in items if i["owner"].lower() == user.lower()]
         return render(
@@ -763,7 +772,7 @@ def register(app: FastAPI) -> None:
             "work.html",
             items=items,
             mine=bool(mine),
-            personal=discovery_views.by_engagement(conn),
+            personal=discovery_views.by_engagement(conn, ids),
             registers=REGISTERS,
         )
 
@@ -832,7 +841,7 @@ def register(app: FastAPI) -> None:
             who=who,
             action=action,
             clients=conn.execute("SELECT id, client FROM engagements ORDER BY client").fetchall(),
-            users=people(conn),
+            users=access.colleagues(conn, user, None),
             actions=[
                 r[0] for r in conn.execute("SELECT DISTINCT action FROM audit_log ORDER BY action")
             ],
@@ -844,7 +853,7 @@ def register(app: FastAPI) -> None:
     def team_page(request: Request, user: User, conn: Conn):
         rows = conn.execute(
             "SELECT u.username, u.role, u.created_at, u.email, "
-            "u.password_hash LIKE '!%' AS no_password, "
+            "u.expires_at, u.password_hash LIKE '!%' AS no_password, "
             "(SELECT COUNT(*) FROM login_identities i "
             " WHERE LOWER(i.username) = LOWER(u.username)) AS sign_ins "
             "FROM users u ORDER BY u.username"
@@ -854,71 +863,96 @@ def register(app: FastAPI) -> None:
             "team.html",
             rows=rows,
             roles=ROLES,
-            is_admin=user_role(request) == "admin",
+            grantable=grantable(user_role(request)),
+            is_admin=access.is_staff(user_role(request)),
             mail_on=mailer.configured(),
+            engagements=conn.execute(
+                "SELECT id, client FROM engagements ORDER BY client"
+            ).fetchall(),
+            days_left=access.days_left,
         )
 
     def require_admin(request):
-        if user_role(request) != "admin":
+        if not access.is_staff(user_role(request)):
             raise HTTPException(status_code=403, detail="Only an admin can manage the team.")
 
-    @app.post("/team")
-    async def team_add(request: Request, user: User, conn: Conn):
-        form = await form_with_csrf(request)
-        require_admin(request)
-        name = str(form.get("username", "")).strip()
-        email = str(form.get("email", "")).strip()
-        password = str(form.get("password", ""))
-        role = str(form.get("role", "member"))
+    def grantable(role: str) -> list[str]:
+        """Roles this person may give: a super admin any, an admin the non-staff ones."""
+        if role == "super_admin":
+            return list(ROLES)
+        if role == "admin":
+            return [r for r in ROLES if r not in access.STAFF]
+        return []
+
+    async def new_account(
+        request, conn, by: str, name: str, email: str, password: str, role: str
+    ) -> tuple[bool, str]:
+        """Create an account and send its invite. Returns (created, message for the flash)."""
         if not re.fullmatch(r"[A-Za-z0-9._-]{2,40}", name):
-            flash(request, "Use 2-40 letters, digits, dots, dashes or underscores.", "error")
-            return redirect("/team")
-        if role not in ROLES:
-            raise HTTPException(status_code=400, detail="Unknown role")
+            return False, "Use 2-40 letters, digits, dots, dashes or underscores for the username."
         if conn.execute("SELECT 1 FROM users WHERE LOWER(username) = LOWER(?)", (name,)).fetchone():
-            flash(request, f"{name} already has an account.", "error")
-            return redirect("/team")
+            return False, f"{name} already has an account. Pick another username."
         if problem := auth_views.email_problem(conn, email, name):
-            flash(request, problem, "error")
-            return redirect("/team")
+            return False, problem
         invite = not password
         if invite and not (email and mailer.configured()):
-            flash(
-                request,
+            return False, (
                 "Give a starting password, or an email address to send an invite to"
-                + ("." if mailer.configured() else " (email isn't set up on this server yet)."),
-                "error",
+                + ("." if mailer.configured() else " (email isn't set up on this server yet).")
             )
-            return redirect("/team")
         if password and len(password) < 10:
-            flash(request, "Give a starting password of at least 10 characters.", "error")
-            return redirect("/team")
+            return False, "Give a starting password of at least 10 characters."
         conn.execute(
-            "INSERT INTO users (username, password_hash, created_at, role, email) "
-            "VALUES (?,?,?,?,?)",
+            "INSERT INTO users (username, password_hash, created_at, role, email, expires_at) "
+            "VALUES (?,?,?,?,?,?)",
             (
                 name,
                 auth_views.NO_PASSWORD if invite else hash_password(password),
                 db.now(),
                 role,
                 email,
+                access.trial_end() if role == "trial" else "",
             ),
         )
-        db.audit(conn, user, "user_created", None, {"username": name, "role": role})
+        db.audit(conn, by, "user_created", None, {"username": name, "role": role})
+        label = ROLE_LABELS.get(role, role)
         if invite:
             try:
-                auth_views.send_invite(conn, request, name, email, user)
+                auth_views.send_invite(conn, request, name, email, by)
             except mailer.MailError as exc:
-                flash(
-                    request,
+                return True, (
                     f"Added {name}, but the invite email didn't send: {exc} "
-                    "Use “Send invite” to try again.",
-                    "error",
+                    "Use “Send invite” on Team & roles to try again."
                 )
-                return redirect("/team")
-            flash(request, f"Added {name} as {role} and emailed an invite to {email}.")
-        else:
-            flash(request, f"Added {name} as {role}. Share the starting password privately.")
+            return True, f"Added {name} as {label} and emailed an invite to {email}."
+        return True, f"Added {name} as {label}. Share the starting password privately."
+
+    @app.post("/team")
+    async def team_add(request: Request, user: User, conn: Conn):
+        form = await form_with_csrf(request)
+        require_admin(request)
+        role = str(form.get("role", "partner"))
+        if role not in grantable(user_role(request)):
+            raise HTTPException(status_code=403, detail="You can't give that role.")
+        name = str(form.get("username", "")).strip()
+        ok, message = await new_account(
+            request,
+            conn,
+            user,
+            name,
+            str(form.get("email", "")).strip(),
+            str(form.get("password", "")),
+            role,
+        )
+        if ok:
+            eid = str(form.get("engagement", "")).strip()
+            if (
+                eid.isdigit()
+                and conn.execute("SELECT 1 FROM engagements WHERE id = ?", (int(eid),)).fetchone()
+            ):
+                access.grant(conn, int(eid), name, user)
+                db.audit(conn, user, "access_granted", int(eid), {"username": name})
+        flash(request, message, "info" if ok else "error")
         return redirect("/team")
 
     @app.post("/team/{name}/email")
@@ -980,14 +1014,100 @@ def register(app: FastAPI) -> None:
         ).fetchone()
         if row is None:
             raise HTTPException(status_code=404, detail="No such user")
-        admins = conn.execute("SELECT COUNT(*) FROM users WHERE role = 'admin'").fetchone()[0]
-        if row["role"] == "admin" and role != "admin" and admins <= 1:
-            flash(request, "Keep at least one admin.", "error")
+        allowed = grantable(user_role(request))
+        if role not in allowed or row["role"] not in allowed:
+            flash(request, "Only a super admin can change an admin's role.", "error")
             return redirect("/team")
-        conn.execute("UPDATE users SET role = ? WHERE LOWER(username) = LOWER(?)", (role, name))
+        owners = conn.execute("SELECT COUNT(*) FROM users WHERE role = 'super_admin'").fetchone()[0]
+        if row["role"] == "super_admin" and role != "super_admin" and owners <= 1:
+            flash(request, "Keep at least one super admin.", "error")
+            return redirect("/team")
+        # A trial gets a fresh end date; any other role has none.
+        conn.execute(
+            "UPDATE users SET role = ?, expires_at = ? WHERE LOWER(username) = LOWER(?)",
+            (role, access.trial_end() if role == "trial" else "", name),
+        )
         # The analyst's tools depend on the role, so it starts afresh with the new one.
         for key in [k for k in request.app.state.agents if k.lower() == name.lower()]:
             request.app.state.agents.pop(key, None)
         db.audit(conn, user, "role_changed", None, {"username": name, "role": role})
-        flash(request, f"{name} is now {role}.")
+        flash(request, f"{name} is now {ROLE_LABELS.get(role, role)}.")
         return redirect("/team")
+
+    @app.post("/team/{name}/extend")
+    async def team_extend(name: str, request: Request, user: User, conn: Conn):
+        """Give a trial another TRIAL_DAYS from today."""
+        await form_with_csrf(request)
+        require_admin(request)
+        row = conn.execute(
+            "SELECT username, role FROM users WHERE LOWER(username) = LOWER(?)", (name,)
+        ).fetchone()
+        if row is None or row["role"] != "trial":
+            raise HTTPException(status_code=404, detail="No such trial account")
+        end = access.trial_end()
+        conn.execute("UPDATE users SET expires_at = ? WHERE username = ?", (end, row["username"]))
+        db.audit(conn, user, "trial_extended", None, {"username": row["username"], "until": end})
+        flash(request, f"{row['username']}'s trial now ends {end[:10]}.")
+        return redirect("/team")
+
+    # ---- who can open an engagement (partners and staff bring a client's people in)
+
+    def require_lead(conn, user, eid):
+        if not access.leads(conn, user, eid):
+            raise HTTPException(
+                status_code=403, detail="Only the engagement lead can manage who has access."
+            )
+
+    @app.post("/engagements/{eid}/access")
+    async def access_invite(eid: int, request: Request, user: User, conn: Conn):
+        """Create an account for someone at this client and give them this engagement."""
+        form = await form_with_csrf(request)
+        get_engagement(conn, eid)
+        require_lead(conn, user, eid)
+        name = str(form.get("username", "")).strip()
+        ok, message = await new_account(
+            request,
+            conn,
+            user,
+            name,
+            str(form.get("email", "")).strip(),
+            str(form.get("password", "")),
+            "client",
+        )
+        if ok:
+            access.grant(conn, eid, name, user)
+            db.audit(conn, user, "access_granted", eid, {"username": name})
+        flash(request, message, "info" if ok else "error")
+        return redirect(f"/engagements/{eid}#access")
+
+    @app.post("/engagements/{eid}/access/grant")
+    async def access_grant(eid: int, request: Request, user: User, conn: Conn):
+        """Staff only: give an existing account this engagement."""
+        form = await form_with_csrf(request)
+        get_engagement(conn, eid)
+        require_admin(request)
+        row = conn.execute(
+            "SELECT username FROM users WHERE LOWER(username) = LOWER(?)",
+            (str(form.get("username", "")).strip(),),
+        ).fetchone()
+        if row is None:
+            flash(request, "Pick an account from the list.", "error")
+        elif access.grant(conn, eid, row["username"], user):
+            db.audit(conn, user, "access_granted", eid, {"username": row["username"]})
+            flash(request, f"{row['username']} can now open this engagement.")
+        else:
+            flash(request, f"{row['username']} already has access.")
+        return redirect(f"/engagements/{eid}#access")
+
+    @app.post("/engagements/{eid}/access/{name}/remove")
+    async def access_remove(eid: int, name: str, request: Request, user: User, conn: Conn):
+        await form_with_csrf(request)
+        get_engagement(conn, eid)
+        require_lead(conn, user, eid)
+        if name.lower() == user.lower():
+            flash(request, "You can't remove your own access.", "error")
+            return redirect(f"/engagements/{eid}#access")
+        access.revoke(conn, eid, name)
+        db.audit(conn, user, "access_removed", eid, {"username": name})
+        flash(request, f"{name} can no longer open this engagement.")
+        return redirect(f"/engagements/{eid}#access")

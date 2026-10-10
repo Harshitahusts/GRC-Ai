@@ -5,7 +5,7 @@
 <div class="page-head">
   <div>
     <h1>Team &amp; roles</h1>
-    <p class="muted">Who can sign in, and what they can do. Every account sees every client in this workspace.</p>
+    <p class="muted">Who can sign in, and what they can do. Admins see every client; partners see the clients they run; clients see only their own company.</p>
   </div>
 </div>
 <div class="grid-2 wide-left">
@@ -30,10 +30,17 @@
             {% if is_admin %}
             <form method="post" action="/team/{{ r.username|urlencode }}/role" class="inline-role">
               <input type="hidden" name="csrf" value="{{ csrf }}">
-              <select name="role" aria-label="Role for {{ r.username }}" onchange="this.form.submit()">{% for k in roles %}<option value="{{ k }}" {% if k == r.role %}selected{% endif %}>{{ k|capitalize }}</option>{% endfor %}</select>
+              {% if r.role in grantable %}
+              <select name="role" aria-label="Role for {{ r.username }}" onchange="this.form.submit()">{% for k in grantable %}<option value="{{ k }}" {% if k == r.role %}selected{% endif %}>{{ role_names[k] }}</option>{% endfor %}</select>
               <noscript><button type="submit" class="button small">Save</button></noscript>
+              {% else %}{{ role_names[r.role] or r.role }}{% endif %}
             </form>
-            {% else %}{{ r.role|capitalize }}{% endif %}
+            {% else %}{{ role_names[r.role] or r.role }}{% endif %}
+            {% if r.role == "trial" %}
+            {% set left = days_left(r.expires_at) %}
+            <br><span class="small {{ 'muted' if left else 'is-bad' }}">{{ "Ended" if not left else left ~ " day" ~ ("" if left == 1 else "s") ~ " left" }}</span>
+            {% if is_admin %}<form method="post" action="/team/{{ r.username|urlencode }}/extend" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="link small">Extend 14 days</button></form>{% endif %}
+            {% endif %}
           </td>
           <td class="hide-sm small muted">{{ r.created_at[:10] }}</td>
           {% if is_admin %}
@@ -51,6 +58,7 @@
       </tbody>
     </table>
     <ul class="plain small">{% for k, d in roles.items() %}<li>{{ d }}</li>{% endfor %}</ul>
+    <p class="small muted">Partners bring their clients' people in from each engagement's <strong>People with access</strong> box.</p>
   </section>
   {% if is_admin %}
   <section class="card">
@@ -59,7 +67,10 @@
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <label>Username <input name="username" required maxlength="40" pattern="[A-Za-z0-9._\-]{2,40}" autocomplete="off"></label>
       <label>Email {% if not mail_on %}<span class="muted small">(optional)</span>{% endif %}<input name="email" type="email" maxlength="254" autocomplete="off" placeholder="name@company.com"></label>
-      <label>Role <select name="role">{% for k in roles %}<option value="{{ k }}" {% if k == "member" %}selected{% endif %}>{{ k|capitalize }}</option>{% endfor %}</select></label>
+      <label>Role <select name="role">{% for k in grantable %}<option value="{{ k }}" {% if k == "partner" %}selected{% endif %}>{{ role_names[k] }}</option>{% endfor %}</select></label>
+      <label>Give access to <span class="muted small">(optional)</span>
+        <select name="engagement"><option value="">No engagement yet</option>{% for e in engagements %}<option value="{{ e.id }}">{{ e.client }}</option>{% endfor %}</select></label>
+      <p class="small muted">A trial lasts 14 days and includes one engagement.</p>
       <label>Starting password {% if mail_on %}<span class="muted small">(optional)</span>{% endif %}<input name="password" type="password" {% if not mail_on %}required{% endif %} minlength="10" autocomplete="new-password"></label>
       <p class="small muted">{% if mail_on %}Leave the password empty and we'll email them an invite to set their own{% if sign_in_options() %} or sign in with Google or Microsoft{% endif %}.{% else %}Share the starting password privately; they can change it under Account. Set up email (Resend) to send invites instead.{% endif %}</p>
       <p><button type="submit" class="primary">{{ icon("i-plus") }} Add</button></p>

@@ -1049,3 +1049,11 @@ pre.code { background: var(--hover); border: 1px solid var(--border); border-rad
 .connect-row .sso-button { width: auto; }
 .inline-email { display: flex; gap: .35rem; align-items: center; margin-top: .3rem; }
 .inline-email input { max-width: 15rem; padding: .25rem .45rem; font-size: .85rem; }
+
+/* Sign in: company or partner (sets where you start; the account decides access). */
+.portal-choice { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin: .6rem 0 .3rem; }
+.portal-option { display: flex; gap: .5rem; align-items: flex-start; padding: .6rem .7rem; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; }
+.portal-option input { margin-top: .2rem; width: auto; }
+.portal-option span { display: grid; }
+.portal-option small { color: var(--muted); font-size: .8rem; }
+.portal-option:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
