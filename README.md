@@ -117,6 +117,22 @@ without the facts it needs, a full history with comments, and evidence attachmen
 assigned work. The **Work queue** lists everything open across clients, most urgent
 first; the **Audit log** shows every change; **Team & roles** sets each person's role.
 
+### Trust page and vendor questionnaires
+
+- **Trust page** (Compliance → Trust page): a public page at `/trust/<address>` showing
+  how the client protects personal data, built from its records: DPDP programme areas
+  (in place / in progress, from the Obligations register), safeguards across its Systems,
+  published Policies, active Vendors as sub-processors with where they process data, and
+  how to exercise rights. Only that summary is shown, never notes, owners or evidence. It
+  stays private until published, and needs a contact email first (Section 8(9)).
+- **Vendor questionnaire by link** (on each vendor): 15 DPDP due-diligence questions
+  (contract, purpose limits, Rule 6 safeguards, 24-hour breach notice, erasure, rights,
+  audit) plus data location, sub-processors and certifications. The vendor answers
+  without an account; the link (stored hashed) works once, for 30 days, and a new one
+  cancels the old. Answers become a score and a risk rating (any "no" on an essential
+  makes it high) on the vendor record; an admin or manager reviews and confirms the risk
+  (`grc_agent/vendor_questions.py`).
+
 ### Training (in testing)
 
 DPDP awareness training for a client's employees, on the engagement's **Training** tab.

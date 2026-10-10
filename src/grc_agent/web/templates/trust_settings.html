@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "_macros.html" import engagement_header, page_intro, icon %}
+{% block title %}Trust page · {{ eng.client }}{% endblock %}
+{% block content %}
+{{ engagement_header(eng, s, tab) }}
+{% set locked = read_only or not can_edit %}
+{{ page_intro("Trust page", "A public page that shows customers, partners and tender teams how " ~ eng.client ~ " protects personal data. It is built from your records (published policies, systems' safeguards, active vendors, the obligations register) and shows only a safe summary: never notes, owners, evidence or personal data. It stays private until you publish it.", "Section 8(9): published contact") }}
+
+<div class="grid-2 wide-left">
+  <section class="card">
+    <h3>Settings</h3>
+    {% if page and page.published %}<p>{{ icon("i-check") }} Live at <a href="/trust/{{ page.slug }}" target="_blank">{{ public_url }}{{ page.slug }}</a></p>
+    {% elif page %}<p class="muted">Saved, not public yet.</p>{% endif %}
+    <form method="post" action="/engagements/{{ eng.id }}/trust" class="stack">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <fieldset {% if locked %}disabled{% endif %}>
+        <label>Web address <span class="small muted">{{ public_url }}</span><input name="slug" value="{{ slug }}" required pattern="[a-z0-9][a-z0-9-]{1,58}[a-z0-9]" maxlength="60"></label>
+        <label>Company name <input name="company" maxlength="160" value="{{ page.company if page else eng.client }}"></label>
+        <label>Introduction <textarea name="intro" rows="3" maxlength="1500" placeholder="e.g. We take the privacy of our customers seriously. This page explains how we meet India's DPDP Act.">{{ page.intro if page else "" }}</textarea></label>
+        <label>Contact email for data protection questions <input name="contact_email" type="email" maxlength="200" value="{{ page.contact_email if page else '' }}" placeholder="privacy@yourcompany.in"></label>
+        <label>Grievance officer / DPO name <input name="grievance_officer" maxlength="160" value="{{ page.grievance_officer if page else '' }}"></label>
+        <label>Link to make a rights request (optional) <input name="rights_url" maxlength="300" value="{{ page.rights_url if page else '' }}" placeholder="https://"></label>
+        <fieldset class="quiz-q"><legend>Show</legend>
+          {% for k, label in [("show_programme", "DPDP programme areas (in place / in progress)"), ("show_safeguards", "Security safeguards across your systems"), ("show_policies", "Published policies"), ("show_subprocessors", "Sub-processors (active vendors) and where they process data")] %}
+          <label class="quiz-opt"><input type="checkbox" name="{{ k }}" value="1" {% if not page or page[k] %}checked{% endif %}> {{ label }}</label>
+          {% endfor %}
+        </fieldset>
+        <label class="quiz-opt"><input type="checkbox" name="published" value="1" {% if page and page.published %}checked{% endif %}> <strong>Publish</strong>: anyone with the address can see it</label>
+        {% if not locked %}<p><button class="primary">Save</button></p>{% endif %}
+      </fieldset>
+    </form>
+  </section>
+  <section class="card">
+    <h3>What it will show</h3>
+    {% if preview %}
+    <p class="small"><strong>{{ preview.areas|length }}</strong> programme areas · <strong>{{ preview.safeguards|length }}</strong> safeguards · <strong>{{ preview.policies|length }}</strong> published policies · <strong>{{ preview.subprocessors|length }}</strong> sub-processors</p>
+    <p><a class="button small" href="/engagements/{{ eng.id }}/trust/preview" target="_blank">{{ icon("i-eye") }} Preview</a></p>
+    {% else %}<p class="muted small">Save the settings to see a summary.</p>{% endif %}
+    <p class="small muted">To fill it in: publish policies on the Policies tab (with an https link), record systems and their safeguards on Systems, mark vendors Active, and review duties on Obligations.</p>
+  </section>
+</div>
+{% endblock %}

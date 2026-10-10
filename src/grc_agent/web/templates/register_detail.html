@@ -76,6 +76,42 @@
       {% endif %}
     </section>
 
+    {% if spec.key == "vendors" %}
+    <section class="card" id="questionnaire">
+      <div class="card-head"><h3>DPDP questionnaire</h3></div>
+      {% if vq_link %}
+      <div class="invite-link">
+        <p class="small">Send this link to the vendor (it's shown once, works for 30 days, and can be submitted once):</p>
+        <div class="copy-row"><input id="vq-link" value="{{ vq_link }}" readonly aria-label="Questionnaire link"><button type="button" class="primary" data-copy-field="vq-link">Copy link</button></div>
+      </div>
+      <script>
+      document.querySelectorAll("[data-copy-field]").forEach(b => b.addEventListener("click", () => {
+        const f = document.getElementById(b.dataset.copyField); f.select();
+        navigator.clipboard.writeText(f.value).then(() => { b.textContent = "Copied"; });
+      }));
+      </script>
+      {% endif %}
+      {% if questionnaires %}
+      <ul class="plain small">
+        {% for q in questionnaires %}
+        <li class="file-row">
+          <span>{% if q.status in ("submitted", "reviewed") %}<a href="/engagements/{{ eng.id }}/vendor-questionnaires/{{ q.id }}"><strong>{{ q.score }}%</strong> · {{ q.risk|capitalize }} risk</a>{% else %}Sent {{ q.sent_at[:10] }}{% if q.sent_to %} to {{ q.sent_to }}{% endif %}{% endif %}</span>
+          <span class="badge {{ 'badge-pass' if q.status == 'reviewed' else 'badge-warn' if q.status == 'submitted' else 'badge-none' }}">{{ {"sent": "Expired" if q.expired else "Waiting", "submitted": "To review", "reviewed": "Reviewed", "revoked": "Replaced"}[q.status] }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="muted small">Ask the vendor how they protect the personal data you share: contract terms, Rule 6 safeguards, breach notice, erasure. Their answers become a risk score here.</p>{% endif %}
+      {% if not locked %}
+      <form method="post" action="/engagements/{{ eng.id }}/r/vendors/{{ item.id }}/questionnaire" class="attach-form">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input name="email" type="email" maxlength="200" placeholder="{{ 'Vendor contact email' if mail_ready else 'Vendor email (optional)' }}" aria-label="Vendor email" value="{{ item.data.contact if '@' in item.data.get('contact', '') else '' }}">
+        <button type="submit" class="button small primary">{{ "Send questionnaire" if mail_ready else "Create link" }}</button>
+      </form>
+      {% if questionnaires %}<p class="small muted">A new link cancels one still waiting.</p>{% endif %}
+      {% endif %}
+    </section>
+    {% endif %}
+
     <section class="card" id="history">
       <div class="card-head"><h3>History</h3></div>
       {% if not locked %}

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block title %}{{ page.company }}: data protection{% endblock %}
+{% block content %}
+{% set labels = {"in_place": "In place", "progress": "In progress", "planned": "Planned"} %}
+{% set badges = {"in_place": "badge-pass", "progress": "badge-warn", "planned": "badge-none"} %}
+<div class="learn trust">
+  {% if preview %}<div class="flash flash-info" role="note">{{ icon("i-eye") }} Preview{% if not page.published %}: not public yet{% endif %}.</div>{% endif %}
+  <header class="trust-head">
+    <span class="brand-mark" aria-hidden="true">{{ icon("i-shield") }}</span>
+    <div>
+      <h1>{{ page.company }}</h1>
+      <p class="muted">How we protect personal data under India's Digital Personal Data Protection Act 2023 · Updated {{ c.updated }}</p>
+    </div>
+  </header>
+  {% if page.intro %}<p class="trust-intro plain-text">{{ page.intro }}</p>{% endif %}
+
+  {% if c.areas %}
+  <section class="card">
+    <h2>Our DPDP programme</h2>
+    <ul class="trust-list">{% for a in c.areas %}<li><span>{{ a.name }}</span><span class="badge {{ badges[a.state] }}">{{ labels[a.state] }}</span></li>{% endfor %}</ul>
+  </section>
+  {% endif %}
+
+  {% if c.safeguards %}
+  <section class="card">
+    <h2>Security safeguards</h2>
+    <ul class="trust-list">{% for s in c.safeguards %}<li><span>{{ s.label }}</span><span class="badge {{ badges[s.state] }}">{{ labels[s.state] }}</span></li>{% endfor %}</ul>
+  </section>
+  {% endif %}
+
+  {% if c.policies %}
+  <section class="card">
+    <h2>Policies</h2>
+    <ul class="trust-list">{% for p in c.policies %}<li><span>{% if p.link %}<a href="{{ p.link }}" rel="noopener noreferrer" target="_blank">{{ p.title }}</a>{% else %}{{ p.title }}{% endif %}</span><span class="small muted">{% if p.version %}v{{ p.version }}{% endif %}{% if p.approved_on %} · {{ p.approved_on }}{% endif %}</span></li>{% endfor %}</ul>
+  </section>
+  {% endif %}
+
+  {% if c.subprocessors %}
+  <section class="card">
+    <h2>Sub-processors</h2>
+    <p class="small muted">Companies that process personal data on our behalf, each under a contract.</p>
+    <table class="table"><thead><tr><th>Company</th><th class="hide-sm">Service</th><th>Data processed in</th></tr></thead>
+      <tbody>{% for v in c.subprocessors %}<tr><td>{{ v.name }}</td><td class="hide-sm">{{ v.service or "–" }}</td><td>{{ v.location }}</td></tr>{% endfor %}</tbody></table>
+  </section>
+  {% endif %}
+
+  <section class="card">
+    <h2>Your rights</h2>
+    <p>You can ask us for a summary of your personal data and who it was shared with, ask us to correct, complete, update or erase it, withdraw consent, nominate someone to act for you, and raise a grievance. We respond within {{ rights_days }} days at most.</p>
+    <ul class="plain">
+      <li>{{ icon("i-user") }} Contact: <a href="mailto:{{ page.contact_email }}">{{ page.contact_email }}</a>{% if page.grievance_officer %} · Grievance officer: {{ page.grievance_officer }}{% endif %}</li>
+      {% if page.rights_url %}<li>{{ icon("i-arrow") }} <a href="{{ page.rights_url }}" rel="noopener noreferrer" target="_blank">Make a request</a></li>{% endif %}
+    </ul>
+    <p class="small muted">If you aren't satisfied with our response, you can complain to the Data Protection Board of India.</p>
+  </section>
+  <p class="small muted">This page is maintained by {{ page.company }} and reflects its own assessment. It is not a certification. Powered by GRC Flow.</p>
+</div>
+{% endblock %}

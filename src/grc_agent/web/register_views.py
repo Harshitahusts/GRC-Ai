@@ -330,6 +330,8 @@ def register(app: FastAPI) -> None:
 
     @app.get("/engagements/{eid}/r/{key}/{rid}")
     def register_detail(eid: int, key: str, rid: int, request: Request, user: User, conn: Conn):
+        from grc_agent.web import mailer, vendor_views
+
         spec = spec_for(key)
         eng = agent_engagement(conn, eid)
         item = view(get_record(conn, eid, spec, rid), spec)
@@ -351,6 +353,9 @@ def register(app: FastAPI) -> None:
             history=events(conn, rid),
             files=files,
             blocked=blocked,
+            questionnaires=vendor_views.for_record(conn, rid) if key == "vendors" else [],
+            vq_link=request.session.pop("vq_link", None) if key == "vendors" else None,
+            mail_ready=mailer.configured(),
         )
 
     @app.post("/engagements/{eid}/r/{key}/{rid}/edit")

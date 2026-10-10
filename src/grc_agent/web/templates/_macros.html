@@ -52,6 +52,7 @@
     ("evidence", "/engagements/%d/evidence" % eng.id, "Evidence", 0, 0),
     ("policies", "/engagements/%d/r/policies" % eng.id, "Policies", 0, (o.policies or {}).overdue or 0),
     ("exceptions", "/engagements/%d/r/exceptions" % eng.id, "Accepted gaps", 0, (o.exceptions or {}).overdue or 0),
+    ("trust", "/engagements/%d/trust" % eng.id, "Trust page", 0, 0),
   ] + ([("training", "/engagements/%d/training" % eng.id, "Training", 0, 0)] if training_on() else []) + [
   ]),
   ("Risk", [
