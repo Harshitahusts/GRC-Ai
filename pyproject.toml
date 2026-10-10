@@ -49,6 +49,8 @@ pythonpath = ["src"]
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+# Vendored agent skills (Markdown with code samples), kept exactly as published.
+extend-exclude = [".claude"]
 
 [tool.ruff.lint]
 # S = flake8-bandit security rules (the same checks as Bandit), so CI fails on a new
