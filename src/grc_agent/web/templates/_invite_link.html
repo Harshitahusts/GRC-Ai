@@ -1,0 +1,18 @@
+{# A one-time invite link, shown once when email isn't set up so it can be passed on. #}
+{% if invite_link %}
+<section class="card invite-link" role="status">
+  <h2>Send this invite to {{ invite_link.name }}</h2>
+  <p class="muted small">Email isn't set up yet, so share this link with <strong>{{ invite_link.email }}</strong> yourself (email, WhatsApp, Slack). It works once and expires in 7 days, and it won't be shown again.</p>
+  <div class="copy-row">
+    <input id="invite-link" value="{{ invite_link.link }}" readonly aria-label="Invite link">
+    <button type="button" class="primary" data-copy-field="invite-link">Copy link</button>
+  </div>
+</section>
+<script>
+document.querySelectorAll("[data-copy-field]").forEach(b => b.addEventListener("click", () => {
+  const field = document.getElementById(b.dataset.copyField);
+  field.select();
+  navigator.clipboard.writeText(field.value).then(() => { b.textContent = "Copied"; });
+}));
+</script>
+{% endif %}

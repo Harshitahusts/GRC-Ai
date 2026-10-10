@@ -33,9 +33,9 @@
   <form method="post" action="/engagements" class="card" id="new">
     <h2>New engagement</h2>
     <input type="hidden" name="csrf" value="{{ csrf }}">
-    {% if role in ("client", "trial") %}
-    <input type="hidden" name="audience" value="self">
-    <p class="muted small">For your own company's DPDP compliance.</p>
+    {% if not is_staff %}
+    <input type="hidden" name="audience" value="{{ 'client' if acct.partner else 'self' }}">
+    <p class="muted small">{{ "For one of your clients." if acct.partner else "For your own organisation's DPDP compliance." }}</p>
     {% else %}
     <fieldset class="stack">
       <legend>Who is this for?</legend>

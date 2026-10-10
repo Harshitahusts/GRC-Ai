@@ -87,7 +87,7 @@ def test_database_target(monkeypatch, tmp_path):
 
 
 def test_login_ignores_username_case(client):
-    token = csrf(client, "/login")
+    token = csrf(client, "/login?as=company")
     r = client.post(
         "/login",
         data={"username": "HARSHIT", "password": PASSWORD, "csrf": token},

@@ -5,7 +5,7 @@ import re
 PASSWORD = "correct-horse-battery"
 
 
-def csrf(client, path="/login"):
+def csrf(client, path="/login?as=company"):
     return re.search(r'name="csrf" value="([^"]+)"', client.get(path).text).group(1)
 
 
@@ -48,3 +48,23 @@ ALL_YES = {
         ]
     },
 }
+
+
+MEMBER_PASSWORD = "role-test-password"  # noqa: S105
+
+
+def add_member(app, name, *, org=None, kind="client", team_role="admin", password=MEMBER_PASSWORD):
+    """A customer who signs in with a password, in a new organisation (or `org`'s id).
+    Returns the organisation id."""
+    from grc_agent.web import access, db
+    from grc_agent.web.security import hash_password
+
+    with db.connect(app.state.db_path) as c:
+        if org is None:
+            org = access.new_org(c, f"{name} org", kind, None, "test")
+        c.execute(
+            "INSERT INTO users (username, password_hash, created_at, role, org_id, team_role) "
+            "VALUES (?,?,?,?,?,?)",
+            (name, hash_password(password), "2026-01-01", "user", org, team_role),
+        )
+    return org

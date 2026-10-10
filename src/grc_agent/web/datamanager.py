@@ -167,6 +167,13 @@ CATALOG: dict[str, dict] = {
         "retain_days": 90,
         "retention": "90 days",
     },
+    "orgs": {
+        "purpose": "Customer organisations (companies and partners) and POC end dates",
+        "category": "Security",
+        "personal": False,
+        "retain_days": None,
+        "retention": "While the customer uses GRC Flow",
+    },
     "engagement_access": {
         "purpose": "Who may open each client besides staff (partners and the client's people)",
         "category": "Security",

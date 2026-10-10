@@ -23,7 +23,7 @@ from typing import Annotated, Any
 from urllib.parse import urlsplit
 
 import anthropic
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import (
     HTMLResponse,
@@ -162,26 +162,24 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
         if user:
             with db.connect(request.app.state.db_path) as c:
                 row = c.execute(
-                    "SELECT password_hash, role, expires_at FROM users "
-                    "WHERE LOWER(username) = LOWER(?)",
-                    (user,),
+                    "SELECT password_hash FROM users WHERE LOWER(username) = LOWER(?)", (user,)
                 ).fetchone()
+                acct = access.account(c, user) if row else None
                 if row is None or request.session.get("pv") != session_stamp(row["password_hash"]):
                     request.session.clear()
-                elif access.expired(row["expires_at"]):
+                elif acct.poc_ended:
                     request.session.clear()
                     request.session["flash"] = [
-                        ["error", "Your trial has ended. Email talk@grc-flow.com to continue."]
+                        ["error", "Your POC has ended. Email talk@grc-flow.com to continue."]
                     ]
                 else:
-                    # Who may open what (web/access.py): staff and API pages, and clients
-                    # the person was not given. An unseen client answers as not found, so
-                    # its existence isn't revealed.
-                    role = row["role"]
+                    # Who may open what (web/access.py): the owner's dashboard, staff and
+                    # API pages, and engagements the person can't open. The dashboard and
+                    # an unseen engagement answer as not found, so they aren't revealed.
                     path = request.url.path
-                    if access.OWNER_PATHS.match(path) and role != "super_admin":
+                    if access.OWNER_PATHS.match(path) and acct.role != "super_admin":
                         return render(request, "error.html", status_code=404, message="Not found")
-                    if not access.path_allowed(path, role):
+                    if not access.path_allowed(path, acct):
                         return render(
                             request,
                             "error.html",
@@ -189,7 +187,7 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
                             message="Your role doesn't include this page.",
                         )
                     m = access.ENGAGEMENT_PATH.match(path)
-                    if m and not access.can_see(c, user, int(m.group(1)), role):
+                    if m and not access.can_see(c, user, int(m.group(1))):
                         return render(
                             request, "error.html", status_code=404, message="Engagement not found"
                         )
@@ -406,6 +404,14 @@ VIEWER_POSTS = (
 )
 
 
+def current_account(request: Request) -> access.Account:
+    """The signed-in person's account (platform role, organisation, team role)."""
+    username = request.session.get("user") or ""
+    with db.connect(request.app.state.db_path) as c:
+        acct = access.account(c, username) if username else None
+    return acct or access.Account("", "", None, "", "", "viewer", "")
+
+
 def user_role(request: Request, username: str | None = None) -> str:
     username = username or request.session.get("user")
     if not username:
@@ -422,7 +428,7 @@ async def form_with_csrf(request: Request) -> dict[str, Any]:
     if not csrf_matches(request.session.get("csrf"), form.get("csrf")):
         raise HTTPException(status_code=403, detail="Form expired. Go back, reload and try again.")
     _refuse_in_public_demo(request)
-    if user_role(request) == "viewer" and not request.url.path.startswith(VIEWER_POSTS):
+    if current_account(request).viewer and not request.url.path.startswith(VIEWER_POSTS):
         raise HTTPException(
             status_code=403, detail="Your account is read-only. Ask an admin for access."
         )
@@ -437,13 +443,8 @@ def redirect(url: str) -> RedirectResponse:
     return RedirectResponse(url, status_code=303)
 
 
-ROLE_NAMES = {
-    "super_admin": "Super admin",
-    "admin": "Admin",
-    "partner": "Partner",
-    "client": "Client",
-    "trial": "Trial",
-}
+PORTALS = ("company", "partner")
+TEAM_ROLE_NAMES = {"admin": "Admin", "manager": "Manager", "viewer": "Viewer"}
 
 
 def render(request: Request, name: str, status_code: int = 200, **context: Any) -> HTMLResponse:
@@ -451,23 +452,21 @@ def render(request: Request, name: str, status_code: int = 200, **context: Any) 
         request.session["csrf"] = new_csrf_token()
     user = request.session.get("user")
     unread = 0
-    role, trial_days = "", None
+    acct = None
     if user:
         with db.connect(request.app.state.db_path) as c:
             unread = notify.unread_count(c, user)
-            row = c.execute(
-                "SELECT role, expires_at FROM users WHERE LOWER(username) = LOWER(?)", (user,)
-            ).fetchone()
-        if row:
-            role = row["role"]
-            trial_days = access.days_left(row["expires_at"]) if role == "trial" else None
-    context.setdefault("role", role)
-    context.setdefault("role_label", ROLE_NAMES.get(role, role))
-    context.setdefault("role_names", ROLE_NAMES)
-    context.setdefault("trial_days", trial_days)
-    context.setdefault("is_staff", access.is_staff(role))
-    context.setdefault("api_role", role in access.API_ROLES)
-    context.setdefault("read_only", user_role(request) == "viewer")
+            acct = access.account(c, user)
+    context.setdefault("acct", acct)
+    context.setdefault("invite_link", request.session.pop("invite_link", None))
+    context.setdefault("role", acct.role if acct else "")
+    context.setdefault("is_staff", bool(acct and acct.staff))
+    context.setdefault("api_role", bool(acct and acct.can_api))
+    context.setdefault("read_only", bool(acct and acct.viewer))
+    context.setdefault("team_role_names", TEAM_ROLE_NAMES)
+    context.setdefault(
+        "poc_days", access.days_left(acct.poc_until) if acct and not acct.staff else None
+    )
     context.update(
         request=request,
         user=user,
@@ -709,14 +708,17 @@ def _routes(app: FastAPI) -> None:
     # ---- auth
 
     @app.get("/login")
-    def login_page(request: Request):
+    def login_page(request: Request, as_: str = Query("", alias="as")):
+        """First the portal (log in as a company or a partner), then the sign-in form."""
         if request.session.get("user"):
             return redirect("/")
-        return render(request, "login.html")
+        portal = as_ if as_ in PORTALS else ""
+        return render(request, "login.html", portal=portal)
 
     @app.post("/login")
     async def login(request: Request, conn: Conn):
         form = await form_with_csrf(request)
+        portal = form.get("portal") if form.get("portal") in PORTALS else "company"
         username = str(form.get("username", "")).strip()
         password = str(form.get("password", ""))
         failures = request.app.state.login_failures
@@ -732,6 +734,7 @@ def _routes(app: FastAPI) -> None:
             return render(
                 request,
                 "login.html",
+                portal=portal,
                 status_code=429,
                 error="Too many failed attempts. Wait 5 minutes and try again.",
                 username=username,
@@ -748,6 +751,7 @@ def _routes(app: FastAPI) -> None:
             return render(
                 request,
                 "login.html",
+                portal=portal,
                 status_code=401,
                 error="Wrong username or password.",
                 username=username,
@@ -761,24 +765,30 @@ def _routes(app: FastAPI) -> None:
                 "UPDATE users SET password_hash = ? WHERE username = ?",
                 (password_hash, row["username"]),
             )
-        if access.expired(row["expires_at"]):
+        acct = access.account(conn, row["username"])
+        if acct.poc_ended:
             return render(
                 request,
                 "login.html",
+                portal=portal,
                 status_code=403,
-                error="This trial has ended. Email talk@grc-flow.com to continue.",
+                error="This POC has ended. Email talk@grc-flow.com to continue.",
+                username=username,
+            )
+        if not acct.staff and (portal == "partner") != acct.partner:
+            # The right password at the wrong door: say which door, sign nothing in.
+            other = "Partner" if acct.partner else "Company"
+            return render(
+                request,
+                "login.html",
+                portal=portal,
+                status_code=403,
+                error=f"This is a {other.lower()} account. Use {other} login instead.",
+                wrong_portal="company" if other == "Company" else "partner",
                 username=username,
             )
         start_session(request, row["username"], password_hash)
         db.audit(conn, row["username"], "login")
-        portal = form.get("portal")
-        partner_side = row["role"] in ("partner", "admin", "super_admin")
-        if portal in ("client", "partner") and (portal == "partner") != partner_side:
-            flash(
-                request,
-                f"This is a {ROLE_NAMES.get(row['role'], row['role'])} account, so you're in "
-                + ("the partner view." if partner_side else "your company's view."),
-            )
         return redirect("/")
 
     @app.post("/logout")
@@ -796,12 +806,12 @@ def _routes(app: FastAPI) -> None:
         user: User,
         conn: Conn,
     ):
-        role = user_role(request)
-        ids = access.visible_ids(conn, user, role)
+        acct = current_account(request)
+        ids = access.visible_ids(conn, user)
         engagements = access.only(
             conn.execute("SELECT * FROM engagements ORDER BY id DESC").fetchall(), ids, "id"
         )
-        if role in ("client", "trial") and len(engagements) == 1:
+        if not acct.staff and not acct.partner and len(engagements) == 1:
             return redirect(f"/engagements/{engagements[0]['id']}")  # straight to their company
         summaries = [_summary(conn, e) for e in engagements]
         agent = summaries
@@ -898,20 +908,17 @@ def _routes(app: FastAPI) -> None:
         client = str(form.get("client", "")).strip()
         sector = form.get("sector")
         audience = form.get("audience") or "client"
-        role = user_role(request)
-        if role in ("client", "trial"):
-            audience = "self"  # a company's own people assess their own company
+        acct = current_account(request)
+        if not acct.staff:
+            # A company assesses itself; a partner assesses its clients.
+            audience = "client" if acct.partner else "self"
         if not client or sector not in SECTORS or audience not in AUDIENCES:
             flash(request, "Enter a name and choose a sector.", "error")
             return redirect("/engagements")
-        refused = access.may_create(conn, user, role)
-        if refused:
-            flash(request, refused, "error")
-            return redirect("/engagements")
         cur = conn.execute(
-            "INSERT INTO engagements (client, sector, mode, audience, created_by, created_at) "
-            "VALUES (?,?,'agent',?,?,?)",
-            (client, sector, audience, user, db.now()),
+            "INSERT INTO engagements (client, sector, mode, audience, created_by, created_at, "
+            "org_id) VALUES (?,?,'agent',?,?,?,?)",
+            (client, sector, audience, user, db.now(), acct.org_id),
         )
         db.audit(conn, user, "engagement_created", cur.lastrowid)
         return redirect(f"/engagements/{cur.lastrowid}")
@@ -1529,7 +1536,7 @@ def _routes(app: FastAPI) -> None:
                 settings=settings,
                 # Viewers get the read-only tools; everyone else may also draft tasks.
                 tools=analyst.analyst_tools(
-                    request.app, user=user, can_act=user_role(request) != "viewer"
+                    request.app, user=user, can_act=not current_account(request).viewer
                 ),
                 system_prompt=ANALYST_PROMPT,
             )

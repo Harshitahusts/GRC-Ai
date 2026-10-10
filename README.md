@@ -105,33 +105,35 @@ without the facts it needs, a full history with comments, and evidence attachmen
 assigned work. The **Work queue** lists everything open across clients, most urgent
 first; the **Audit log** shows every change; **Team & roles** sets each person's role.
 
-### Roles: companies and partners in one workspace
+### Organisations, teams and the owner's dashboard
 
-GRC Flow is used two ways: a company runs its own DPDP compliance (**client**), and a
-consultancy or MSSP runs DPDP work for many companies (**partner**). The sign-in page asks
-which you are, but the account decides what each person can open
-(`web/access.py`):
+GRC Flow is used two ways: a company runs its own DPDP compliance, and a consultancy or
+MSSP (a partner) runs DPDP work for many companies. Each customer is an **organisation**,
+a company or a partner, and sees only its own engagements (`web/access.py`).
 
-| Role | Sees | Can also |
-|---|---|---|
-| Super admin | Every client | Everything, including making admins (the first account) |
-| Admin | Every client | Team, AI provider, audit log, data manager; give non-staff roles |
-| Partner | The clients they created or were given | Invite each client's people, API keys and MCP (reads only their clients) |
-| Client | Their own company only | Run their own assessment; sign off engagements they set up |
-| Trial | Like a client, one engagement | Ends after 14 days (an admin can extend it) |
+- **Logging in** is two steps: *Log in as Company* or *Log in as Partner*, then the
+  sign-in form. A partner account at the company door (or the other way round) is told
+  which door to use and isn't signed in.
+- **Team & roles** is each organisation's own page, run by its admins: **Admin**
+  (everything, plus the team), **Manager** (does the work and signs off) and **Viewer**
+  (reads, changes nothing). Invites go by email, or as a one-time link when email isn't
+  set up. Nobody types a password for someone else.
+- **People with access** on an engagement lets its lead bring in someone from outside
+  the team, usually the client's own staff when a partner runs it, as a Manager or Viewer
+  of that engagement only.
+- **API keys and MCP** are for GRC Flow staff and a partner's admins and managers; the
+  key reads only that partner's engagements.
 
-The **Super admin dashboard** is the owner's desk, a separate page outside the tool:
-nothing in the app links to it, and anyone who isn't signed in as a super admin gets
-"not found" there. It is at `/dashboard` and lets the owner invite anyone by email with
-a role (the invite is emailed, or shown as a one-time link to share when email isn't set
-up), run POCs (trial accounts of 7 to 90 days, listed ending soonest first, with extend,
-make client and end now), and give or remove access to any client per person.
+The platform roles are hidden from customers: the **super admin** (the workspace owner,
+the first account) and **GRC Flow admins** (staff, who see every engagement). The
+super admin's dashboard at `/dashboard` is a separate page: nothing in the app links to
+it, and anyone else gets "not found". There the owner creates organisations (company or
+partner), makes one a **POC for any number of days** (1 to 365), extends it, makes it a
+customer or ends it (its people are signed out until it's extended), invites people with
+their team role, sets platform roles, and gives or removes access to engagements.
 
-Each engagement's **People with access** box lists who besides staff can open it; a
-partner invites the client's people there. Another partner's client answers "not found"
-everywhere: pages, lists, notifications, the GRC Analyst and MCP. Older workspaces upgrade
-on start: members become partners and viewers become clients, keeping the clients they
-saw, and the first admin becomes the super admin.
+Older workspaces upgrade on start: each partner, client or trial account becomes its own
+organisation (a trial's end date becomes the POC's) with that person as its admin.
 
 The audit log is **tamper-evident**: each entry is sealed with a SHA-256 hash over its
 own fields and the hash of the entry before it. **Check integrity** on the Audit log page

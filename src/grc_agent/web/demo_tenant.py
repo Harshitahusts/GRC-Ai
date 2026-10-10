@@ -445,7 +445,7 @@ def seed(data_dir: Path, reset: bool = False) -> Path:
 
 
 def _login(client, user: str, password: str):
-    token = _csrf(client, "/login")
+    token = _csrf(client, "/login?as=company")
     r = client.post("/login", data={"username": user, "password": password, "csrf": token})
     if r.url.path != "/":
         raise RuntimeError(f"demo login failed for {user}")

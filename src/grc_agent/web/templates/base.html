@@ -29,9 +29,11 @@
     {{ nav_link("/dataflows", "i-flow", "Data flows", path.startswith("/dataflows") or path.endswith("/dataflow")) }}
     {{ nav_link("/connectors", "i-plug", "Connectors", path.startswith("/connectors") or path.startswith("/settings/github")) }}
     {{ nav_link("/corpus", "i-book", "Corpus", path.startswith("/corpus")) }}
-    {% if is_staff or api_role %}<p class="nav-group">Organisation</p>{% endif %}
-    {% if is_staff %}
+    {% if is_staff or api_role or (acct and acct.org_id) %}<p class="nav-group">Organisation</p>{% endif %}
+    {% if acct and acct.org_id %}
     {{ nav_link("/team", "i-users", "Team & roles", path.startswith("/team")) }}
+    {% endif %}
+    {% if is_staff %}
     {{ nav_link("/audit", "i-clock", "Audit log", path.startswith("/audit")) }}
     {{ nav_link("/data-manager", "i-database", "Data manager", path.startswith("/data-manager")) }}
     {{ nav_link("/settings/ai", "i-spark", "AI provider", path.startswith("/settings/ai")) }}
@@ -73,7 +75,7 @@
       <details class="user-menu">
         <summary aria-label="Account menu"><span class="avatar" aria-hidden="true">{{ user[:1]|upper }}</span><span class="hide-sm">{{ user }}</span></summary>
         <div class="menu" role="menu">
-          <p class="menu-head">Signed in as <strong>{{ user }}</strong>{% if role_label %}<br><span class="badge badge-none">{{ role_label }}</span>{% endif %}</p>
+          <p class="menu-head">Signed in as <strong>{{ user }}</strong>{% if acct and acct.org_name %}<br><span class="small muted">{{ acct.org_name }} · {{ team_role_names[acct.team_role] }}</span>{% endif %}</p>
           <a role="menuitem" href="/account"><svg class="icon" aria-hidden="true"><use href="#i-user"/></svg>Account</a>
           <a role="menuitem" href="/notifications"><svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg>Notifications</a>
           <form method="post" action="/logout">
@@ -85,8 +87,8 @@
     </div>
   </header>
   {% endif %}
-  {% if trial_days is not none and user %}
-  <div class="tenant-banner" role="status"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg><span><strong>Free trial: {{ trial_days }} day{{ "" if trial_days == 1 else "s" }} left.</strong> One engagement, every DPDP feature except API keys. To keep your work, email <a href="mailto:talk@grc-flow.com">talk@grc-flow.com</a>.</span></div>
+  {% if poc_days is not none and user %}
+  <div class="tenant-banner" role="status"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg><span><strong>POC: {{ poc_days }} day{{ "" if poc_days == 1 else "s" }} left.</strong> To keep your work after that, email <a href="mailto:talk@grc-flow.com">talk@grc-flow.com</a>.</span></div>
   {% endif %}
   {% if public_demo and user %}
   {# Shown on every page: visitors to the shared public demo are strangers. #}
@@ -125,7 +127,7 @@
       ("Pages", "AI provider (Claude, Groq, Gemini...)", "/settings/ai", "i-spark", "" if is_staff else "-"),
       ("Pages", "API keys & MCP (connect Claude, Cursor...)", "/settings/api-keys", "i-plug", "" if api_role else "-"),
       ("Pages", "Audit log", "/audit", "i-clock", "" if is_staff else "-"),
-      ("Pages", "Team & roles", "/team", "i-users", "" if is_staff else "-"),
+      ("Pages", "Team & roles", "/team", "i-users", "" if acct and acct.org_id else "-"),
       ("Actions", "New engagement", "/engagements#new", "i-plus", "n"),
       ("Actions", "Ask the GRC Analyst", "/assistant", "i-spark", ""),
       ("Actions", "Unread notifications", "/notifications?show=unread", "i-bell", ""),

@@ -177,14 +177,8 @@ def register(app: FastAPI) -> None:
             if user is not None:
                 # A key works only while its owner's role still includes API access and
                 # (for any account with an end date) the account hasn't ended.
-                owner = conn.execute(
-                    "SELECT role, expires_at FROM users WHERE LOWER(username) = LOWER(?)", (user,)
-                ).fetchone()
-                if (
-                    owner is None
-                    or owner["role"] not in access.API_ROLES
-                    or access.expired(owner["expires_at"])
-                ):
+                owner = access.account(conn, user)
+                if owner is None or not owner.can_api or owner.poc_ended:
                     user = None
         if user is None:
             return JSONResponse(
