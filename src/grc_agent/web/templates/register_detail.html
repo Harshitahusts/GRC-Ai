@@ -18,6 +18,7 @@
       {% if ob %}· <a href="/corpus/provision?ref={{ ob.source|urlencode }}" title="{{ ob.obligation }}">{{ ob.source }}</a>{% endif %}
     </p>
   </div>
+  {% if spec.key == "breaches" %}<a class="button small" href="/engagements/{{ eng.id }}/r/breaches/{{ item.id }}/board-report.txt">{{ icon("i-download") }} Draft Board report</a>{% endif %}
 </div>
 
 {# The status workflow: every step is a button; a step that needs more information says what. #}

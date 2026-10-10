@@ -25,6 +25,7 @@ from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 # Tables whose primary key is a generated `id` (so INSERTs can return it).
 ID_TABLES = {
     "users",
+    "employees",
     "orgs",
     "engagement_access",
     "engagements",

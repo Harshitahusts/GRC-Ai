@@ -88,8 +88,14 @@ Each engagement groups its work in three rows under the workflow steps:
 - **Privacy operations:** Personal data (discovery and inventory), **Consent** records,
   **Requests** from Data Principals (access, correction, erasure, grievance, nomination;
   response clock up to 90 days, Rule 14(3)), and **Breaches** (the Board's detailed report
-  is due 72 hours after awareness, Rule 7(2)(b)).
-- **Compliance:** the **Readiness plan** (the client's obligations as steps in working
+  is due 72 hours after awareness, Rule 7(2)(b); each breach has a **Draft Board report**
+  download), the **Erasure** log (Rule 8: the 48-hour notice before erasure is enforced)
+  and breach **Drills** (time to a ready intimation and report, lessons).
+- **Compliance:** the **Obligations** register (every duty in the DPDP Act and the Rules,
+  with status, owner, re-check date, evidence, the penalty row at stake and a daily
+  readiness trend; statuses are suggested from the intake and Controls until reviewed;
+  `grc_agent/obligations.py`), **Accepted gaps** (reason, compensating measures, approver,
+  review date), the **Readiness plan** (the client's obligations as steps in working
   order, from scoping through notice and consent, security and breaches, rights,
   retention, processors and transfers to delivery, each with one next action; progress is
   recalculated from live data on every visit, so it can't be ticked off by hand),
@@ -97,13 +103,39 @@ Each engagement groups its work in three rows under the workflow steps:
   applicable" needs a reason and an admin, "implemented" needs evidence or a description),
   **Tasks**, the **Evidence** library, and **Policies** (version, approver, review date).
 - **Risk:** the risk register, **Vendors & processors** (contract, data location, review),
-  **DPIA**, the data-flow map and connectors.
+  **DPIA**, **Systems** (each system holding personal data with Rule 6 safeguards), the
+  data-flow map and connectors.
+
+**Board inquiry pack:** one ZIP per client (Obligations page) with a cover note, the
+obligations register, controls, every register, findings, the data inventory and map,
+reviewed documents, the evidence files with SHA-256 hashes and the client's audit log.
+Re-check dates that have come (obligations, controls, evidence) show on the Work queue.
 
 Every register record has an owner, a due date, a status workflow that won't move on
 without the facts it needs, a full history with comments, and evidence attachments.
 "Create task" links on findings, risks, controls and inventory gaps turn a gap into
 assigned work. The **Work queue** lists everything open across clients, most urgent
 first; the **Audit log** shows every change; **Team & roles** sets each person's role.
+
+### Training (in testing)
+
+DPDP awareness training for a client's employees, on the engagement's **Training** tab.
+It is switched on when the app runs without `GRC_DOMAIN` (a laptop or test machine) and
+off on the live server; `GRC_TRAINING=1` or `0` overrides that.
+
+- **Employees:** import a CSV exported from any HR system (Zoho People, Keka, Darwinbox,
+  greytHR, BambooHR; columns matched by name, only active people), connect Zoho People
+  directly (self-client refresh token, stored encrypted), or add people one by one.
+- **Personal links:** each employee gets a private `/learn/<token>` link (only its hash is
+  stored; a new link stops the old one). No account needed. Links can be emailed.
+- **Lessons:** six built-in DPDP lessons (`grc_agent/training.py`). Each is a reading
+  until you add a video: an uploaded MP4/WebM (your own recording) or a YouTube link.
+  Videos play at 0.5x, 1x, 1.5x or 2x and can't be skipped ahead: the server counts
+  watch time itself, never faster than 2x real time.
+- **Quiz:** after each lesson; 70% passes. Below that the lesson resets and must be
+  watched again before another try.
+- **Tracking:** completion, by department, a leaderboard, a CSV report, and acceptance
+  of the client's published policies.
 
 ### Organisations, teams and the owner's dashboard
 

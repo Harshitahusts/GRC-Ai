@@ -42,6 +42,21 @@
   {% endif %}
 </section>
 
+{% if rechecks %}
+<section class="card">
+  <div class="card-head"><h2>Re-checks due</h2></div>
+  <p class="small muted">Obligations, controls and evidence whose re-check date has come. Look again, then set the next date.</p>
+  <table class="table">
+    <thead><tr><th>What</th><th>Client</th><th class="hide-sm">Owner</th><th>Due</th></tr></thead>
+    <tbody>
+      {% for r in rechecks %}
+      <tr><td><span class="tag">{{ r.kind }}</span> <a class="strong-link" href="{{ r.href }}">{{ r.what }}</a></td><td class="small">{{ r.client }}</td><td class="hide-sm small">{{ r.owner or "–" }}</td><td class="nowrap small">{{ r.due }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
 {% if personal %}
 <section class="card">
   <div class="card-head"><h2>Personal data to review</h2></div>

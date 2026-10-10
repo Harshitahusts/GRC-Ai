@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, meter %}
+{% block title %}{{ lesson.title }} · DPDP training{% endblock %}
+{% block content %}
+<div class="learn">
+  <p class="crumb"><a href="/learn/{{ token }}">{{ emp.client }} · Training</a> / Lesson {{ number }} of {{ count }}</p>
+  <h1>{{ lesson.title }}</h1>
+
+  {% if result %}
+    {% if result.blocked %}
+    <div class="flash flash-warn" role="alert">{{ icon("i-alert") }} Finish the lesson first; the quiz opens at the end.</div>
+    {% elif result.passed %}
+    <div class="flash flash-success" role="status">{{ icon("i-check") }} <strong>Passed with {{ result.score }}%.</strong> Well done.</div>
+    {% else %}
+    <div class="flash flash-error" role="alert">{{ icon("i-alert") }} <strong>{{ result.score }}%: not passed this time</strong> ({{ result.wrong }} wrong; {{ pass_mark }}% passes). Watch the session again, then retake the quiz.</div>
+    {% endif %}
+  {% endif %}
+
+  {% if st.passed %}
+  <div class="flash flash-success">{{ icon("i-check") }} You passed this lesson with {{ st.best_score }}%. You can watch it again any time.</div>
+  {% endif %}
+
+  <section class="card lesson-card">
+    {% if media %}
+    <div class="player">
+      {% if media.kind == "upload" %}
+      <video id="video" controls controlslist="nodownload noplaybackrate" disablepictureinpicture preload="metadata" playsinline src="/learn/{{ token }}/lesson/{{ lesson.id }}/video"></video>
+      {% else %}
+      <div id="yt" class="yt-frame"></div>
+      {% endif %}
+    </div>
+    <div class="player-bar">
+      <span class="speeds" role="group" aria-label="Playback speed">{% for sp in speeds %}<button type="button" class="chip speed" data-speed="{{ sp }}" aria-pressed="{{ 'true' if sp == 1.0 else 'false' }}">{{ "%g"|format(sp) }}x</button>{% endfor %}</span>
+      <span class="small muted">Skipping ahead is turned off. Going back is fine.</span>
+    </div>
+    <details class="small"><summary>Lesson notes</summary>{% for p in lesson.body %}<p>{{ p }}</p>{% endfor %}</details>
+    {% else %}
+    <div class="lesson-text">{% for p in lesson.body %}<p>{{ p }}</p>{% endfor %}</div>
+    {% endif %}
+    <div class="watch-meter">{{ meter(st.watched, st.duration, "How much of the lesson is done") }}<span class="small" id="watch-label">{% if st.ready %}Lesson complete{% else %}{{ (100 * st.watched / st.duration)|round|int }}% done{% endif %}</span></div>
+    {% if not media and not st.ready %}<p class="small muted" id="read-note">Take your time reading. The quiz opens after about {{ (lesson.minutes / 2)|round(1) }}–{{ lesson.minutes }} minutes on this page.</p>{% endif %}
+  </section>
+
+  <section class="card quiz" id="quiz" {% if not st.ready or st.passed %}hidden{% endif %}>
+    <h2>Quiz</h2>
+    <p class="small muted">{{ lesson.quiz|length }} questions. {{ pass_mark }}% or more passes.</p>
+    <form method="post" action="/learn/{{ token }}/lesson/{{ lesson.id }}/quiz">
+      {% for q in lesson.quiz %}
+      {% set qi = loop.index0 %}
+      <fieldset class="quiz-q">
+        <legend>{{ loop.index }}. {{ q.text }}</legend>
+        {% for opt in q.options %}<label class="quiz-opt"><input type="radio" name="q{{ qi }}" value="{{ loop.index0 }}" required> {{ opt }}</label>{% endfor %}
+      </fieldset>
+      {% endfor %}
+      <p><button class="primary">Submit answers</button></p>
+    </form>
+  </section>
+
+  <p><a href="/learn/{{ token }}">&larr; All lessons</a></p>
+</div>
+
+<script>
+(() => {
+  const beatUrl = "/learn/{{ token }}/lesson/{{ lesson.id }}/beat";
+  const duration = {{ st.duration }};
+  let maxAllowed = {{ st.watched }};      // the furthest point the server has counted
+  let done = {{ "true" if st.ready else "false" }};
+  const quiz = document.getElementById("quiz"), label = document.getElementById("watch-label");
+  const bar = document.querySelector(".watch-meter .meter > span");
+  const passed = {{ "true" if st.passed else "false" }};
+
+  function show(watched, complete) {
+    maxAllowed = Math.max(maxAllowed, watched);
+    if (bar) bar.style.width = Math.min(100, Math.round(100 * watched / duration)) + "%";
+    if (complete) { done = true; label.textContent = "Lesson complete"; if (!passed) quiz.hidden = false; const n = document.getElementById("read-note"); if (n) n.hidden = true; }
+    else label.textContent = Math.round(100 * watched / duration) + "% done";
+  }
+  async function beat(position) {
+    try {
+      const r = await fetch(beatUrl, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({position})});
+      if (r.ok) { const j = await r.json(); show(j.watched, j.complete); }
+    } catch (e) {}
+  }
+
+  {% if media and media.kind == "upload" %}
+  const v = document.getElementById("video");
+  // The furthest point reached by normal playback; seeking past it snaps back.
+  let lastOk = 0;
+  v.addEventListener("timeupdate", () => { if (!v.seeking && v.currentTime <= Math.max(lastOk, maxAllowed) + 3) lastOk = Math.max(lastOk, v.currentTime); });
+  v.addEventListener("seeking", () => { if (v.currentTime > Math.max(maxAllowed, lastOk) + 1) v.currentTime = Math.max(maxAllowed, lastOk); });
+  v.addEventListener("ratechange", () => { if (![{{ speeds|join(",") }}].includes(v.playbackRate)) v.playbackRate = 1; });
+  const pos = () => v.currentTime;
+  const playing = () => !v.paused && !v.ended;
+  const setSpeed = s => { v.playbackRate = s; };
+  v.addEventListener("ended", () => beat(duration));
+  {% elif media %}
+  let player = null;
+  window.onYouTubeIframeAPIReady = () => {
+    player = new YT.Player("yt", {videoId: "{{ media.ref }}", host: "https://www.youtube-nocookie.com",
+      playerVars: {rel: 0, modestbranding: 1, disablekb: 1, playsinline: 1}});
+  };
+  const s = document.createElement("script"); s.src = "https://www.youtube.com/iframe_api"; document.head.appendChild(s);
+  const pos = () => (player && player.getCurrentTime ? player.getCurrentTime() : 0);
+  const playing = () => player && player.getPlayerState && player.getPlayerState() === 1;
+  const setSpeed = sp => { if (player && player.setPlaybackRate) player.setPlaybackRate(sp); };
+  let lastT = 0;
+  setInterval(() => {
+    if (!player || !player.getCurrentTime) return;
+    const t = player.getCurrentTime(), ok = Math.max(lastT, maxAllowed);
+    if (t > ok + 2.5) player.seekTo(ok, true); else lastT = Math.max(lastT, t);
+  }, 500);
+  {% else %}
+  // A reading: time counts while the page is visible.
+  let readFor = maxAllowed;
+  setInterval(() => { if (document.visibilityState === "visible" && !done) readFor += 1; }, 1000);
+  const pos = () => readFor * {{ speeds|max }};   // reading counts at the top speed
+  const playing = () => document.visibilityState === "visible" && !done;
+  const setSpeed = () => {};
+  {% endif %}
+
+  document.querySelectorAll(".speed").forEach(b => b.addEventListener("click", () => {
+    setSpeed(parseFloat(b.dataset.speed));
+    document.querySelectorAll(".speed").forEach(x => x.setAttribute("aria-pressed", x === b ? "true" : "false"));
+  }));
+  if (!done) setInterval(() => { if (playing()) beat(pos()); }, 5000);
+  else if (!passed) quiz.hidden = false;
+})();
+</script>
+{% endblock %}

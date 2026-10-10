@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% from "_macros.html" import engagement_header, page_intro, icon, meter %}
+{% block title %}Obligations · {{ eng.client }}{% endblock %}
+{% block content %}
+{{ engagement_header(eng, s, tab) }}
+{% set locked = read_only %}
+
+{{ page_intro("Obligations register", "Every duty the DPDP Act and the DPDP Rules 2025 place on you, in plain English. For each one record where you stand, who owns it and when to look at it again. Until someone reviews a duty, GRC Flow suggests a status from your intake answers and the Controls tab.") }}
+
+<section class="tiles dash-tiles" aria-label="Obligations at a glance">
+  <div class="tile tile-hero"><p class="tile-label">Readiness</p><p class="tile-value">{{ sm.pct }}<small>%</small></p>{{ meter(sm.pct, 100, "Readiness") }}<p class="muted small">partly met counts half</p></div>
+  <div class="tile"><p class="tile-label">Compliant</p><p class="tile-value">{{ sm.compliant }}<small class="muted">/{{ sm.applicable }}</small></p><p class="muted small">{{ sm.partial }} partly</p></div>
+  <div class="tile {{ 'is-bad' if sm.non_compliant }}"><p class="tile-label">Not compliant</p><p class="tile-value">{{ sm.non_compliant }}</p><p class="muted small">{{ sm.not_assessed }} not assessed yet</p></div>
+  <div class="tile {{ 'is-warn' if sm.recheck }}"><p class="tile-label">Re-check due</p><p class="tile-value">{{ sm.recheck }}</p><p class="muted small">{{ sm.na }} don't apply</p></div>
+</section>
+
+<div class="grid-2 obligations-top">
+  <section class="card">
+    <h3>Penalty exposure</h3>
+    {% if exposure.rows %}
+    <p class="small muted">The maximum penalty per breach in the Act's Schedule, for each kind of duty that isn't fully met. The Board decides the actual amount; this is the worst case, not a forecast.</p>
+    <table class="table compact">
+      <tbody>
+      {% for r in exposure.rows %}
+        <tr><td>{{ r.label }}<br><span class="small muted">{{ r.duties|map(attribute="ref")|join(", ") }}</span></td><td class="num nowrap"><strong>{{ "₹{:,} crore".format(r.amount // 10000000) }}</strong></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p>{{ icon("i-check") }} Every applicable duty is marked compliant. Keep the evidence current and re-check on the dates you set.</p>
+    {% endif %}
+  </section>
+  <section class="card">
+    <h3>Readiness over time</h3>
+    {% if points|length > 1 %}
+    <svg class="sparkline" viewBox="0 0 320 60" preserveAspectRatio="none" role="img" aria-label="Readiness from {{ points[0].pct }}% on {{ points[0].day }} to {{ points[-1].pct }}% on {{ points[-1].day }}">
+      <polyline points="{{ spark }}" fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke"/>
+    </svg>
+    <p class="small muted">{{ points[0].day }}: {{ points[0].pct }}% → {{ points[-1].day }}: {{ points[-1].pct }}%</p>
+    {% else %}
+    <p class="small muted">Recorded once a day when this page is opened. The line appears from the second day.</p>
+    {% endif %}
+    <p class="small"><a href="/engagements/{{ eng.id }}/board-pack.zip">{{ icon("i-download") }} Download the Board inquiry pack</a><br><span class="muted">Everything in one ZIP if the Data Protection Board asks: this register, controls, evidence list, registers, findings and the audit log.</span></p>
+  </section>
+</div>
+
+<section class="card">
+  <nav class="chips" aria-label="Filter obligations">
+    <a class="chip" href="?" aria-pressed="{{ 'false' if show else 'true' }}">All {{ all_count }}</a>
+    {% for k, label in statuses.items() %}<a class="chip" href="?show={{ k }}" aria-pressed="{{ 'true' if show == k else 'false' }}">{{ label }}</a>{% endfor %}
+    <a class="chip" href="?show=recheck" aria-pressed="{{ 'true' if show == 'recheck' else 'false' }}">Re-check due</a>
+  </nav>
+  <p class="small muted">Plain-English summaries of the Act and the Rules (G.S.R. 846(E), November 2025). Check the Gazette text before relying on one. This is your own record, <strong>not a certification of compliance</strong>.</p>
+  {% if not items %}<p class="muted">Nothing here with that filter.</p>{% endif %}
+  <ul class="control-list">
+    {% for i in items %}
+    {% set it = i.item %}
+    <li id="{{ it.id }}" class="control-row">
+      <div class="control-main">
+        <p class="control-title"><strong>{{ it.ref }}</strong> · {{ it.title }} <span class="badge {{ i.badge }}">{{ i.label }}</span>{% if not i.reviewed and i.status != "not_assessed" %} <span class="badge badge-none" title="{{ i.why }}">Suggested</span>{% endif %}{% if i.recheck_due %} <span class="badge badge-warn">Re-check due</span>{% endif %}</p>
+        <p>{{ it.duty }}</p>
+        <p class="small muted">
+          Proof: {{ it.proof }}<br>
+          {% if it.scope != "all" %}{{ scopes[it.scope] }} · {% endif %}Applies from {{ it.applies_from }} · Max penalty {{ i.penalty_max }}
+          · <a href="/engagements/{{ eng.id }}/evidence?obligation={{ it.id }}">{{ i.files }} evidence file{{ '' if i.files == 1 else 's' }}</a>
+          {% if it.register %}· <a href="/engagements/{{ eng.id }}/r/{{ it.register }}">{{ i.records }} record{{ '' if i.records == 1 else 's' }}</a>{% endif %}
+          {% if it.links %}· Linked: {% for o in it.links %}<a href="/engagements/{{ eng.id }}/controls#{{ o }}">{{ o }}</a>{{ ", " if not loop.last }}{% endfor %}{% endif %}
+          {% if i.owner %}· Owner {{ i.owner }}{% endif %}
+          {% if i.review_date %}· Re-check {{ i.review_date }}{% endif %}
+        </p>
+        {% if i.why %}<p class="small muted">Suggested: {{ i.why }}</p>{% endif %}
+        {% if i.note %}<p class="small plain-text">{{ i.note }} <span class="muted">({{ i.updated_by }})</span></p>{% endif %}
+      </div>
+      {% if not locked %}
+      <details class="control-edit">
+        <summary class="button small">Update</summary>
+        <form method="post" action="/engagements/{{ eng.id }}/obligations/{{ it.id }}" class="inv-form">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <fieldset>
+            <label>Status
+              <select name="status">{% for k, label in statuses.items() %}{% if k != "not_applicable" or is_admin or i.status == k %}<option value="{{ k }}" {% if k == i.status %}selected{% endif %}>{{ label }}</option>{% endif %}{% endfor %}</select></label>
+            <label>How it's met, or why it doesn't apply <textarea name="note" rows="2" maxlength="1000">{{ i.note }}</textarea></label>
+            <label>Owner <input name="owner" value="{{ i.owner }}" maxlength="80" list="people-o"></label>
+            <label>Re-check on <input name="review_date" type="date" value="{{ i.review_date }}"></label>
+            <p><button type="submit" class="button small primary">Save</button>
+            <a class="button small" href="/engagements/{{ eng.id }}/r/tasks/new?title={{ ('Meet ' ~ it.ref ~ ': ' ~ it.title)|urlencode }}&details={{ it.duty|urlencode }}&priority=high&source={{ ('Obligations: ' ~ it.ref)|urlencode }}">{{ icon("i-plus") }} Task</a>
+            <a class="button small" href="/engagements/{{ eng.id }}/r/exceptions/new?title={{ ('Accepted gap: ' ~ it.ref)|urlencode }}&obligation_ref={{ it.ref|urlencode }}">Accept gap</a></p>
+          </fieldset>
+        </form>
+      </details>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  <datalist id="people-o">{% for p in people %}<option value="{{ p }}">{% endfor %}</datalist>
+</section>
+{% endblock %}

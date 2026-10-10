@@ -5,7 +5,7 @@
 {{ engagement_header(eng, s, tab) }}
 {# Day-to-day records stay editable after delivery; only viewers are read-only. #}
 {% set locked = read_only %}
-{% set ob_by_id = {} %}{% for o in obligations %}{% set _ = ob_by_id.update({o.id: o}) %}{% endfor %}
+{% set ob_by_id = {} %}{% for o in obligations|list + catalogue|list %}{% set _ = ob_by_id.update({o.id: o}) %}{% endfor %}
 
 {{ page_intro("Evidence", "Files that prove a control works: policies, screenshots, contracts, training records, exports. Link each to the obligation it supports. With an AI provider set up, the AI reads each linked file and flags one that isn't about its obligation, so it doesn't count by mistake; a person decides in the end. Connector checks are collected automatically on the Connectors tab.") }}
 
@@ -87,7 +87,10 @@
       <label>What it shows <input name="title" maxlength="160" placeholder="e.g. Signed DPA with Razorpay"></label>
       <label>Kind <select name="category">{% for c in categories %}<option>{{ c }}</option>{% endfor %}</select></label>
       <label>Supports obligation
-        <select name="obligation_id"><option value="">None</option>{% for o in obligations %}<option value="{{ o.id }}" {% if o.id == obligation %}selected{% endif %}>{{ o.source }}: {{ o.obligation[:60] }}</option>{% endfor %}</select></label>
+        <select name="obligation_id"><option value="">None</option>
+          <optgroup label="Assessment obligations">{% for o in obligations %}<option value="{{ o.id }}" {% if o.id == obligation %}selected{% endif %}>{{ o.source }}: {{ o.obligation[:60] }}</option>{% endfor %}</optgroup>
+          <optgroup label="Full obligations register">{% for o in catalogue %}<option value="{{ o.id }}" {% if o.id == obligation %}selected{% endif %}>{{ o.source }}: {{ o.obligation[:60] }}</option>{% endfor %}</optgroup>
+        </select></label>
       <label>Review again by <input name="review_date" type="date"></label>
       <label>File <input type="file" name="file" required></label>
       <p class="small muted">{{ types }} · up to {{ max_mb }} MB. Stored privately on this server; only signed-in users can download it.</p>
