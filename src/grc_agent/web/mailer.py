@@ -3,7 +3,7 @@
 Set in .env:
   RESEND_API_KEY   a Resend API key (resend.com > API Keys; "Sending access" is enough)
   GRC_MAIL_FROM    the sender, on a domain verified in Resend,
-                   e.g. "GRC Flow <noreply@grc-flow.com>"
+                   e.g. "GRC-Flow <noreply@grc-flow.com>"
 
 Without both, the app sends nothing: admins share starting passwords by hand, and the
 forgot-password page says to ask an admin.
@@ -39,7 +39,7 @@ def send(to: str, subject: str, lines: list[str], link: str = "", button: str = 
         raise MailError("Email isn't set up on this server (RESEND_API_KEY, GRC_MAIL_FROM).")
     if not valid_email(to):
         raise MailError("That email address doesn't look right.")
-    text = "\n\n".join([*lines, *([f"{button}: {link}"] if link else []), "GRC Flow"])
+    text = "\n\n".join([*lines, *([f"{button}: {link}"] if link else []), "GRC-Flow"])
     paras = "".join(f'<p style="margin:0 0 16px">{html.escape(line)}</p>' for line in lines)
     cta = (
         f'<p style="margin:24px 0"><a href="{html.escape(link, quote=True)}" '
@@ -53,7 +53,7 @@ def send(to: str, subject: str, lines: list[str], link: str = "", button: str = 
     body = (
         '<div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;font-size:15px;'
         f'line-height:1.5;color:#111;max-width:560px">{paras}{cta}'
-        '<p style="margin:24px 0 0;color:#555;font-size:13px">GRC Flow</p></div>'
+        '<p style="margin:24px 0 0;color:#555;font-size:13px">GRC-Flow</p></div>'
     )
     try:
         resp = request(
