@@ -23,15 +23,18 @@
   <nav class="side-links" aria-label="Main">
     {{ nav_link("/", "i-home", "Dashboard", path == "/") }}
     {{ nav_link("/work", "i-check", "Work queue", path.startswith("/work")) }}
-    {{ nav_link("/engagements", "i-briefcase", "Engagements", path.startswith("/engagements") and not path.endswith("/dataflow")) }}
+    {{ nav_link("/engagements", "i-briefcase", "Engagements", path.startswith("/engagements") and not path.endswith("/dataflow") and "/training" not in path) }}
     {{ nav_link("/assistant", "i-spark", "GRC Analyst", path == "/assistant") }}
     <p class="nav-group">Evidence</p>
     {{ nav_link("/dataflows", "i-flow", "Data flows", path.startswith("/dataflows") or path.endswith("/dataflow")) }}
     {{ nav_link("/connectors", "i-plug", "Connectors", path.startswith("/connectors") or path.startswith("/settings/github")) }}
     {{ nav_link("/corpus", "i-book", "Corpus", path.startswith("/corpus")) }}
-    {% if is_staff or api_role or (acct and acct.org_id) %}<p class="nav-group">Organisation</p>{% endif %}
+    {% if is_staff or api_role or (acct and acct.org_id) or training_on() %}<p class="nav-group">Organisation</p>{% endif %}
     {% if acct and acct.org_id %}
     {{ nav_link("/team", "i-users", "Team & roles", path.startswith("/team")) }}
+    {% endif %}
+    {% if training_on() %}
+    {{ nav_link("/training", "i-star", "Training", path == "/training" or path.startswith("/training/") or (path.startswith("/engagements/") and "/training" in path)) }}
     {% endif %}
     {% if is_staff %}
     {{ nav_link("/audit", "i-clock", "Audit log", path.startswith("/audit")) }}

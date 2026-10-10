@@ -135,7 +135,7 @@ first; the **Audit log** shows every change; **Team & roles** sets each person's
 
 ### Training (in testing)
 
-DPDP awareness training for a client's employees, on the engagement's **Training** tab.
+DPDP awareness training for a client's employees, under **Organisation → Training** in the sidebar (one row per workspace).
 It is switched on when the app runs without `GRC_DOMAIN` (a laptop or test machine) and
 off on the live server; `GRC_TRAINING=1` or `0` overrides that.
 

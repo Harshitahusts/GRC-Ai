@@ -263,6 +263,47 @@ def register(app: FastAPI) -> None:
 
     # ---------------------------------------------------------------- admin
 
+    @app.get("/training")
+    def training_index(request: Request, user: User, conn: Conn):
+        """Training across the organisation: every client this person can see, with how
+        far its people have got. A company with one workspace goes straight to it."""
+        require_on()
+        ids = access.visible_ids(conn, user)
+        engs = [
+            e
+            for e in conn.execute("SELECT id, client, sector FROM engagements ORDER BY client")
+            if ids is None or e["id"] in ids
+        ]
+        if len(engs) == 1:
+            return redirect(f"/engagements/{engs[0]['id']}/training")
+        clients = []
+        for e in engs:
+            rows = people(conn, e["id"])
+            done = sum(r["done"] for r in rows)
+            scores = [r["avg"] for r in rows if r["avg"] is not None]
+            clients.append(
+                {
+                    "id": e["id"],
+                    "client": e["client"],
+                    "sector": e["sector"],
+                    "people": len(rows),
+                    "done": done,
+                    "pct": round(100 * done / len(rows)) if rows else 0,
+                    "avg": round(sum(scores) / len(scores)) if scores else None,
+                }
+            )
+        total = sum(c["people"] for c in clients)
+        done = sum(c["done"] for c in clients)
+        return render(
+            request,
+            "training_index.html",
+            clients=clients,
+            total=total,
+            done=done,
+            pct=round(100 * done / total) if total else 0,
+            pass_mark=training.PASS_MARK,
+        )
+
     @app.get("/engagements/{eid}/training")
     def training_page(eid: int, request: Request, user: User, conn: Conn):
         require_on()

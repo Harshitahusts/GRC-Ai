@@ -1,11 +1,16 @@
 {% extends "base.html" %}
-{% from "_macros.html" import engagement_header, page_intro, icon, meter %}
+{% from "_macros.html" import page_intro, icon, meter %}
 {% block title %}Training · {{ eng.client }}{% endblock %}
 {% block content %}
-{{ engagement_header(eng, s, tab) }}
+<div class="page-head">
+  <div>
+    <p class="crumb"><a href="/training">Training</a> / {{ eng.client }}</p>
+    <h1>Training: {{ eng.client }}</h1>
+  </div>
+</div>
 {% set locked = read_only or not can_lead %}
 
-{{ page_intro("Training", "DPDP awareness training for " ~ eng.client ~ "'s employees. Import your people, share each person's private link, and track who has finished. Lessons can't be skipped; each ends with a quiz and " ~ pass_mark ~ "% passes. Below that, the lesson is watched again.", "Section 8(4): organisational measures") }}
+{{ page_intro("How it works", "DPDP awareness training for " ~ eng.client ~ "'s employees. Import your people, share each person's private link, and track who has finished. Lessons can't be skipped; each ends with a quiz and " ~ pass_mark ~ "% passes. Below that, the lesson is watched again.", "Section 8(4): organisational measures") }}
 <div class="flash flash-info" role="note">{{ icon("i-info") }} <strong>In testing.</strong> Training is switched on for this test setup only. It isn't on the live app yet.</div>
 
 {% if training_link %}
