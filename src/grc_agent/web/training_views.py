@@ -801,14 +801,13 @@ def register(app: FastAPI) -> None:
         complete = training.watch_complete(watched, duration)
         conn.execute(
             "UPDATE training_progress SET watched_seconds = ?, duration_seconds = ?, "
-            "last_beat_at = ?, watched_at = CASE WHEN ? AND watched_at = '' THEN ? "
+            "last_beat_at = ?, watched_at = CASE WHEN watched_at = '' THEN ? "
             "ELSE watched_at END WHERE employee_id = ? AND lesson_id = ?",
             (
                 int(watched),
                 duration,
                 now.isoformat(),
-                complete,
-                now.isoformat(),
+                now.isoformat() if complete else "",
                 emp["id"],
                 lesson_id,
             ),
