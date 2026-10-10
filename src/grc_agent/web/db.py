@@ -356,6 +356,46 @@ CREATE TABLE IF NOT EXISTS hr_connections (
     updated_by TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+-- Due-diligence questionnaires a vendor answers by link (web/vendor_views.py). Only a
+-- hash of the link is kept.
+CREATE TABLE IF NOT EXISTS vendor_questionnaires (
+    id INTEGER PRIMARY KEY,
+    engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+    record_id INTEGER NOT NULL REFERENCES records(id),
+    token_hash TEXT NOT NULL UNIQUE,
+    sent_to TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'sent' CHECK (status IN
+        ('sent', 'submitted', 'reviewed', 'revoked')),
+    answers_json TEXT NOT NULL DEFAULT '{}',
+    score INTEGER,
+    risk TEXT NOT NULL DEFAULT '',
+    respondent TEXT NOT NULL DEFAULT '',
+    review_note TEXT NOT NULL DEFAULT '',
+    sent_by TEXT NOT NULL,
+    sent_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    submitted_at TEXT NOT NULL DEFAULT '',
+    reviewed_by TEXT NOT NULL DEFAULT '',
+    reviewed_at TEXT NOT NULL DEFAULT ''
+);
+-- A client's public DPDP trust page (web/trust_views.py): what it shows, and whether it
+-- is published.
+CREATE TABLE IF NOT EXISTS trust_pages (
+    engagement_id INTEGER PRIMARY KEY REFERENCES engagements(id),
+    slug TEXT NOT NULL UNIQUE,
+    published INTEGER NOT NULL DEFAULT 0,
+    company TEXT NOT NULL DEFAULT '',
+    intro TEXT NOT NULL DEFAULT '',
+    contact_email TEXT NOT NULL DEFAULT '',
+    grievance_officer TEXT NOT NULL DEFAULT '',
+    rights_url TEXT NOT NULL DEFAULT '',
+    show_policies INTEGER NOT NULL DEFAULT 1,
+    show_safeguards INTEGER NOT NULL DEFAULT 1,
+    show_subprocessors INTEGER NOT NULL DEFAULT 1,
+    show_programme INTEGER NOT NULL DEFAULT 1,
+    updated_by TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 -- Uploaded evidence files. The file lives in <data dir>/evidence/, never in the web root.
 CREATE TABLE IF NOT EXISTS evidence_files (
     id INTEGER PRIMARY KEY,
@@ -816,6 +856,8 @@ COPY_ORDER = (
     "training_progress",
     "training_acks",
     "hr_connections",
+    "vendor_questionnaires",
+    "trust_pages",
     "evidence_files",
     "ai_providers",
     "orgs",

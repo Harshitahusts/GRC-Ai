@@ -95,6 +95,8 @@ credentials with Fernet from the `cryptography` library.
 | `registers.py`, `register_views.py` | Tasks, consent, rights requests, breaches, erasure, drills, vendors, DPIAs, policies, systems, accepted gaps |
 | `obligation_views.py` (+ `grc_agent/obligations.py`) | Full DPDP obligations register, penalty exposure, readiness trend, re-checks due |
 | `training_views.py` (+ `grc_agent/training.py`, `connectors/hr.py`) | Employee training: HR import, personal links, no-skip lessons, quizzes, leaderboard |
+| `trust_views.py` | Public DPDP trust page per client |
+| `vendor_views.py` (+ `grc_agent/vendor_questions.py`) | Vendor due-diligence questionnaire by link, scoring, review |
 | `board_pack.py` | Board inquiry pack ZIP and the breach Board-report draft |
 | `discovery_views.py`, `dataflow_views.py`, `risk_views.py` | The pages for those features |
 | `connector_views.py`, `mcp_views.py` | Connector pages; API keys and the MCP server for AI apps |

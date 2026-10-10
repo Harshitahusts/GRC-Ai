@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block title %}Data protection questionnaire{% endblock %}
+{% block content %}
+<div class="learn">
+  <p class="crumb">{{ q.client }} · Vendor due diligence</p>
+  <h1>Data protection questionnaire</h1>
+  {% if done %}
+  <div class="flash flash-success" role="status">{{ icon("i-check") }} <strong>Thank you.</strong> Your answers were sent to {{ q.client }}{% if q.submitted_at %} on {{ q.submitted_at[:10] }}{% endif %}. You can close this page.</div>
+  {% else %}
+  <p class="muted">{{ q.client }} works with <strong>{{ q.vendor_name }}</strong> and shares personal data with you. Under India's Digital Personal Data Protection Act 2023, they remain responsible for that data, so they ask how you protect it. It takes about 10 minutes and can be submitted once.</p>
+  {% if errors %}<div class="flash flash-error" role="alert">{{ icon("i-alert") }} {{ errors|join(" ") }}</div>{% endif %}
+  {% set a = values.get("answers", {}) %}{% set c = values.get("comments", {}) %}
+  <form method="post" action="/vq/{{ token }}" class="vq-form">
+    {% for section, items in sections %}
+    <section class="card">
+      <h2>{{ section }}</h2>
+      {% for qq in items %}
+      <fieldset class="quiz-q">
+        <legend>{{ qq.text }}{% if qq.ref %} <span class="small muted">({{ qq.ref }})</span>{% endif %}</legend>
+        {% if qq.help %}<p class="small muted">{{ qq.help }}</p>{% endif %}
+        <div class="vq-answers">{% for k, label in answers %}<label class="quiz-opt"><input type="radio" name="a_{{ qq.id }}" value="{{ k }}" required {% if a.get(qq.id) == k %}checked{% endif %}> {{ label }}</label>{% endfor %}</div>
+        <input name="c_{{ qq.id }}" maxlength="1000" placeholder="Comment or evidence (optional)" aria-label="Comment on: {{ qq.text }}" value="{{ c.get(qq.id, '') }}">
+      </fieldset>
+      {% endfor %}
+    </section>
+    {% endfor %}
+    <section class="card">
+      <h2>Where and who</h2>
+      <label>Where is the personal data stored and processed?
+        <select name="location" required><option value="">Choose…</option>{% for k, label in locations %}<option value="{{ k }}" {% if values.get('location') == k %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+      <label>Countries outside India, if any <input name="countries" maxlength="200" value="{{ values.get('countries', '') }}"></label>
+      <label>Sub-processors that handle our data (name, purpose, country) <textarea name="subprocessors" rows="3" maxlength="2000">{{ values.get('subprocessors', '') }}</textarea></label>
+      <fieldset class="quiz-q"><legend>Certifications you hold</legend>
+        {% for k, label in certifications %}<label class="quiz-opt"><input type="checkbox" name="certifications" value="{{ k }}" {% if k in values.get('certifications', []) %}checked{% endif %}> {{ label }}</label>{% endfor %}
+      </fieldset>
+      <label>Your name <input name="respondent" maxlength="120" required value="{{ values.get('respondent', '') }}"></label>
+      <label>Your role <input name="role" maxlength="120" value="{{ values.get('role', '') }}"></label>
+      <p class="small muted">By submitting you confirm the answers are accurate to the best of your knowledge.</p>
+      <p><button class="primary">Submit answers</button></p>
+    </section>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

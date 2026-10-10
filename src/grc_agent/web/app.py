@@ -74,6 +74,8 @@ from grc_agent.web import (
     register_views,
     risk_views,
     training_views,
+    trust_views,
+    vendor_views,
 )
 from grc_agent.web.registers import REGISTERS, is_overdue
 from grc_agent.web.security import (
@@ -218,6 +220,8 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
     ops_views.register(app)
     obligation_views.register(app)
     training_views.register(app)
+    trust_views.register(app)
+    vendor_views.register(app)
     console_views.register(app)
     ai_views.register(app)
     mcp_views.register(app)

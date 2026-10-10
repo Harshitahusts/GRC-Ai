@@ -181,6 +181,20 @@ CATALOG: dict[str, dict] = {
         "retain_days": None,
         "retention": "Until disconnected",
     },
+    "vendor_questionnaires": {
+        "purpose": "Vendor due-diligence questionnaires and their answers (link stored hashed)",
+        "category": "Client data",
+        "personal": False,
+        "retain_days": None,
+        "retention": "Contract term + 3 years",
+    },
+    "trust_pages": {
+        "purpose": "Settings for each client's public DPDP trust page",
+        "category": "Client data",
+        "personal": False,
+        "retain_days": None,
+        "retention": "Until the page is removed",
+    },
     "evidence_files": {
         "purpose": "Uploaded evidence (files are kept in the evidence folder)",
         "category": "Evidence",

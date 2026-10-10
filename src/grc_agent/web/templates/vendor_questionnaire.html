@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% from "_macros.html" import engagement_header, icon, meter %}
+{% block title %}Questionnaire · {{ rec.title }} · {{ eng.client }}{% endblock %}
+{% block content %}
+{{ engagement_header(eng, s, tab) }}
+<p class="crumb"><a href="/engagements/{{ eng.id }}/r/vendors">Vendors</a> / <a href="/engagements/{{ eng.id }}/r/vendors/{{ rec.id }}">{{ rec.ref }} {{ rec.title }}</a> / Questionnaire</p>
+<h2>DPDP questionnaire: {{ rec.title }}</h2>
+
+{% if not result %}
+<p class="muted">Sent {{ q.sent_at[:10] }}{% if q.sent_to %} to {{ q.sent_to }}{% endif %}. Not answered yet.</p>
+{% else %}
+<section class="tiles dash-tiles" aria-label="Result">
+  <div class="tile tile-hero"><p class="tile-label">Score</p><p class="tile-value">{{ q.score }}<small>%</small></p>{{ meter(q.score, 100, "Score") }}</div>
+  <div class="tile {{ 'is-bad' if q.risk == 'high' else 'is-warn' if q.risk == 'medium' }}"><p class="tile-label">Risk</p><p class="tile-value">{{ risk_labels[q.risk] }}</p><p class="muted small">{{ "reviewed" if q.status == "reviewed" else "calculated, not yet reviewed" }}</p></div>
+  <div class="tile {{ 'is-bad' if result.critical }}"><p class="tile-label">Essentials missing</p><p class="tile-value">{{ result.critical|length }}</p><p class="muted small">contract, purpose, encryption, breach notice, erasure</p></div>
+  <div class="tile"><p class="tile-label">Answered by</p><p class="tile-value small-value">{{ q.respondent }}</p><p class="muted small">{{ a.role }} · {{ q.submitted_at[:10] }}</p></div>
+</section>
+
+{% if result.concerns %}
+<section class="card">
+  <h3>{{ icon("i-alert") }} Concerns to follow up</h3>
+  <ul>{% for c in result.concerns %}<li>{{ c }}</li>{% endfor %}</ul>
+  <p class="small"><a class="button small" href="/engagements/{{ eng.id }}/r/tasks/new?title={{ ('Follow up vendor ' ~ rec.title ~ ' questionnaire')|urlencode }}&details={{ result.concerns|join('\n')|urlencode }}&priority={{ 'high' if q.risk == 'high' else 'medium' }}&source={{ ('Vendor questionnaire: ' ~ rec.ref)|urlencode }}">{{ icon("i-plus") }} Task</a></p>
+</section>
+{% endif %}
+
+<section class="card">
+  <h3>Answers</h3>
+  <table class="table">
+    <thead><tr><th>Question</th><th>Answer</th><th class="hide-sm">Comment</th></tr></thead>
+    <tbody>
+    {% for qq in questions %}
+    {% set ans = a.answers.get(qq.id, "") %}
+    <tr><td>{{ qq.text }} <span class="small muted">{{ qq.ref }}</span></td>
+      <td><span class="badge {{ 'badge-pass' if ans == 'yes' else 'badge-warn' if ans == 'partly' else 'badge-fail' if ans == 'no' else 'badge-none' }}">{{ answer_labels.get(ans, "–") }}</span></td>
+      <td class="hide-sm small plain-text">{{ a.comments.get(qq.id, "") }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <dl class="details">
+    <dt>Where data is processed</dt><dd>{{ locations.get(a.location, "–") }}{% if a.countries %} ({{ a.countries }}){% endif %}</dd>
+    <dt>Sub-processors</dt><dd class="plain-text">{{ a.subprocessors or "–" }}</dd>
+    <dt>Certifications</dt><dd>{% for k in a.certifications %}{{ certifications.get(k, k) }}{{ ", " if not loop.last }}{% else %}None{% endfor %}</dd>
+  </dl>
+</section>
+
+{% if q.status == "reviewed" %}
+<p class="small muted">Reviewed by {{ q.reviewed_by }} on {{ q.reviewed_at[:10] }}{% if q.review_note %}: “{{ q.review_note }}”{% endif %}</p>
+{% elif can_review and not read_only %}
+<section class="card">
+  <h3>Review</h3>
+  <form method="post" action="/engagements/{{ eng.id }}/vendor-questionnaires/{{ q.id }}/review" class="stack">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Risk after review <select name="risk">{% for k, label in risk_labels.items() %}<option value="{{ k }}" {% if k == q.risk %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label>Note <textarea name="note" rows="2" maxlength="2000" placeholder="e.g. DPA signed with breach notice clause; encryption confirmed from SOC 2 report"></textarea></label>
+    <p><button class="primary">Mark reviewed</button></p>
+  </form>
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}

@@ -1151,3 +1151,14 @@ pre.code { background: var(--hover); border: 1px solid var(--border); border-rad
 .quiz-q { border: 1px solid var(--border); border-radius: 10px; padding: .7rem .9rem; margin: 0 0 .8rem; }
 .quiz-q legend { font-weight: 650; padding: 0 .3rem; }
 .quiz-opt { display: flex; gap: .5rem; align-items: baseline; font-weight: 400; padding: .25rem 0; }
+
+/* Trust page and vendor questionnaire */
+.trust-head { display: flex; gap: .9rem; align-items: center; margin: .5rem 0 1rem; }
+.trust-head h1 { margin: 0; }
+.trust-head .brand-mark { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--accent); color: #fff; }
+.trust-intro { font-size: 1.05rem; }
+.trust-list { list-style: none; padding: 0; margin: 0; }
+.trust-list li { display: flex; justify-content: space-between; gap: 1rem; padding: .55rem 0; border-bottom: 1px solid var(--border); }
+.trust-list li:last-child { border-bottom: 0; }
+.vq-answers { display: flex; flex-wrap: wrap; gap: .3rem 1.2rem; margin: .3rem 0 .5rem; }
+.small-value { font-size: 1.15rem !important; }
