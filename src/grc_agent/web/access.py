@@ -41,6 +41,7 @@ TRIAL_ENGAGEMENTS = 1
 
 ENGAGEMENT_PATH = re.compile(r"^/engagements/(\d+)(?:/|\.|$)")
 # Pages for staff only, and pages for partners and staff.
+OWNER_PATHS = re.compile(r"^/dashboard(/|$)")  # the super admin console
 STAFF_PATHS = re.compile(
     r"^/(team(/|$)|settings/(ai|github-app)(/|$)|data-manager$|audit(\.csv)?$)"
 )
@@ -187,7 +188,9 @@ def days_left(expires_at: str | None) -> int | None:
 
 
 def path_allowed(path: str, role: str) -> bool:
-    """The page-level gates: staff pages and API pages."""
+    """The page-level gates: the owner console, staff pages and API pages."""
+    if OWNER_PATHS.match(path):
+        return role == "super_admin"
     if STAFF_PATHS.match(path):
         return is_staff(role)
     if API_PATHS.match(path):

@@ -1057,3 +1057,10 @@ pre.code { background: var(--hover); border: 1px solid var(--border); border-rad
 .portal-option span { display: grid; }
 .portal-option small { color: var(--muted); font-size: .8rem; }
 .portal-option:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+/* Admin console */
+.invite-link { border-color: var(--accent); }
+.copy-row { display: flex; gap: .5rem; flex-wrap: wrap; }
+.copy-row input { flex: 1 1 18rem; font-family: ui-monospace, monospace; font-size: .85rem; }
+.stack-actions { display: flex; flex-direction: column; gap: .35rem; align-items: flex-start; }
+.pick-clients { display: flex; flex-wrap: wrap; gap: .3rem .9rem; max-height: 10rem; overflow: auto; }

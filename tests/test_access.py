@@ -186,3 +186,82 @@ def test_old_roles_upgrade_and_keep_what_they_saw(app, authed):
         assert access.role_of(conn, "mem") == "partner"
         assert access.role_of(conn, "vie") == "client"
         assert access.can_see(conn, "mem", eid) and access.can_see(conn, "vie", eid)
+
+
+# ---- the super admin console at /dashboard
+
+
+def test_only_a_super_admin_opens_the_console(app, authed):
+    assert "Super admin dashboard" in authed.get("/dashboard").text
+    add(authed, "ada", "admin")
+    add(authed, "pat", "partner")
+    for name in ("ada", "pat"):
+        c = sign_in(app, name)
+        assert c.get("/dashboard").status_code == 403, name
+        assert post(c, "/dashboard/invite", {"email": "x@example.com"}).status_code == 403
+        assert 'href="/dashboard"' not in c.get("/engagements").text
+
+
+def test_console_invites_a_poc_with_access_and_shows_the_link(app, authed):
+    eid = make(authed, "Prospect Ltd")
+    r = post(
+        authed,
+        "/dashboard/invite",
+        {"email": "neha.k@gmail.com", "role": "trial", "days": "30", "engagements": str(eid)},
+    )
+    # No email service in tests: the one-time link is shown to share by hand.
+    link = re.search(r'id="invite-link" value="([^"]+)"', r.text).group(1)
+    assert "/invite/" in link and "neha.k" in r.text
+    with db(app) as conn:
+        row = conn.execute("SELECT * FROM users WHERE username = 'neha.k'").fetchone()
+        assert row["role"] == "trial" and row["email"] == "neha.k@gmail.com"
+        assert access.days_left(row["expires_at"]) == 30
+        assert access.can_see(conn, "neha.k", eid)
+    # The link sets a password and lets them in, straight to their client.
+    c = TestClient(app)
+    path = link.split("://", 1)[1].split("/", 1)[1]
+    token = csrf(c, "/" + path)
+    c.post("/" + path, data={"password": PW, "confirm": PW, "csrf": token})
+    c2 = sign_in(app, "neha.k")
+    assert c2.get("/", follow_redirects=False).headers["location"] == f"/engagements/{eid}"
+    # The same email can't be invited twice under another name.
+    r = post(authed, "/dashboard/invite", {"email": "neha.k@gmail.com", "role": "client"})
+    assert "neha.k2" not in r.text
+
+
+def test_console_tracks_extends_converts_and_ends_pocs(app, authed):
+    post(authed, "/dashboard/invite", {"email": "soon@example.com", "role": "trial", "days": "7"})
+    post(authed, "/dashboard/invite", {"email": "later@example.com", "role": "trial", "days": "60"})
+    page = authed.get("/dashboard").text
+    pocs = page.split('id="pocs"')[1].split('id="invite"')[0]
+    assert pocs.index("soon") < pocs.index("later")  # ending soonest first
+    assert "7 days left" in pocs
+    post(authed, "/dashboard/poc/soon/extend", {"days": "14"})
+    with db(app) as conn:
+        assert access.days_left(access_end(conn, "soon")) == 21
+    post(authed, "/dashboard/poc/later/end")
+    with db(app) as conn:
+        assert access.expired(access_end(conn, "later"))
+    post(authed, "/dashboard/poc/soon/convert")
+    with db(app) as conn:
+        assert access.role_of(conn, "soon") == "client" and access_end(conn, "soon") == ""
+
+
+def test_console_gives_and_removes_access(app, authed):
+    a, b = make(authed, "Alpha Co"), make(authed, "Beta Co")
+    add(authed, "pat", "partner")
+    post(authed, "/dashboard/people/pat/grant", {"engagements": str(a)})
+    pat = sign_in(app, "pat")
+    assert pat.get(f"/engagements/{a}").status_code == 200
+    assert pat.get(f"/engagements/{b}").status_code == 404
+    post(authed, f"/dashboard/people/pat/revoke/{a}")
+    assert pat.get(f"/engagements/{a}").status_code == 404
+    # Role changes from the console, and the owner can't remove the last super admin.
+    post(authed, "/dashboard/people/pat/role", {"role": "admin"})
+    assert pat.get(f"/engagements/{b}").status_code == 200
+    r = post(authed, "/dashboard/people/harshit/role", {"role": "client"})
+    assert "Keep at least one super admin" in r.text
+
+
+def access_end(conn, name):
+    return conn.execute("SELECT expires_at FROM users WHERE username = ?", (name,)).fetchone()[0]

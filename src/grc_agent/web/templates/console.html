@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block title %}Super admin dashboard{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="eyebrow">Super admin</p>
+    <h1>Super admin dashboard</h1>
+    <p class="muted">Invite people by email with a role, run POCs, and give access to clients, all in one place.</p>
+  </div>
+</div>
+
+{% if new_link %}
+<section class="card invite-link" role="status">
+  <h2>Share this invite with {{ new_name }}</h2>
+  <p class="muted small">Email isn't set up on this server yet, so send this link to <strong>{{ new_email }}</strong> yourself (email, WhatsApp, Slack). It works once and expires in 7 days. It won't be shown again; use “New invite link” if it's lost.</p>
+  <div class="copy-row">
+    <input id="invite-link" value="{{ new_link }}" readonly aria-label="Invite link">
+    <button type="button" class="primary" data-copy="invite-link">{{ icon("i-check") }} Copy link</button>
+  </div>
+</section>
+{% endif %}
+
+<section class="tiles dash-tiles" aria-label="Workspace at a glance">
+  <a class="tile tile-link" href="#people"><p class="tile-label">People</p><p class="tile-value">{{ users|length }}</p>
+    <p class="muted small">{{ counts.client }} client · {{ counts.partner }} partner · {{ counts.admin + counts.super_admin }} admin</p></a>
+  <a class="tile tile-link" href="#pocs"><p class="tile-label">Active POCs</p><p class="tile-value">{{ poc_active }}</p><p class="muted small">trial accounts still open</p></a>
+  <a class="tile tile-link {{ 'is-bad' if poc_ending }}" href="#pocs"><p class="tile-label">Ending in 7 days</p><p class="tile-value">{{ poc_ending }}</p><p class="muted small">follow up now</p></a>
+  <a class="tile tile-link" href="#pocs"><p class="tile-label">Ended POCs</p><p class="tile-value">{{ poc_ended }}</p><p class="muted small">extend or convert</p></a>
+  <a class="tile tile-link" href="/engagements"><p class="tile-label">Clients</p><p class="tile-value">{{ engagements|length }}</p><p class="muted small">engagements in the workspace</p></a>
+</section>
+
+<div class="grid-2 wide-left">
+  <section class="card" id="pocs">
+    <div class="card-head"><h2>POCs</h2><span class="muted small">ending soonest first</span></div>
+    {% if pocs %}
+    <table class="table">
+      <thead><tr><th>Account</th><th>Ends</th><th class="hide-sm">Clients</th><th></th></tr></thead>
+      <tbody>
+        {% for u in pocs %}
+        <tr>
+          <td><strong>{{ u.username }}</strong>{% if u.email %}<br><span class="small muted">{{ u.email }}</span>{% endif %}
+            {% if u.no_password %}<br><span class="badge badge-none">Invite not accepted</span>{% endif %}</td>
+          <td class="nowrap">{{ u.expires_at[:10] }}<br>
+            {% if u.status == "ended" %}<span class="badge badge-fail">Ended</span>
+            {% elif u.status == "ending" %}<span class="badge badge-warn">{{ u.days_left }} day{{ "" if u.days_left == 1 else "s" }} left</span>
+            {% else %}<span class="badge badge-pass">{{ u.days_left }} days left</span>{% endif %}</td>
+          <td class="hide-sm small">{% for e in u.owned + u.granted %}<a href="/engagements/{{ e.id }}">{{ e.client }}</a>{{ ", " if not loop.last }}{% else %}<span class="muted">None yet</span>{% endfor %}</td>
+          <td class="stack-actions">
+            <form method="post" action="/dashboard/poc/{{ u.username|urlencode }}/extend" class="inline-form">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <select name="days" aria-label="Extend {{ u.username }} by">{% for d in poc_days %}<option value="{{ d }}" {% if d == 14 %}selected{% endif %}>+{{ d }} days</option>{% endfor %}</select>
+              <button class="small">Extend</button>
+            </form>
+            <form method="post" action="/dashboard/poc/{{ u.username|urlencode }}/convert"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="small primary">Make client</button></form>
+            {% if u.status != "ended" %}<form method="post" action="/dashboard/poc/{{ u.username|urlencode }}/end"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link small">End now</button></form>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<p class="muted">No POCs yet. Invite someone with the <strong>POC / trial</strong> role.</p>{% endif %}
+  </section>
+
+  <section class="card" id="invite">
+    <h2>Invite someone</h2>
+    <form method="post" action="/dashboard/invite" class="stack">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label>Email (Gmail or work) <input name="email" type="email" required maxlength="254" autocomplete="off" placeholder="name@company.com"></label>
+      <label>Username <span class="muted small">(optional: made from the email)</span><input name="username" maxlength="40" pattern="[A-Za-z0-9._\-]{2,40}" autocomplete="off"></label>
+      <label>Role <select name="role" id="invite-role">{% for k, label in role_choices.items() %}<option value="{{ k }}">{{ label }}</option>{% endfor %}</select></label>
+      <label>POC length <span class="muted small">(POC / trial only)</span>
+        <select name="days">{% for d in poc_days %}<option value="{{ d }}" {% if d == 14 %}selected{% endif %}>{{ d }} days</option>{% endfor %}</select></label>
+      {% if engagements %}
+      <fieldset class="pick-clients">
+        <legend>Give access to <span class="muted small">(optional)</span></legend>
+        {% for e in engagements %}<label class="inline"><input type="checkbox" name="engagements" value="{{ e.id }}"> {{ e.client }}</label>{% endfor %}
+      </fieldset>
+      {% endif %}
+      <p class="small muted">{% if mail_on %}They get an email with a one-time link to set a password{% if sign_in_options() %} or use Google / Microsoft sign-in{% endif %}.{% else %}Email isn't set up yet, so you'll get a one-time link to share. Add a Resend key to send invites by email.{% endif %}</p>
+      <p><button type="submit" class="primary">{{ icon("i-plus") }} {{ "Create and send invite" if mail_on else "Create and get link" }}</button></p>
+    </form>
+  </section>
+</div>
+
+<section class="card" id="people">
+  <div class="card-head"><h2>People and access</h2><a class="small" href="/team">Team &amp; roles {{ icon("i-arrow") }}</a></div>
+  <p class="muted small">Admins and super admins open every client. Everyone else opens the clients they set up, plus the ones listed here.</p>
+  <table class="table">
+    <thead><tr><th>Account</th><th>Role</th><th>Can open</th><th class="hide-sm">Give access</th></tr></thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td><strong>{{ u.username }}</strong>{% if u.username == user %} <span class="tag">you</span>{% endif %}{% if u.email %}<br><span class="small muted">{{ u.email }}</span>{% endif %}
+          {% if u.no_password %}<form method="post" action="/dashboard/people/{{ u.username|urlencode }}/resend"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link small">{{ "Resend invite" if mail_on and u.email else "New invite link" }}</button></form>{% endif %}</td>
+        <td>
+          <form method="post" action="/dashboard/people/{{ u.username|urlencode }}/role" class="inline-role">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <select name="role" aria-label="Role for {{ u.username }}" onchange="this.form.submit()">{% for k, label in role_choices.items() %}<option value="{{ k }}" {% if k == u.role %}selected{% endif %}>{{ label.split(":")[0] }}</option>{% endfor %}</select>
+            <noscript><button class="small">Save</button></noscript>
+          </form>
+        </td>
+        <td class="small">
+          {% if u.role in ("super_admin", "admin") %}<span class="muted">Every client</span>
+          {% else %}
+            {% for e in u.owned %}<span class="chip"><a href="/engagements/{{ e.id }}">{{ e.client }}</a> <span class="muted">(theirs)</span></span>{% endfor %}
+            {% for e in u.granted %}<span class="chip"><a href="/engagements/{{ e.id }}">{{ e.client }}</a>
+              <form method="post" action="/dashboard/people/{{ u.username|urlencode }}/revoke/{{ e.id }}" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link small" aria-label="Remove {{ u.username }}'s access to {{ e.client }}">✕</button></form></span>{% endfor %}
+            {% if not u.owned and not u.granted %}<span class="muted">Nothing yet</span>{% endif %}
+          {% endif %}
+        </td>
+        <td class="hide-sm">
+          {% if u.role not in ("super_admin", "admin") and engagements %}
+          {% set have = (u.granted|map(attribute="id")|list) + (u.owned|map(attribute="id")|list) %}
+          <form method="post" action="/dashboard/people/{{ u.username|urlencode }}/grant" class="inline-form">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <select name="engagements" aria-label="Client to give {{ u.username }}">{% for e in engagements if e.id not in have %}<option value="{{ e.id }}">{{ e.client }}</option>{% endfor %}</select>
+            <button class="small">Give</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+document.querySelectorAll("[data-copy]").forEach(b => b.addEventListener("click", () => {
+  const field = document.getElementById(b.dataset.copy);
+  field.select();
+  navigator.clipboard.writeText(field.value).then(() => { b.textContent = "Copied"; });
+}));
+</script>
+{% endblock %}

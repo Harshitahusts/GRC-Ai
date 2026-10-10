@@ -120,6 +120,12 @@ which you are, but the account decides what each person can open
 | Client | Their own company only | Run their own assessment; sign off engagements they set up |
 | Trial | Like a client, one engagement | Ends after 14 days (an admin can extend it) |
 
+The **Super admin dashboard** (`/dashboard`, super admins only) is the owner's desk:
+invite anyone by email with a role (the invite is emailed, or shown as a one-time link to
+share when email isn't set up), run POCs (trial accounts of 7 to 90 days, listed ending
+soonest first, with extend, make client and end now), and give or remove access to any
+client per person.
+
 Each engagement's **People with access** box lists who besides staff can open it; a
 partner invites the client's people there. Another partner's client answers "not found"
 everywhere: pages, lists, notifications, the GRC Analyst and MCP. Older workspaces upgrade
