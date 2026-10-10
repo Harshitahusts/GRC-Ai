@@ -76,7 +76,9 @@ def sso(client, start="/auth/google", code="the-code"):
 
 
 def test_invite_by_email_then_set_a_password(app, authed, outbox):
-    r = post(authed, "/team", {"username": "priya", "email": "priya@example.com", "role": "member"})
+    r = post(
+        authed, "/team", {"username": "priya", "email": "priya@example.com", "role": "partner"}
+    )
     assert "emailed an invite to priya@example.com" in text(r)
     (mail,) = outbox
     assert mail["to"] == "priya@example.com" and mail["link"].startswith(
@@ -106,7 +108,7 @@ def test_invite_by_email_then_set_a_password(app, authed, outbox):
 
 
 def test_invited_account_cannot_sign_in_with_any_password(app, authed, outbox):
-    post(authed, "/team", {"username": "priya", "email": "priya@example.com", "role": "member"})
+    post(authed, "/team", {"username": "priya", "email": "priya@example.com", "role": "partner"})
     guest = TestClient(app)
     for password in ("", "!none", "none"):
         r = guest.post(
@@ -116,17 +118,19 @@ def test_invited_account_cannot_sign_in_with_any_password(app, authed, outbox):
 
 
 def test_invite_needs_email_set_up(authed):
-    r = post(authed, "/team", {"username": "priya", "email": "priya@example.com", "role": "member"})
+    r = post(
+        authed, "/team", {"username": "priya", "email": "priya@example.com", "role": "partner"}
+    )
     assert "Give a starting password" in text(r) and "isn't set up" in text(r)
 
 
 def test_password_account_still_works_without_email(authed):
-    r = post(authed, "/team", {"username": "dev", "password": "long-enough-pw", "role": "viewer"})
+    r = post(authed, "/team", {"username": "dev", "password": "long-enough-pw", "role": "client"})
     assert "Share the starting password privately" in text(r)
 
 
 def test_admin_resends_invite_or_reset(app, authed, outbox):
-    post(authed, "/team", {"username": "priya", "email": "priya@example.com", "role": "member"})
+    post(authed, "/team", {"username": "priya", "email": "priya@example.com", "role": "partner"})
     post(authed, "/team/priya/send-link")
     assert len(outbox) == 2 and "/invite/" in outbox[1]["link"]
     # The first invite link no longer works once a new one is sent.
@@ -210,7 +214,7 @@ def test_change_password_needs_the_current_one(app, authed):
 
 
 def test_viewer_can_change_own_password(app, authed):
-    post(authed, "/team", {"username": "vic", "password": "viewer-password", "role": "viewer"})
+    post(authed, "/team", {"username": "vic", "password": "viewer-password", "role": "client"})
     viewer = TestClient(app)
     viewer.post(
         "/login",
@@ -277,7 +281,7 @@ def test_cancelled_sign_in(client, google):
 
 def test_one_google_account_one_grc_account(app, authed, google, outbox):
     sso(authed, "/auth/google?intent=link")
-    post(authed, "/team", {"username": "priya", "email": "priya@example.com", "role": "member"})
+    post(authed, "/team", {"username": "priya", "email": "priya@example.com", "role": "partner"})
     invite = path_of(outbox[0]["link"])
     guest = TestClient(app)
     r = sso(guest, f"{invite}/sso/google")
@@ -287,7 +291,7 @@ def test_one_google_account_one_grc_account(app, authed, google, outbox):
 def test_accept_invite_with_google(app, authed, google, outbox):
     who, _ = google
     who.update(subject="g-priya", email="priya@gmail.com")
-    post(authed, "/team", {"username": "priya", "email": "priya@example.com", "role": "member"})
+    post(authed, "/team", {"username": "priya", "email": "priya@example.com", "role": "partner"})
     invite = path_of(outbox[0]["link"])
     guest = TestClient(app)
     assert "Continue with Google" in guest.get(invite).text
@@ -301,7 +305,7 @@ def test_accept_invite_with_google(app, authed, google, outbox):
 def test_cannot_disconnect_the_only_way_in(app, authed, google, outbox):
     who, _ = google
     who.update(subject="g-priya")
-    post(authed, "/team", {"username": "priya", "email": "priya@example.com", "role": "member"})
+    post(authed, "/team", {"username": "priya", "email": "priya@example.com", "role": "partner"})
     guest = TestClient(app)
     sso(guest, f"{path_of(outbox[0]['link'])}/sso/google")
     with conn(app) as c:
@@ -318,7 +322,7 @@ def test_someone_elses_sign_in_cannot_be_removed(app, authed, google):
     sso(authed, "/auth/google?intent=link")
     with conn(app) as c:
         iid = c.execute("SELECT id FROM login_identities").fetchone()[0]
-    post(authed, "/team", {"username": "dev", "password": "long-enough-pw", "role": "member"})
+    post(authed, "/team", {"username": "dev", "password": "long-enough-pw", "role": "partner"})
     other = TestClient(app)
     other.post(
         "/login", data={"username": "dev", "password": "long-enough-pw", "csrf": csrf(other)}

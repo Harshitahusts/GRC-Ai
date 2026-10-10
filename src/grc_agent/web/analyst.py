@@ -19,7 +19,7 @@ from fastapi import FastAPI
 
 from grc_agent import dataflow, risk
 from grc_agent.tools import BASE_TOOLS, Tool, ToolError
-from grc_agent.web import connector_views, db
+from grc_agent.web import access, connector_views, db
 
 
 def risks_for(conn: sqlite3.Connection, app: FastAPI, eid: int) -> list[risk.Risk]:
@@ -55,7 +55,7 @@ def flow_for(conn: sqlite3.Connection, app: FastAPI, eng: sqlite3.Row) -> dict[s
     )
 
 
-def _engagement(conn: sqlite3.Connection, eid: int) -> sqlite3.Row:
+def _engagement_row(conn: sqlite3.Connection, eid: int) -> sqlite3.Row:
     row = conn.execute("SELECT * FROM engagements WHERE id = ?", (eid,)).fetchone()
     if row is None:
         raise ToolError(f"No engagement with id {eid}. Call list_engagements for valid ids.")
@@ -71,11 +71,17 @@ def analyst_tools(app: FastAPI, user: str = "", can_act: bool = False) -> list[T
     def connect() -> sqlite3.Connection:
         return db.connect(app.state.db_path)
 
+    def _engagement(conn: sqlite3.Connection, eid: int) -> sqlite3.Row:
+        # Only the clients this person can open exist for the analyst (and over MCP).
+        if not access.can_see(conn, user, eid):
+            raise ToolError(f"No engagement with id {eid}. Call list_engagements for valid ids.")
+        return _engagement_row(conn, eid)
+
     def list_engagements() -> dict[str, Any]:
         with connect() as conn:
             rows = conn.execute("SELECT * FROM engagements ORDER BY id")
             out = []
-            for e in rows.fetchall():
+            for e in access.only(rows.fetchall(), access.visible_ids(conn, user), "id"):
                 s = _summary(conn, e)
                 risks = [r for r in risks_for(conn, app, e["id"]) if r.status != "closed"]
                 out.append(
@@ -508,13 +514,16 @@ def analyst_tools(app: FastAPI, user: str = "", can_act: bool = False) -> list[T
     return tools
 
 
-def queue(conn: sqlite3.Connection, app: FastAPI) -> list[dict[str, Any]]:
+def queue(
+    conn: sqlite3.Connection, app: FastAPI, ids: set[int] | None = None
+) -> list[dict[str, Any]]:
     """The analyst's to-do list across clients: the top open risks, overdue first.
 
     Delivered engagements are included: delivery ends the assessment, not the risks.
+    ``ids`` limits it to the clients a person can open (None: all).
     """
     out = []
-    for e in conn.execute("SELECT * FROM engagements"):
+    for e in access.only(conn.execute("SELECT * FROM engagements").fetchall(), ids, "id"):
         for r in risks_for(conn, app, e["id"]):
             if r.status == "closed":
                 continue

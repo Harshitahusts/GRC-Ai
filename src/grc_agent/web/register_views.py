@@ -14,7 +14,7 @@ from datetime import datetime
 
 from fastapi import FastAPI, HTTPException, Request
 
-from grc_agent.web import db
+from grc_agent.web import access, db
 from grc_agent.web.registers import (
     REGISTERS,
     RegisterSpec,
@@ -103,13 +103,15 @@ def counts(conn: sqlite3.Connection, eid: int | None = None) -> dict[str, dict[s
     return out
 
 
-def queue(conn: sqlite3.Connection, limit: int = 50) -> list[dict]:
-    """Open work across every client, overdue and soonest first."""
+def queue(conn: sqlite3.Connection, limit: int = 50, ids: set[int] | None = None) -> list[dict]:
+    """Open work across every client (or only ``ids``), overdue and soonest first."""
     rows = conn.execute(
         "SELECT r.*, e.client FROM records r JOIN engagements e ON e.id = r.engagement_id"
     ).fetchall()
     items = []
     for r in rows:
+        if ids is not None and r["engagement_id"] not in ids:
+            continue
         spec = REGISTERS.get(r["register"])
         if spec and r["status"] in spec.open_statuses:
             item = view(r, spec)
@@ -222,8 +224,8 @@ def register(app: FastAPI) -> None:
             raise HTTPException(status_code=404, detail="Record not found")
         return row
 
-    def people(conn) -> list[str]:
-        return [r[0] for r in conn.execute("SELECT username FROM users ORDER BY username")]
+    def people(conn, eid: int) -> list[str]:
+        return access.assignable(conn, eid)
 
     def common(request, conn, eng, spec):
         return dict(
@@ -232,7 +234,7 @@ def register(app: FastAPI) -> None:
             tab=spec.key,
             spec=spec,
             obligations=request.app.state.register.obligations,
-            people=people(conn),
+            people=people(conn, eng["id"]),
         )
 
     def obligation_ok(request, value: str) -> str:

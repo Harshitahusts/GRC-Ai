@@ -314,7 +314,7 @@ def test_provider_page_validation(authed):
 
 def test_only_admins_change_the_provider(authed, app):
     with webdb.connect(app.state.db_path) as conn:
-        conn.execute("UPDATE users SET role = 'member'")
-    assert "Only an admin" in authed.get("/settings/ai").text
+        conn.execute("UPDATE users SET role = 'partner'")
+    assert "include this page" in authed.get("/settings/ai").text
     r = post(authed, "/settings/ai", {"provider": "ollama"})
     assert r.status_code == 403

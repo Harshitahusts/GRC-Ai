@@ -31,7 +31,7 @@ from starlette.concurrency import run_in_threadpool
 
 from grc_agent import __version__
 from grc_agent.tools import run_tool
-from grc_agent.web import analyst, db
+from grc_agent.web import access, analyst, db
 from grc_agent.web.https import is_local_host
 
 KEY_PREFIX = "grcf_"
@@ -107,7 +107,7 @@ def register(app: FastAPI) -> None:
 
     @app.get("/settings/api-keys")
     def api_keys_page(request: Request, user: User, conn: Conn):
-        is_admin = user_role(request) == "admin"
+        is_admin = access.is_staff(user_role(request))
         rows = conn.execute(
             # Safe: the SQL text holds only names from this code; values are ? parameters.
             "SELECT * FROM api_keys "  # nosec B608  # noqa: S608
@@ -145,7 +145,7 @@ def register(app: FastAPI) -> None:
         row = conn.execute("SELECT * FROM api_keys WHERE id = ?", (kid,)).fetchone()
         if row is None:
             raise HTTPException(status_code=404, detail="No such key")
-        if row["username"].lower() != user.lower() and user_role(request) != "admin":
+        if row["username"].lower() != user.lower() and not access.is_staff(user_role(request)):
             raise HTTPException(status_code=403, detail="That key belongs to someone else.")
         if row["revoked_at"] is None:
             conn.execute("UPDATE api_keys SET revoked_at = ? WHERE id = ?", (db.now(), kid))
@@ -174,6 +174,18 @@ def register(app: FastAPI) -> None:
         key = auth[7:].strip() if auth[:7].lower() == "bearer " else ""
         with db.connect(request.app.state.db_path) as conn:
             user = user_for_key(conn, key) if key else None
+            if user is not None:
+                # A key works only while its owner's role still includes API access and
+                # (for any account with an end date) the account hasn't ended.
+                owner = conn.execute(
+                    "SELECT role, expires_at FROM users WHERE LOWER(username) = LOWER(?)", (user,)
+                ).fetchone()
+                if (
+                    owner is None
+                    or owner["role"] not in access.API_ROLES
+                    or access.expired(owner["expires_at"])
+                ):
+                    user = None
         if user is None:
             return JSONResponse(
                 {"error": "A valid GRC Flow API key is required (Authorization: Bearer ...)."},

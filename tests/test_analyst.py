@@ -26,7 +26,7 @@ def workspace(authed):
     }
     post(authed, f"/engagements/{eid}/intake", {**answers, "action": "submit"})
     post(authed, f"/engagements/{eid}/assess", {"mode": "rules"})
-    tools = {t.name: t for t in analyst_tools(authed.app)}
+    tools = {t.name: t for t in analyst_tools(authed.app, "harshit")}
     return authed, eid, tools
 
 

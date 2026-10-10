@@ -1049,3 +1049,23 @@ pre.code { background: var(--hover); border: 1px solid var(--border); border-rad
 .connect-row .sso-button { width: auto; }
 .inline-email { display: flex; gap: .35rem; align-items: center; margin-top: .3rem; }
 .inline-email input { max-width: 15rem; padding: .25rem .45rem; font-size: .85rem; }
+
+/* Sign in: company or partner (sets where you start; the account decides access). */
+.portal-choice { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin: .6rem 0 .3rem; }
+.portal-option { display: flex; gap: .5rem; align-items: flex-start; padding: .6rem .7rem; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; }
+.portal-option input { margin-top: .2rem; width: auto; }
+.portal-option span { display: grid; }
+.portal-option small { color: var(--muted); font-size: .8rem; }
+.portal-option:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+/* Admin console */
+.invite-link { border-color: var(--accent); }
+.copy-row { display: flex; gap: .5rem; flex-wrap: wrap; }
+.copy-row input { flex: 1 1 18rem; font-family: ui-monospace, monospace; font-size: .85rem; }
+.stack-actions { display: flex; flex-direction: column; gap: .35rem; align-items: flex-start; }
+.pick-clients { display: flex; flex-wrap: wrap; gap: .3rem .9rem; max-height: 10rem; overflow: auto; }
+.owner-page { background: var(--bg, var(--surface)); }
+.owner-bar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; padding: .8rem 1.5rem; border-bottom: 1px solid var(--border); background: var(--surface); }
+.owner-bar .brand-text { display: flex; flex-direction: row; align-items: center; gap: .5rem; font-weight: 700; }
+.owner-bar .brand-text small { display: inline; color: var(--muted); font-weight: 600; font-size: .8rem; }
+.owner-main { max-width: 1280px; margin: 0 auto; }

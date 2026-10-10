@@ -21,7 +21,7 @@ from starlette.concurrency import run_in_threadpool
 from grc_agent.config import Settings, make_client
 from grc_agent.connectors.secrets import mask
 from grc_agent.llm import PROVIDERS, OpenAICompatClient, key_status
-from grc_agent.web import db
+from grc_agent.web import access, db
 from grc_agent.web.https import insecure_url_problem
 
 TEST_PROMPT = "Reply with the single word OK."
@@ -79,7 +79,7 @@ def register(app: FastAPI) -> None:
     from grc_agent.web.app import Conn, User, flash, form_with_csrf, redirect, render, user_role
 
     def require_admin(request: Request) -> None:
-        if user_role(request) != "admin":
+        if not access.is_staff(user_role(request)):
             raise HTTPException(status_code=403, detail="Only an admin can change the AI provider.")
 
     @app.get("/settings/ai")
@@ -97,7 +97,7 @@ def register(app: FastAPI) -> None:
             env=env,
             settings=settings,
             source="page" if active else ("demo" if settings.demo else ".env"),
-            is_admin=user_role(request) == "admin",
+            is_admin=access.is_staff(user_role(request)),
         )
 
     @app.post("/settings/ai")

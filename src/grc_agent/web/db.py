@@ -307,6 +307,16 @@ CREATE TABLE IF NOT EXISTS ai_providers (
     updated_by TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+-- Who may open a client besides staff and the person who created it (web/access.py):
+-- a partner given a client, or a client's own people.
+CREATE TABLE IF NOT EXISTS engagement_access (
+    id INTEGER PRIMARY KEY,
+    engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+    username TEXT NOT NULL,
+    granted_by TEXT NOT NULL,
+    granted_at TEXT NOT NULL,
+    UNIQUE (engagement_id, username)
+);
 -- Keys that let AI apps read the workspace over MCP (web/mcp_views.py). Only a hash is kept.
 CREATE TABLE IF NOT EXISTS api_keys (
     id INTEGER PRIMARY KEY,
@@ -411,9 +421,11 @@ def connect(path: str | Path) -> sqlite3.Connection:
 # Columns added after the first release. init_db adds any that are missing, so an
 # existing local database upgrades in place.
 MIGRATIONS = {
-    # admin: everything incl. team; member: all client work; viewer: read-only.
+    # super_admin, admin, partner, client or trial (see web/access.py).
     "users": {
         "role": "TEXT NOT NULL DEFAULT 'admin'",
+        # When a trial account stops working (UTC ISO time); empty for everyone else.
+        "expires_at": "TEXT NOT NULL DEFAULT ''",
         # Where invites and password-reset links go (optional).
         "email": "TEXT NOT NULL DEFAULT ''",
     },
@@ -466,6 +478,24 @@ def _data_fixes(conn) -> None:
     """One-off data changes that keep old workspaces working with current code."""
     # The "manual baseline" engagement mode was removed; those become ordinary engagements.
     conn.execute("UPDATE engagements SET mode = 'agent' WHERE mode <> 'agent'")
+    # Roles before partners and clients: a member ran every client, a viewer read every
+    # client. Each keeps seeing the clients that exist now, then takes the new role.
+    for old, new in (("member", "partner"), ("viewer", "client")):
+        conn.execute(
+            "INSERT INTO engagement_access (engagement_id, username, granted_by, granted_at) "
+            "SELECT e.id, u.username, 'upgrade', ? FROM engagements e, users u "
+            "WHERE u.role = ? AND NOT EXISTS (SELECT 1 FROM engagement_access a "
+            "WHERE a.engagement_id = e.id AND LOWER(a.username) = LOWER(u.username))",
+            (now(), old),
+        )
+        conn.execute("UPDATE users SET role = ? WHERE role = ?", (new, old))
+    # Someone must own the workspace: the first admin becomes its super admin.
+    if not conn.execute("SELECT 1 FROM users WHERE role = 'super_admin'").fetchone():
+        first = conn.execute(
+            "SELECT id FROM users WHERE role = 'admin' ORDER BY id LIMIT 1"
+        ).fetchone()
+        if first:
+            conn.execute("UPDATE users SET role = 'super_admin' WHERE id = ?", (first["id"],))
 
 
 def _init_postgres(url: str) -> None:
@@ -655,6 +685,7 @@ COPY_ORDER = (
     "controls",
     "evidence_files",
     "ai_providers",
+    "engagement_access",
     "api_keys",
     "login_identities",
     "auth_tokens",

@@ -23,13 +23,15 @@
       <button class="small">Reopen to rework the assessment</button>
     </form>
     {% endif %}
-    {% else %}
+    {% elif is_admin %}
     <form method="post" action="/engagements/{{ eng.id }}/deliver">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <button class="primary" {% if not can_deliver %}disabled{% endif %}>{{ "Sign off the assessment" if own else "Mark as delivered" }}</button>
     </form>
+    {% else %}
+    <p class="muted small">{{ eng.created_by }} {{ "signs off" if own else "delivers" }} once every check passes.</p>
     {% endif %}
-    {% if not read_only %}
+    {% if is_admin %}
     <form method="post" action="/engagements/{{ eng.id }}/audience" class="inline-form small">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <label class="inline">This workspace is for
@@ -56,6 +58,49 @@
     <p class="small"><a href="/engagements/{{ eng.id }}/dataflow">Data-flow map</a> · <a href="/assistant">Ask the GRC Analyst</a> · <a href="/engagements/{{ eng.id }}/export.json">Download findings (JSON)</a></p>
   </section>
 </div>
+
+<section class="card" id="access">
+  <div class="card-head"><h2>People with access</h2></div>
+  <p class="muted small">Besides admins and <strong>{{ eng.created_by }}</strong>, who set this up, only these people can open {{ eng.client }}. Nobody here sees any other client.</p>
+  {% if people_with_access %}
+  <table class="table">
+    <thead><tr><th>Account</th><th>Role</th><th class="hide-sm">Added</th>{% if is_admin %}<th></th>{% endif %}</tr></thead>
+    <tbody>
+      {% for p in people_with_access %}
+      <tr>
+        <td><strong>{{ p.username }}</strong>{% if p.email %}<br><span class="small muted">{{ p.email }}</span>{% endif %}</td>
+        <td>{{ role_names[p.role] or "Removed" }}</td>
+        <td class="hide-sm small muted">{{ p.granted_at[:10] }} by {{ p.granted_by }}</td>
+        {% if is_admin %}<td class="nowrap">{% if p.username != user %}<form method="post" action="/engagements/{{ eng.id }}/access/{{ p.username|urlencode }}/remove"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="link small">Remove</button></form>{% endif %}</td>{% endif %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted small">Nobody else yet.</p>{% endif %}
+  {% if is_admin %}
+  <details class="small">
+    <summary>Invite someone from {{ eng.client }}</summary>
+    <form method="post" action="/engagements/{{ eng.id }}/access" class="stack">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <p class="muted">They get a <strong>Client</strong> account that opens this engagement only: they can answer the intake, upload evidence and work the registers.</p>
+      <label>Username <input name="username" required maxlength="40" pattern="[A-Za-z0-9._\-]{2,40}" autocomplete="off"></label>
+      <label>Email {% if not mail_on %}<span class="muted small">(optional)</span>{% endif %}<input name="email" type="email" maxlength="254" autocomplete="off" placeholder="name@{{ eng.client|lower|replace(' ', '') }}.com"></label>
+      <label>Starting password {% if mail_on %}<span class="muted small">(optional: leave empty to email an invite)</span>{% endif %}<input name="password" type="password" {% if not mail_on %}required{% endif %} minlength="10" autocomplete="new-password"></label>
+      <p><button type="submit" class="primary">{{ icon("i-plus") }} Invite</button></p>
+    </form>
+  </details>
+  {% if all_users %}
+  <details class="small">
+    <summary>Give an existing account access</summary>
+    <form method="post" action="/engagements/{{ eng.id }}/access/grant" class="inline-form">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <select name="username" aria-label="Account">{% for u in all_users %}<option>{{ u }}</option>{% endfor %}</select>
+      <button class="small">Give access</button>
+    </form>
+  </details>
+  {% endif %}
+  {% endif %}
+</section>
 
 <section class="card">
   <h2>Activity</h2>

@@ -52,16 +52,19 @@ from grc_agent.prompts import ANALYST_PROMPT
 from grc_agent.register import CHOICES, corpus_index_path, load_register
 from grc_agent.risk import summary as risk_summary
 from grc_agent.web import (
+    access,
     ai_views,
     analyst,
     auth_views,
     connector_views,
+    console_views,
     dataflow_views,
     datamanager,
     db,
     demo_tenant,
     discovery_views,
     https,
+    mailer,
     mcp_views,
     notification_views,
     notify,
@@ -159,10 +162,40 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
         if user:
             with db.connect(request.app.state.db_path) as c:
                 row = c.execute(
-                    "SELECT password_hash FROM users WHERE LOWER(username) = LOWER(?)", (user,)
+                    "SELECT password_hash, role, expires_at FROM users "
+                    "WHERE LOWER(username) = LOWER(?)",
+                    (user,),
                 ).fetchone()
-            if row is None or request.session.get("pv") != session_stamp(row["password_hash"]):
-                request.session.clear()
+                if row is None or request.session.get("pv") != session_stamp(row["password_hash"]):
+                    request.session.clear()
+                elif access.expired(row["expires_at"]):
+                    request.session.clear()
+                    request.session["flash"] = [
+                        ["error", "Your trial has ended. Email talk@grc-flow.com to continue."]
+                    ]
+                else:
+                    # Who may open what (web/access.py): staff and API pages, and clients
+                    # the person was not given. An unseen client answers as not found, so
+                    # its existence isn't revealed.
+                    role = row["role"]
+                    path = request.url.path
+                    if access.OWNER_PATHS.match(path) and role != "super_admin":
+                        return render(request, "error.html", status_code=404, message="Not found")
+                    if not access.path_allowed(path, role):
+                        return render(
+                            request,
+                            "error.html",
+                            status_code=403,
+                            message="Your role doesn't include this page.",
+                        )
+                    m = access.ENGAGEMENT_PATH.match(path)
+                    if m and not access.can_see(c, user, int(m.group(1)), role):
+                        return render(
+                            request, "error.html", status_code=404, message="Engagement not found"
+                        )
+        if not request.session.get("user") and access.OWNER_PATHS.match(request.url.path):
+            # The owner's page doesn't exist for anyone who isn't signed in as a super admin.
+            return render(request, "error.html", status_code=404, message="Not found")
         return await call_next(request)
 
     app.add_middleware(
@@ -183,6 +216,7 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
     discovery_views.register(app)
     register_views.register(app)
     ops_views.register(app)
+    console_views.register(app)
     ai_views.register(app)
     mcp_views.register(app)
     auth_views.register(app)
@@ -403,14 +437,36 @@ def redirect(url: str) -> RedirectResponse:
     return RedirectResponse(url, status_code=303)
 
 
+ROLE_NAMES = {
+    "super_admin": "Super admin",
+    "admin": "Admin",
+    "partner": "Partner",
+    "client": "Client",
+    "trial": "Trial",
+}
+
+
 def render(request: Request, name: str, status_code: int = 200, **context: Any) -> HTMLResponse:
     if "csrf" not in request.session:
         request.session["csrf"] = new_csrf_token()
     user = request.session.get("user")
     unread = 0
+    role, trial_days = "", None
     if user:
         with db.connect(request.app.state.db_path) as c:
             unread = notify.unread_count(c, user)
+            row = c.execute(
+                "SELECT role, expires_at FROM users WHERE LOWER(username) = LOWER(?)", (user,)
+            ).fetchone()
+        if row:
+            role = row["role"]
+            trial_days = access.days_left(row["expires_at"]) if role == "trial" else None
+    context.setdefault("role", role)
+    context.setdefault("role_label", ROLE_NAMES.get(role, role))
+    context.setdefault("role_names", ROLE_NAMES)
+    context.setdefault("trial_days", trial_days)
+    context.setdefault("is_staff", access.is_staff(role))
+    context.setdefault("api_role", role in access.API_ROLES)
     context.setdefault("read_only", user_role(request) == "viewer")
     context.update(
         request=request,
@@ -705,8 +761,24 @@ def _routes(app: FastAPI) -> None:
                 "UPDATE users SET password_hash = ? WHERE username = ?",
                 (password_hash, row["username"]),
             )
+        if access.expired(row["expires_at"]):
+            return render(
+                request,
+                "login.html",
+                status_code=403,
+                error="This trial has ended. Email talk@grc-flow.com to continue.",
+                username=username,
+            )
         start_session(request, row["username"], password_hash)
         db.audit(conn, row["username"], "login")
+        portal = form.get("portal")
+        partner_side = row["role"] in ("partner", "admin", "super_admin")
+        if portal in ("client", "partner") and (portal == "partner") != partner_side:
+            flash(
+                request,
+                f"This is a {ROLE_NAMES.get(row['role'], row['role'])} account, so you're in "
+                + ("the partner view." if partner_side else "your company's view."),
+            )
         return redirect("/")
 
     @app.post("/logout")
@@ -724,19 +796,33 @@ def _routes(app: FastAPI) -> None:
         user: User,
         conn: Conn,
     ):
-        engagements = conn.execute("SELECT * FROM engagements ORDER BY id DESC").fetchall()
+        role = user_role(request)
+        ids = access.visible_ids(conn, user, role)
+        engagements = access.only(
+            conn.execute("SELECT * FROM engagements ORDER BY id DESC").fetchall(), ids, "id"
+        )
+        if role in ("client", "trial") and len(engagements) == 1:
+            return redirect(f"/engagements/{engagements[0]['id']}")  # straight to their company
         summaries = [_summary(conn, e) for e in engagements]
         agent = summaries
         scores = [s["score"] for s in agent if s["score"] is not None]
-        activity = conn.execute(
-            "SELECT a.*, e.client FROM audit_log a LEFT JOIN engagements e "
-            "ON e.id = a.engagement_id WHERE a.action NOT IN ('login', 'logout') "
-            "ORDER BY a.id DESC LIMIT 8"
-        ).fetchall()
-        connections = conn.execute(
-            "SELECT c.connector, c.status, c.message, c.engagement_id, e.client FROM connections c "
-            "JOIN engagements e ON e.id = c.engagement_id"
-        ).fetchall()
+        activity = access.only(
+            conn.execute(
+                "SELECT a.*, e.client FROM audit_log a LEFT JOIN engagements e "
+                "ON e.id = a.engagement_id WHERE a.action NOT IN ('login', 'logout') "
+                "ORDER BY a.id DESC LIMIT 200"
+            ).fetchall(),
+            ids,
+        )[:8]
+        connections = access.only(
+            conn.execute(
+                "SELECT c.connector, c.status, c.message, c.engagement_id, e.client "
+                "FROM connections c JOIN engagements e ON e.id = c.engagement_id"
+            ).fetchall(),
+            ids,
+        )
+        personal_by_client = discovery_views.by_engagement(conn, ids)
+        work = register_views.queue(conn, limit=200, ids=ids)
         return render(
             request,
             "dashboard.html",
@@ -747,14 +833,9 @@ def _routes(app: FastAPI) -> None:
             delivered=sum(1 for s in agent if s["delivered"]),
             avg_readiness=round(sum(scores) / len(scores)) if scores else None,
             pipeline=_pipeline(agent),
-            attention=_attention(
-                agent,
-                connections,
-                discovery_views.by_engagement(conn),
-                register_views.queue(conn, limit=200),
-            ),
-            work=register_views.queue(conn, limit=200),
-            risk_queue=analyst.queue(conn, request.app),
+            attention=_attention(agent, connections, personal_by_client, work),
+            work=work,
+            risk_queue=analyst.queue(conn, request.app, ids),
             leaves_india=sum(
                 1
                 for e in engagements
@@ -767,9 +848,11 @@ def _routes(app: FastAPI) -> None:
                 request.app.state.db_path,
                 check_integrity=False,
                 data_dir=request.app.state.data_dir,
-            ),
-            personal=discovery_views.summary(conn),
-            personal_by_client=discovery_views.by_engagement(conn),
+            )
+            if ids is None
+            else None,
+            personal=discovery_views.summary(conn, ids=ids),
+            personal_by_client=personal_by_client,
         )
 
     # ---- data manager (read-only storage monitor)
@@ -792,7 +875,11 @@ def _routes(app: FastAPI) -> None:
         user: User,
         conn: Conn,
     ):
-        rows = conn.execute("SELECT * FROM engagements ORDER BY id DESC").fetchall()
+        rows = access.only(
+            conn.execute("SELECT * FROM engagements ORDER BY id DESC").fetchall(),
+            access.visible_ids(conn, user),
+            "id",
+        )
         return render(
             request,
             "engagements.html",
@@ -811,8 +898,15 @@ def _routes(app: FastAPI) -> None:
         client = str(form.get("client", "")).strip()
         sector = form.get("sector")
         audience = form.get("audience") or "client"
+        role = user_role(request)
+        if role in ("client", "trial"):
+            audience = "self"  # a company's own people assess their own company
         if not client or sector not in SECTORS or audience not in AUDIENCES:
             flash(request, "Enter a name and choose a sector.", "error")
+            return redirect("/engagements")
+        refused = access.may_create(conn, user, role)
+        if refused:
+            flash(request, refused, "error")
             return redirect("/engagements")
         cur = conn.execute(
             "INSERT INTO engagements (client, sector, mode, audience, created_by, created_at) "
@@ -844,7 +938,15 @@ def _routes(app: FastAPI) -> None:
             request,
             "engagement.html",
             eng=eng,
-            is_admin=user_role(request) == "admin",
+            is_admin=access.leads(conn, user, eid),
+            people_with_access=access.people(conn, eid),
+            all_users=[
+                r["username"]
+                for r in conn.execute("SELECT username FROM users ORDER BY username").fetchall()
+            ]
+            if access.is_staff(user_role(request))
+            else [],
+            mail_on=mailer.configured(),
             audiences=AUDIENCES,
             s=_summary(conn, eng),
             snapshot=snapshot,
@@ -867,6 +969,8 @@ def _routes(app: FastAPI) -> None:
     ):
         await form_with_csrf(request)
         eng = get_engagement(conn, eid)
+        if not access.leads(conn, user, eid):
+            raise HTTPException(status_code=403, detail="Only the engagement lead can deliver.")
         if eng["delivered_at"]:
             return redirect(f"/engagements/{eid}")
         failed = [label for label, ok in delivery_checks(conn, eng) if not ok]
@@ -896,6 +1000,8 @@ def _routes(app: FastAPI) -> None:
         """Switch who the workspace is for. Takes effect on the next assessment and documents."""
         form = await form_with_csrf(request)
         get_engagement(conn, eid)
+        if not access.leads(conn, user, eid):
+            raise HTTPException(status_code=403, detail="Only the engagement lead can change this.")
         audience = form.get("audience")
         if audience not in AUDIENCES:
             raise HTTPException(status_code=400, detail="Unknown audience")
@@ -913,8 +1019,10 @@ def _routes(app: FastAPI) -> None:
     ):
         """Undo a delivery so the assessment and documents can be reworked (admins only)."""
         await form_with_csrf(request)
-        if user_role(request) != "admin":
-            raise HTTPException(status_code=403, detail="Only an admin can reopen a delivery.")
+        if not access.leads(conn, user, eid):
+            raise HTTPException(
+                status_code=403, detail="Only the engagement lead can reopen a delivery."
+            )
         eng = get_engagement(conn, eid)
         if eng["delivered_at"]:
             conn.execute("UPDATE engagements SET delivered_at = NULL WHERE id = ?", (eid,))
@@ -1456,7 +1564,7 @@ def _routes(app: FastAPI) -> None:
             history=history,
             engagements=engagements,
             focus=focus,
-            queue=analyst.queue(conn, request.app)[:6],
+            queue=analyst.queue(conn, request.app, access.visible_ids(conn, user))[:6],
         )
 
     @app.post("/assistant/focus")

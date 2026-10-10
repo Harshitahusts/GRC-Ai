@@ -331,43 +331,56 @@ def test_work_queue_and_audit_log(authed):
     )
 
 
-def test_roles_viewer_is_read_only_and_last_admin_stays(app, authed, client):
-    r = post(authed, "/team", {"username": "vera", "password": "viewer-pass-123", "role": "viewer"})
-    assert "Added vera as viewer" in r.text
-    assert "Keep at least one admin" in post(authed, "/team/harshit/role", {"role": "member"}).text
+def test_client_sees_only_their_engagement_and_last_super_admin_stays(app, authed, client):
+    r = post(authed, "/team", {"username": "vera", "password": "client-pass-123", "role": "client"})
+    assert "Added vera as Client" in r.text
+    assert (
+        "Keep at least one super admin"
+        in post(authed, "/team/harshit/role", {"role": "partner"}).text
+    )
+    eid = create(authed)
     authed.cookies.clear()
-    viewer = client
-    token = csrf(viewer, "/login")
-    viewer.post("/login", data={"username": "vera", "password": "viewer-pass-123", "csrf": token})
-    eid = 1
+    token = csrf(client, "/login")
+    client.post("/login", data={"username": "vera", "password": "client-pass-123", "csrf": token})
+    # Not given the engagement yet: it doesn't exist for her.
+    assert client.get(f"/engagements/{eid}").status_code == 404
+    assert client.get(f"/engagements/{eid}/r/tasks").status_code == 404
+    assert "Acme" not in client.get("/engagements").text
     with db(app) as conn:
         conn.execute(
-            "INSERT INTO engagements (client, sector, mode, created_by, created_at) "
-            "VALUES ('X', 'SaaS', 'agent', 'harshit', '2026-01-01')"
+            "INSERT INTO engagement_access (engagement_id, username, granted_by, granted_at) "
+            "VALUES (?, 'vera', 'harshit', '2026-01-01')",
+            (eid,),
         )
-    assert viewer.get(f"/engagements/{eid}/r/tasks").status_code == 200
-    r = post(viewer, f"/engagements/{eid}/r/tasks", {"title": "x", "priority": "low"})
-    assert r.status_code == 403 and "read-only" in r.text
+    assert client.get(f"/engagements/{eid}/r/tasks").status_code == 200
+    r = post(client, f"/engagements/{eid}/r/tasks", {"title": "x", "priority": "low"})
+    assert r.status_code == 200  # clients work their own registers
     assert (
         post(
-            viewer, "/team", {"username": "x2", "password": "0123456789", "role": "admin"}
+            client, "/team", {"username": "x2", "password": "0123456789", "role": "admin"}
         ).status_code
         == 403
     )
 
 
-def test_member_cannot_mark_not_applicable(app, authed, client):
-    post(authed, "/team", {"username": "mona", "password": "member-pass-123", "role": "member"})
+def test_only_the_lead_marks_not_applicable(app, authed, client):
+    post(authed, "/team", {"username": "mona", "password": "client-pass-123", "role": "client"})
     eid = create(authed)
+    with db(app) as conn:
+        conn.execute(
+            "INSERT INTO engagement_access (engagement_id, username, granted_by, granted_at) "
+            "VALUES (?, 'mona', 'harshit', '2026-01-01')",
+            (eid,),
+        )
     authed.cookies.clear()
     token = csrf(client, "/login")
-    client.post("/login", data={"username": "mona", "password": "member-pass-123", "csrf": token})
+    client.post("/login", data={"username": "mona", "password": "client-pass-123", "csrf": token})
     r = post(
         client,
         f"/engagements/{eid}/controls/OBL-011",
         {"status": "not_applicable", "na_reason": "No kids"},
     )
-    assert "Only an admin" in r.text
+    assert "Only the engagement lead" in r.text
 
 
 def test_engagement_nav_groups_and_counts(authed):
