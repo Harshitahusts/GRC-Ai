@@ -88,8 +88,14 @@ Each engagement groups its work in three rows under the workflow steps:
 - **Privacy operations:** Personal data (discovery and inventory), **Consent** records,
   **Requests** from Data Principals (access, correction, erasure, grievance, nomination;
   response clock up to 90 days, Rule 14(3)), and **Breaches** (the Board's detailed report
-  is due 72 hours after awareness, Rule 7(2)(b)).
-- **Compliance:** the **Readiness plan** (the client's obligations as steps in working
+  is due 72 hours after awareness, Rule 7(2)(b); each breach has a **Draft Board report**
+  download), the **Erasure** log (Rule 8: the 48-hour notice before erasure is enforced)
+  and breach **Drills** (time to a ready intimation and report, lessons).
+- **Compliance:** the **Obligations** register (every duty in the DPDP Act and the Rules,
+  with status, owner, re-check date, evidence, the penalty row at stake and a daily
+  readiness trend; statuses are suggested from the intake and Controls until reviewed;
+  `grc_agent/obligations.py`), **Accepted gaps** (reason, compensating measures, approver,
+  review date), the **Readiness plan** (the client's obligations as steps in working
   order, from scoping through notice and consent, security and breaches, rights,
   retention, processors and transfers to delivery, each with one next action; progress is
   recalculated from live data on every visit, so it can't be ticked off by hand),
@@ -97,7 +103,13 @@ Each engagement groups its work in three rows under the workflow steps:
   applicable" needs a reason and an admin, "implemented" needs evidence or a description),
   **Tasks**, the **Evidence** library, and **Policies** (version, approver, review date).
 - **Risk:** the risk register, **Vendors & processors** (contract, data location, review),
-  **DPIA**, the data-flow map and connectors.
+  **DPIA**, **Systems** (each system holding personal data with Rule 6 safeguards), the
+  data-flow map and connectors.
+
+**Board inquiry pack:** one ZIP per client (Obligations page) with a cover note, the
+obligations register, controls, every register, findings, the data inventory and map,
+reviewed documents, the evidence files with SHA-256 hashes and the client's audit log.
+Re-check dates that have come (obligations, controls, evidence) show on the Work queue.
 
 Every register record has an owner, a due date, a status workflow that won't move on
 without the facts it needs, a full history with comments, and evidence attachments.

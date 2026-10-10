@@ -132,6 +132,20 @@ CATALOG: dict[str, dict] = {
         "retain_days": None,
         "retention": "Contract term + 3 years",
     },
+    "obligation_reviews": {
+        "purpose": "Client's status for each duty in the full DPDP obligations register",
+        "category": "Client data",
+        "personal": False,
+        "retain_days": None,
+        "retention": "Contract term + 3 years",
+    },
+    "readiness_history": {
+        "purpose": "Daily readiness snapshot per client, for the trend line",
+        "category": "Client data",
+        "personal": False,
+        "retain_days": None,
+        "retention": "Contract term + 3 years",
+    },
     "evidence_files": {
         "purpose": "Uploaded evidence (files are kept in the evidence folder)",
         "category": "Evidence",

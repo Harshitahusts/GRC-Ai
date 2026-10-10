@@ -30,7 +30,7 @@ from fastapi.responses import FileResponse, Response
 from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
 
-from grc_agent import evidence_check, plan
+from grc_agent import evidence_check, obligations, plan
 from grc_agent.discovery import engine as discovery_engine
 from grc_agent.discovery import scanner
 from grc_agent.web import (
@@ -257,11 +257,19 @@ def ai_ready(app) -> bool:
     return app.state.ai_client is not None or ai_views.key_status_of(settings.provider)
 
 
+def evidence_obligations(app) -> tuple:
+    """What evidence can be linked to: the assessment's obligations, then every duty in
+    the full obligations register."""
+    return (*app.state.register.obligations, *obligations.AS_OBLIGATIONS)
+
+
+def find_obligation(app, oid: str):
+    return next((o for o in evidence_obligations(app) if o.id == oid), None)
+
+
 def run_check(app, row) -> evidence_check.CheckResult:
     """Read the stored file and ask the AI. No database writes (safe in a thread)."""
-    obligation = next(
-        (o for o in app.state.register.obligations if o.id == row["obligation_id"]), None
-    )
+    obligation = find_obligation(app, row["obligation_id"])
     if obligation is None:
         raise CheckSkipped("link it to an obligation first.")
     path = evidence_dir(app) / row["stored_name"]
@@ -505,6 +513,7 @@ def register(app: FastAPI) -> None:
             types=", ".join(sorted(EVIDENCE_TYPES)),
             max_mb=EVIDENCE_MAX_BYTES // (1024 * 1024),
             obligations=request.app.state.register.obligations,
+            catalogue=obligations.AS_OBLIGATIONS,
             human_size=datamanager.human_size,
             check_labels=evidence_check.VERDICTS,
             readable=evidence_check.READABLE,
@@ -545,7 +554,7 @@ def register(app: FastAPI) -> None:
         title = str(form.get("title", "")).strip()[:160] or Path(upload.filename).stem
         category = str(form.get("category", "Other"))
         category = category if category in EVIDENCE_CATEGORIES else "Other"
-        ids = {o.id for o in request.app.state.register.obligations}
+        ids = {o.id for o in evidence_obligations(request.app)}
         obligation_id = str(form.get("obligation_id", ""))
         obligation_id = obligation_id if obligation_id in ids else ""
         record_id = str(form.get("record_id", ""))
@@ -699,10 +708,7 @@ def register(app: FastAPI) -> None:
             problem = str(exc)
         db.audit(conn, user, "evidence_text_viewed", eid, {"title": row["title"]})
         limit = 50_000
-        ob = next(
-            (o for o in request.app.state.register.obligations if o.id == row["obligation_id"]),
-            None,
-        )
+        ob = find_obligation(request.app, row["obligation_id"])
         return render(
             request,
             "evidence_text.html",
@@ -757,13 +763,18 @@ def register(app: FastAPI) -> None:
     def work_page(request: Request, user: User, conn: Conn, mine: str = ""):
         ids = access.visible_ids(conn, user)
         items = register_views.queue(conn, limit=200, ids=ids)
+        from grc_agent.web.obligation_views import rechecks_due
+
+        rechecks = rechecks_due(conn, ids)
         if mine:
             items = [i for i in items if i["owner"].lower() == user.lower()]
+            rechecks = [r for r in rechecks if r["owner"].lower() == user.lower()]
         return render(
             request,
             "work.html",
             items=items,
             mine=bool(mine),
+            rechecks=rechecks,
             personal=discovery_views.by_engagement(conn, ids),
             registers=REGISTERS,
         )

@@ -273,6 +273,29 @@ CREATE TABLE IF NOT EXISTS controls (
     updated_at TEXT NOT NULL,
     PRIMARY KEY (engagement_id, obligation_id)
 );
+-- The organisation's own status for each duty in the full DPDP catalogue (obligations.py).
+CREATE TABLE IF NOT EXISTS obligation_reviews (
+    engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+    item_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'not_assessed' CHECK (status IN
+        ('not_assessed', 'compliant', 'partial', 'non_compliant', 'not_applicable')),
+    owner TEXT NOT NULL DEFAULT '',
+    note TEXT NOT NULL DEFAULT '',
+    review_date TEXT NOT NULL DEFAULT '',
+    updated_by TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (engagement_id, item_id)
+);
+-- One row per engagement per day, so readiness can be shown as a trend.
+CREATE TABLE IF NOT EXISTS readiness_history (
+    engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+    day TEXT NOT NULL,
+    compliant INTEGER NOT NULL,
+    partial INTEGER NOT NULL,
+    applicable INTEGER NOT NULL,
+    pct INTEGER NOT NULL,
+    PRIMARY KEY (engagement_id, day)
+);
 -- Uploaded evidence files. The file lives in <data dir>/evidence/, never in the web root.
 CREATE TABLE IF NOT EXISTS evidence_files (
     id INTEGER PRIMARY KEY,
@@ -726,6 +749,8 @@ COPY_ORDER = (
     "records",
     "record_events",
     "controls",
+    "obligation_reviews",
+    "readiness_history",
     "evidence_files",
     "ai_providers",
     "orgs",

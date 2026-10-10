@@ -92,7 +92,9 @@ credentials with Fernet from the `cryptography` library.
 | `https.py` | Certificates, security headers, HTTPS redirect, safe AI-provider addresses |
 | `db.py`, `pg.py` | Database schema, connections, the audit log, the SQLite/PostgreSQL bridge |
 | `ops_views.py` | Controls, evidence library, audit log page, work queue, team |
-| `registers.py`, `register_views.py` | Tasks, consent, rights requests, breaches, vendors, DPIAs, policies |
+| `registers.py`, `register_views.py` | Tasks, consent, rights requests, breaches, erasure, drills, vendors, DPIAs, policies, systems, accepted gaps |
+| `obligation_views.py` (+ `grc_agent/obligations.py`) | Full DPDP obligations register, penalty exposure, readiness trend, re-checks due |
+| `board_pack.py` | Board inquiry pack ZIP and the breach Board-report draft |
 | `discovery_views.py`, `dataflow_views.py`, `risk_views.py` | The pages for those features |
 | `connector_views.py`, `mcp_views.py` | Connector pages; API keys and the MCP server for AI apps |
 | `notify.py`, `notification_views.py` | In-app notifications |

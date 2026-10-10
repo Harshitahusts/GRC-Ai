@@ -69,6 +69,7 @@ from grc_agent.web import (
     notification_views,
     notify,
     oauth,
+    obligation_views,
     ops_views,
     register_views,
     risk_views,
@@ -214,6 +215,7 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
     discovery_views.register(app)
     register_views.register(app)
     ops_views.register(app)
+    obligation_views.register(app)
     console_views.register(app)
     ai_views.register(app)
     mcp_views.register(app)

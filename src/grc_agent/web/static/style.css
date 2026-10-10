@@ -1114,3 +1114,7 @@ pre.code { background: var(--hover); border: 1px solid var(--border); border-rad
 .kind-option:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .table-scroll { overflow-x: auto; }
 [hidden] { display: none !important; }
+
+/* Obligations register */
+.obligations-top .table td { vertical-align: top; }
+.sparkline { width: 100%; height: 60px; color: var(--accent); display: block; margin: .3rem 0; }
