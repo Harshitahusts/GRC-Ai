@@ -97,14 +97,14 @@ def live_token(conn, token: str, purpose: str):
 def send_invite(conn, request: Request, username: str, email: str, by: str) -> None:
     token = issue_token(conn, username, "invite", by)
     lines = [
-        f"{by} has added you to GRC Flow, a workspace for DPDP Act readiness work.",
+        f"{by} has added you to GRC-Flow, a workspace for DPDP Act readiness work.",
         f"Your username is {username}. Use the button to set a password"
         + (" or connect your Google or Microsoft account" if oauth.enabled() else "")
         + ". The link works once and expires in 7 days.",
     ]
     mailer.send(
         email,
-        "You're invited to GRC Flow",
+        "You're invited to GRC-Flow",
         lines,
         link=f"{app_url(request)}/invite/{token}",
         button="Accept the invite",
@@ -116,9 +116,9 @@ def send_reset(conn, request: Request, username: str, email: str, by: str) -> No
     token = issue_token(conn, username, "reset", by)
     mailer.send(
         email,
-        "Reset your GRC Flow password",
+        "Reset your GRC-Flow password",
         [
-            f"Someone asked to reset the password of the GRC Flow account {username}.",
+            f"Someone asked to reset the password of the GRC-Flow account {username}.",
             "If it was you, use the button within an hour. If not, ignore this email: "
             "nothing changes until the link is used.",
         ],
