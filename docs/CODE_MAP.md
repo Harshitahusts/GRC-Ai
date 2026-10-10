@@ -108,7 +108,7 @@ credentials with Fernet from the `cryptography` library.
 | Same response for unknown users; lockout per user and per address | `login()` in `web/app.py` |
 | Sessions end when a user is removed or changes password | `end_stale_sessions` in `web/app.py` |
 | CSRF on every form | `form_with_csrf()` in `web/app.py` |
-| Partners and clients see only their own clients | `web/access.py`, `end_stale_sessions` in `web/app.py` |
+| Each organisation sees only its own engagements; viewers are read-only | `web/access.py`, `end_stale_sessions` and `form_with_csrf()` in `web/app.py` |
 | No requests to private or cloud-metadata addresses | `connectors/base.py`, `insecure_url_problem()` in `web/https.py` |
 | Uploads: type checked against content, size limit, random names | `web/ops_views.py` |
 | Security headers, HTTPS only | `web/https.py`, `deploy/Caddyfile` |

@@ -1,25 +1,45 @@
 {% extends "base.html" %}
 {% from "_macros.html" import icon %}
-{% block title %}Sign in{% endblock %}
+{% block title %}{{ "Log in" if not portal else ("Partner sign in" if portal == "partner" else "Company sign in") }}{% endblock %}
 {% block main_class %}login{% endblock %}
 {% block content %}
 {% include "_login_aside.html" %}
 <div class="login-main">
-  <div class="login-card card">
-    <h1>Sign in</h1>
-    {% set portal = portal or "client" %}
-    <div class="portal-choice" role="radiogroup" aria-label="Sign in as">
-      <label class="portal-option"><input type="radio" name="portal" value="client" form="login-form" {% if portal == "client" %}checked{% endif %}>
-        <span><strong>Company</strong><small>Your own DPDP compliance</small></span></label>
-      <label class="portal-option"><input type="radio" name="portal" value="partner" form="login-form" {% if portal == "partner" %}checked{% endif %}>
-        <span><strong>Partner</strong><small>DPDP work for your clients</small></span></label>
+  {% set website = site_url() %}
+  {% if not portal %}
+  {# Step 1: who is logging in. #}
+  <div class="login-card card portal-card">
+    <h1>Log in to GRC Flow</h1>
+    <p class="muted">Choose how you use GRC Flow.</p>
+    {% if error %}<div class="flash flash-error login-error" role="alert">{{ icon("i-alert") }} {{ error }}</div>{% endif %}
+    <div class="portal-list">
+      <a class="portal-tile" href="/login?as=company">
+        <span class="portal-icon" aria-hidden="true">{{ icon("i-briefcase") }}</span>
+        <span class="portal-text"><strong>Log in as Company</strong><small>Your own organisation's DPDP compliance</small></span>
+        <span class="portal-go" aria-hidden="true">{{ icon("i-arrow") }}</span>
+      </a>
+      <a class="portal-tile" href="/login?as=partner">
+        <span class="portal-icon" aria-hidden="true">{{ icon("i-users") }}</span>
+        <span class="portal-text"><strong>Log in as Partner</strong><small>Consultants and MSSPs running DPDP for clients</small></span>
+        <span class="portal-go" aria-hidden="true">{{ icon("i-arrow") }}</span>
+      </a>
     </div>
-    <p class="muted small">Your account decides what you see; this only sets where you start.</p>
+    {% if demo_tenant %}<div class="flash flash-info demo-login" role="note"><strong>Demo tenant</strong> with sample data. Sign in as <code>{{ demo_login[0] }}</code> / <code>{{ demo_login[1] }}</code>.</div>{% endif %}
+    <p class="login-alt small muted">New to GRC Flow? {% if website %}<a href="{{ website }}/contact">Book a demo</a> to get access.{% else %}Ask us for access.{% endif %} Joining your team? Use the invite link in your email.</p>
+    {% if website %}<p class="login-site small"><a href="{{ website }}">&larr; Back to {{ website.split("://", 1)[1] }}</a></p>{% endif %}
+  </div>
+  {% else %}
+  {# Step 2: the sign-in form for that portal. #}
+  <div class="login-card card">
+    <a class="small portal-back" href="/login">&larr; {{ "Partner" if portal == "partner" else "Company" }} login · change</a>
+    <h1>{{ "Partner sign in" if portal == "partner" else "Company sign in" }}</h1>
+    <p class="muted">{{ "Sign in to run DPDP work for your clients." if portal == "partner" else "Sign in to your organisation's DPDP workspace." }}</p>
     {% if demo_tenant %}<div class="flash flash-info demo-login" role="note"><strong>Demo tenant</strong> with sample data. Sign in as <code>{{ demo_login[0] }}</code> / <code>{{ demo_login[1] }}</code>.</div>{% endif %}
 
-    {% if error %}<div class="flash flash-error login-error" id="login-err" role="alert">{{ icon("i-alert") }} {{ error }}</div>{% endif %}
+    {% if error %}<div class="flash flash-error login-error" id="login-err" role="alert">{{ icon("i-alert") }} {{ error }}{% if wrong_portal %} <a href="/login?as={{ wrong_portal }}">Go to {{ wrong_portal|capitalize }} login</a>{% endif %}</div>{% endif %}
     <form method="post" action="/login" id="login-form">
       <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="hidden" name="portal" value="{{ portal }}">
       <label for="username">Username</label>
       <input id="username" name="username" autocomplete="username" required value="{{ username or '' }}"
              {% if not username %}autofocus{% endif %} {% if error %}aria-invalid="true" aria-describedby="login-err"{% endif %}>
@@ -40,9 +60,7 @@
       {% for p in options %}<a class="button sso-button" href="/auth/{{ p.key }}">{{ icon("i-" ~ p.key) }}Continue with {{ p.label }}</a>{% endfor %}
     </div>
     {% endif %}
-    {% set website = site_url() %}
-    {% if website %}<p class="login-site small"><a href="{{ website }}">&larr; Back to {{ website.split("://", 1)[1] }}</a></p>{% endif %}
-    <p class="login-alt small muted">No account yet? Companies can ask for a free 14-day trial, and consultancies can apply to become a partner{% if website %}, at <a href="{{ website }}/contact">{{ website.split("://", 1)[1] }}/contact</a>{% endif %}. Joining a team? Ask its admin or partner to invite you.</p>
   </div>
+  {% endif %}
 </div>
 {% endblock %}

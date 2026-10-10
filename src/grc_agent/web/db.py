@@ -307,6 +307,16 @@ CREATE TABLE IF NOT EXISTS ai_providers (
     updated_by TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+-- A customer organisation (web/access.py): a company running its own DPDP work
+-- ('client') or a consultancy running it for others ('partner'). A POC has an end date.
+CREATE TABLE IF NOT EXISTS orgs (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'client' CHECK (kind IN ('client', 'partner')),
+    poc_until TEXT NOT NULL DEFAULT '',
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
 -- Who may open a client besides staff and the person who created it (web/access.py):
 -- a partner given a client, or a client's own people.
 CREATE TABLE IF NOT EXISTS engagement_access (
@@ -421,11 +431,14 @@ def connect(path: str | Path) -> sqlite3.Connection:
 # Columns added after the first release. init_db adds any that are missing, so an
 # existing local database upgrades in place.
 MIGRATIONS = {
-    # super_admin, admin, partner, client or trial (see web/access.py).
+    # Platform role: super_admin, admin or user (see web/access.py).
     "users": {
         "role": "TEXT NOT NULL DEFAULT 'admin'",
-        # When a trial account stops working (UTC ISO time); empty for everyone else.
+        # No longer used: POC end dates live on the organisation (orgs.poc_until).
         "expires_at": "TEXT NOT NULL DEFAULT ''",
+        # The customer organisation and the person's role in its team.
+        "org_id": "INTEGER",
+        "team_role": "TEXT NOT NULL DEFAULT 'admin'",
         # Where invites and password-reset links go (optional).
         "email": "TEXT NOT NULL DEFAULT ''",
     },
@@ -444,7 +457,10 @@ MIGRATIONS = {
     },
     "ai_providers": {"models_json": "TEXT NOT NULL DEFAULT '[]'"},
     # Who the workspace is for; changes the wording, not the rules (see AUDIENCES in app.py).
-    "engagements": {"audience": "TEXT NOT NULL DEFAULT 'client'"},
+    "engagements": {
+        "audience": "TEXT NOT NULL DEFAULT 'client'",
+        "org_id": "INTEGER",  # the organisation whose team works on it
+    },
     # AI relevance check of an evidence file (see grc_agent.evidence_check).
     "evidence_files": {
         "ai_check": "TEXT NOT NULL DEFAULT ''",
@@ -489,6 +505,33 @@ def _data_fixes(conn) -> None:
             (now(), old),
         )
         conn.execute("UPDATE users SET role = ? WHERE role = ?", (new, old))
+    # Partners, clients and trials become organisations: each such account gets its own
+    # (a trial's end date becomes the POC's) and is its team admin, and the engagements
+    # it created belong to that organisation.
+    for row in conn.execute(
+        "SELECT id, username, role, expires_at FROM users "
+        "WHERE role IN ('partner', 'client', 'trial')"
+    ).fetchall():
+        cur = conn.execute(
+            "INSERT INTO orgs (name, kind, poc_until, created_by, created_at) VALUES (?,?,?,?,?)",
+            (
+                row["username"],
+                "partner" if row["role"] == "partner" else "client",
+                row["expires_at"] if row["role"] == "trial" else "",
+                "upgrade",
+                now(),
+            ),
+        )
+        conn.execute(
+            "UPDATE users SET role = 'user', org_id = ?, team_role = 'admin', expires_at = '' "
+            "WHERE id = ?",
+            (cur.lastrowid, row["id"]),
+        )
+        conn.execute(
+            "UPDATE engagements SET org_id = ? "
+            "WHERE org_id IS NULL AND LOWER(created_by) = LOWER(?)",
+            (cur.lastrowid, row["username"]),
+        )
     # Someone must own the workspace: the first admin becomes its super admin.
     if not conn.execute("SELECT 1 FROM users WHERE role = 'super_admin'").fetchone():
         first = conn.execute(
@@ -685,6 +728,7 @@ COPY_ORDER = (
     "controls",
     "evidence_files",
     "ai_providers",
+    "orgs",
     "engagement_access",
     "api_keys",
     "login_identities",

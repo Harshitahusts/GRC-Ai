@@ -1,83 +1,75 @@
 {% extends "base.html" %}
 {% from "_macros.html" import icon %}
-{% block title %}Team{% endblock %}
+{% block title %}Team & roles{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
+    <p class="eyebrow">{{ acct.org_name }} · {{ "Partner" if acct.partner else "Company" }}</p>
     <h1>Team &amp; roles</h1>
-    <p class="muted">Who can sign in, and what they can do. Admins see every client; partners see the clients they run; clients see only their own company.</p>
+    <p class="muted">The people in {{ acct.org_name }} and what each can do. Everyone here sees your organisation's engagements, and nothing else.</p>
   </div>
 </div>
+
+{% include "_invite_link.html" %}
+
+<section class="role-cards" aria-label="Roles">
+  {% for key, text in team_roles.items() %}
+  <div class="role-card role-{{ key }}">
+    <p class="role-card-head"><span class="role-pill role-pill-{{ key }}">{{ text.split(":")[0] }}</span><strong>{{ counts[key] }}</strong></p>
+    <p class="small muted">{{ text.split(": ", 1)[1] }}.</p>
+  </div>
+  {% endfor %}
+</section>
+
 <div class="grid-2 wide-left">
   <section class="card">
-    <table class="table">
-      <thead><tr><th>Account</th><th>Role</th><th class="hide-sm">Since</th>{% if is_admin %}<th></th>{% endif %}</tr></thead>
-      <tbody>
-        {% for r in rows %}
-        <tr>
-          <td><strong>{{ r.username }}</strong>{% if r.username == user %} <span class="tag">you</span>{% endif %}
-            {% if r.no_password and not r.sign_ins %} <span class="badge badge-none">Invited</span>{% endif %}
-            {% if r.sign_ins %} <span class="tag" title="Signs in with Google or Microsoft">SSO</span>{% endif %}
-            {% if is_admin %}
-            <form method="post" action="/team/{{ r.username|urlencode }}/email" class="inline-email">
-              <input type="hidden" name="csrf" value="{{ csrf }}">
-              <input name="email" type="email" value="{{ r.email }}" placeholder="email" maxlength="254" aria-label="Email for {{ r.username }}" class="small">
-              <button type="submit" class="link small">Save</button>
-            </form>
-            {% elif r.email %}<br><span class="small muted">{{ r.email }}</span>{% endif %}
-          </td>
-          <td>
-            {% if is_admin %}
-            <form method="post" action="/team/{{ r.username|urlencode }}/role" class="inline-role">
-              <input type="hidden" name="csrf" value="{{ csrf }}">
-              {% if r.role in grantable %}
-              <select name="role" aria-label="Role for {{ r.username }}" onchange="this.form.submit()">{% for k in grantable %}<option value="{{ k }}" {% if k == r.role %}selected{% endif %}>{{ role_names[k] }}</option>{% endfor %}</select>
-              <noscript><button type="submit" class="button small">Save</button></noscript>
-              {% else %}{{ role_names[r.role] or r.role }}{% endif %}
-            </form>
-            {% else %}{{ role_names[r.role] or r.role }}{% endif %}
-            {% if r.role == "trial" %}
-            {% set left = days_left(r.expires_at) %}
-            <br><span class="small {{ 'muted' if left else 'is-bad' }}">{{ "Ended" if not left else left ~ " day" ~ ("" if left == 1 else "s") ~ " left" }}</span>
-            {% if is_admin %}<form method="post" action="/team/{{ r.username|urlencode }}/extend" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="link small">Extend 14 days</button></form>{% endif %}
-            {% endif %}
-          </td>
-          <td class="hide-sm small muted">{{ r.created_at[:10] }}</td>
-          {% if is_admin %}
-          <td class="nowrap">
-            {% if mail_on and r.email %}
-            <form method="post" action="/team/{{ r.username|urlencode }}/send-link">
-              <input type="hidden" name="csrf" value="{{ csrf }}">
-              <button type="submit" class="link small">{{ "Send invite" if r.no_password and not r.sign_ins else "Send reset link" }}</button>
-            </form>
-            {% endif %}
-          </td>
-          {% endif %}
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    <ul class="plain small">{% for k, d in roles.items() %}<li>{{ d }}</li>{% endfor %}</ul>
-    <p class="small muted">Partners bring their clients' people in from each engagement's <strong>People with access</strong> box.</p>
+    <div class="card-head"><h2>Members</h2><span class="muted small">{{ rows|length }} {{ "person" if rows|length == 1 else "people" }}</span></div>
+    <ul class="member-list">
+      {% for r in rows %}
+      <li class="member">
+        <span class="avatar" aria-hidden="true">{{ r.username[:1]|upper }}</span>
+        <span class="member-who">
+          <span><strong>{{ r.username }}</strong>{% if r.username == user %} <span class="tag">you</span>{% endif %}</span>
+          <small class="muted">{{ r.email or "No email" }}{% if r.invited and not r.sign_ins %} · <span class="badge badge-warn">Invite pending</span>{% endif %}</small>
+        </span>
+        {% if can_manage and r.username != user %}
+        <form method="post" action="/team/{{ r.username|urlencode }}/role" class="member-role">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <select name="team_role" aria-label="Role for {{ r.username }}" onchange="this.form.submit()">{% for k, text in team_roles.items() %}<option value="{{ k }}" {% if k == r.team_role %}selected{% endif %}>{{ text.split(":")[0] }}</option>{% endfor %}</select>
+          <noscript><button class="small">Save</button></noscript>
+        </form>
+        <details class="member-more">
+          <summary aria-label="More for {{ r.username }}">⋯</summary>
+          <div class="menu">
+            <form method="post" action="/team/{{ r.username|urlencode }}/send-link"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link">{{ "Resend invite" if r.invited and not r.sign_ins else "Send password reset" }}</button></form>
+            <form method="post" action="/team/{{ r.username|urlencode }}/remove"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link danger-text">Remove from team</button></form>
+          </div>
+        </details>
+        {% else %}
+        <span class="role-pill role-pill-{{ r.team_role }}">{{ team_role_names[r.team_role] }}</span>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
   </section>
-  {% if is_admin %}
+
   <section class="card">
-    <h3>Add a person</h3>
+    {% if can_manage %}
+    <h2>Invite a teammate</h2>
     <form method="post" action="/team" class="stack">
       <input type="hidden" name="csrf" value="{{ csrf }}">
-      <label>Username <input name="username" required maxlength="40" pattern="[A-Za-z0-9._\-]{2,40}" autocomplete="off"></label>
-      <label>Email {% if not mail_on %}<span class="muted small">(optional)</span>{% endif %}<input name="email" type="email" maxlength="254" autocomplete="off" placeholder="name@company.com"></label>
-      <label>Role <select name="role">{% for k in grantable %}<option value="{{ k }}" {% if k == "partner" %}selected{% endif %}>{{ role_names[k] }}</option>{% endfor %}</select></label>
-      <label>Give access to <span class="muted small">(optional)</span>
-        <select name="engagement"><option value="">No engagement yet</option>{% for e in engagements %}<option value="{{ e.id }}">{{ e.client }}</option>{% endfor %}</select></label>
-      <p class="small muted">A trial lasts 14 days and includes one engagement.</p>
-      <label>Starting password {% if mail_on %}<span class="muted small">(optional)</span>{% endif %}<input name="password" type="password" {% if not mail_on %}required{% endif %} minlength="10" autocomplete="new-password"></label>
-      <p class="small muted">{% if mail_on %}Leave the password empty and we'll email them an invite to set their own{% if sign_in_options() %} or sign in with Google or Microsoft{% endif %}.{% else %}Share the starting password privately; they can change it under Account. Set up email (Resend) to send invites instead.{% endif %}</p>
-      <p><button type="submit" class="primary">{{ icon("i-plus") }} Add</button></p>
+      <label>Work email <input name="email" type="email" required maxlength="254" autocomplete="off" placeholder="name@company.com"></label>
+      <label>Role
+        <select name="team_role">{% for k, text in team_roles.items() %}<option value="{{ k }}" {% if k == "manager" %}selected{% endif %}>{{ text.split(":")[0] }}</option>{% endfor %}</select>
+      </label>
+      <p class="small muted">{% if mail_on %}They get an email to set a password{% if sign_in_options() %} or use Google / Microsoft sign-in{% endif %}.{% else %}You'll get a one-time link to send them.{% endif %}</p>
+      <p><button type="submit" class="primary">{{ icon("i-plus") }} Send invite</button></p>
     </form>
+    {% else %}
+    <h2>Your role</h2>
+    <p><span class="role-pill role-pill-{{ acct.team_role }}">{{ team_role_names[acct.team_role] }}</span></p>
+    <p class="muted small">Only your team's admins can invite people or change roles.</p>
+    {% endif %}
   </section>
-  {% else %}
-  <section class="card"><p class="muted">Only an admin can add people or change roles.</p></section>
-  {% endif %}
 </div>
 {% endblock %}

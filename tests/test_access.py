@@ -1,8 +1,9 @@
-"""The five roles and the fence around each client (web/access.py).
+"""Organisations, team roles and the hidden super admin dashboard (web/access.py).
 
-A partner runs DPDP work for its own clients and must never see another partner's; a
-client sees only their own company; a trial ends on its date. These tests sign in as
-each kind of account and try to reach what they shouldn't.
+Each customer organisation (a company or a partner) sees only its own engagements, its
+people have team roles (Admin / Manager / Viewer), and the platform roles are set only on
+the owner's dashboard. These tests sign in as each kind of person and try to reach what
+they shouldn't.
 """
 
 import json
@@ -10,41 +11,38 @@ import re
 
 import pytest
 from fastapi.testclient import TestClient
-from helpers import csrf, post
+from helpers import MEMBER_PASSWORD as PW
+from helpers import add_member, csrf, post
 
 from grc_agent.web import access
 from grc_agent.web import db as webdb
-
-PW = "role-test-password"
 
 
 def db(app):
     return webdb.connect(app.state.db_path)
 
 
-def add(authed, name, role):
-    r = post(authed, "/team", {"username": name, "password": PW, "role": role})
-    assert f"Added {name}" in r.text, r.text[-400:]
-
-
-def sign_in(app, name):
+def sign_in(app, name, portal="company"):
     c = TestClient(app)
-    token = csrf(c, "/login")
-    r = c.post("/login", data={"username": name, "password": PW, "csrf": token})
-    assert r.status_code == 200, name
+    token = csrf(c, f"/login?as={portal}")
+    r = c.post("/login", data={"username": name, "password": PW, "csrf": token, "portal": portal})
+    assert r.status_code == 200 and r.url.path != "/login", r.text[-600:]
     return c
 
 
-def make(c, client_name):
-    r = post(c, "/engagements", {"client": client_name, "sector": "SaaS"})
+def make(c, name):
+    r = post(c, "/engagements", {"client": name, "sector": "SaaS"})
     return int(r.url.path.rsplit("/", 1)[1])
 
 
 @pytest.fixture
-def two_partners(app, authed):
-    add(authed, "pia", "partner")
-    add(authed, "raj", "partner")
-    pia, raj = sign_in(app, "pia"), sign_in(app, "raj")
+def partners(app, authed):
+    """Two partner firms: A (pia admin, pete manager, vik viewer) and B (raj admin)."""
+    a = add_member(app, "pia", kind="partner")
+    add_member(app, "pete", org=a, team_role="manager")
+    add_member(app, "vik", org=a, team_role="viewer")
+    add_member(app, "raj", kind="partner")
+    pia, raj = sign_in(app, "pia", "partner"), sign_in(app, "raj", "partner")
     return pia, raj, make(pia, "Pia Client Co"), make(raj, "Raj Client Co")
 
 
@@ -53,103 +51,195 @@ def test_first_account_owns_the_workspace(app):
         assert access.role_of(conn, "harshit") == "super_admin"
 
 
-def test_partners_never_see_each_others_clients(app, authed, two_partners):
-    pia, raj, pia_eid, raj_eid = two_partners
-    assert pia.get(f"/engagements/{pia_eid}").status_code == 200
+def test_two_step_login_and_the_right_door(app, partners):
+    page = TestClient(app).get("/login").text
+    assert "Log in as Company" in page and "Log in as Partner" in page
+    assert 'name="password"' not in page
+    # A partner at the company door: refused, told where to go, not signed in.
+    c = TestClient(app)
+    token = csrf(c, "/login?as=company")
+    data = {"username": "pia", "password": PW, "csrf": token, "portal": "company"}
+    r = c.post("/login", data=data)
+    assert r.status_code == 403 and "Use Partner login" in r.text
+    assert c.get("/", follow_redirects=False).headers["location"] == "/login"
+    # A wrong password gets the usual message, never which door the account uses.
+    r = c.post("/login", data={**data, "password": "nope"})
+    assert r.status_code == 401 and "Use Partner login" not in r.text
+
+
+def test_partners_never_see_each_others_engagements(app, authed, partners):
+    pia, raj, pia_eid, raj_eid = partners
     for path in ("", "/intake", "/r/tasks", "/dataflow", "/evidence", "/export.json"):
         assert raj.get(f"/engagements/{pia_eid}{path}").status_code == 404, path
     assert post(raj, f"/engagements/{pia_eid}/r/tasks", {"title": "x"}).status_code == 404
     for page in ("/", "/engagements", "/work", "/dataflows", "/connectors", "/notifications"):
-        text = raj.get(page).text
-        assert "Pia Client Co" not in text, page
-    assert "Raj Client Co" in raj.get("/engagements").text
-    # Staff see both.
+        assert "Pia Client Co" not in raj.get(page).text, page
     listing = authed.get("/engagements").text
-    assert "Pia Client Co" in listing and "Raj Client Co" in listing
+    assert "Pia Client Co" in listing and "Raj Client Co" in listing  # staff see all
 
 
-def test_partners_cannot_open_staff_pages_but_can_use_api_keys(app, two_partners):
-    pia, *_ = two_partners
-    for path in ("/team", "/audit", "/audit.csv", "/data-manager", "/settings/ai"):
-        assert pia.get(path).status_code == 403, path
-    assert pia.get("/settings/api-keys").status_code == 200
-    page = pia.get("/").text
-    assert 'href="/team"' not in page and 'href="/settings/api-keys"' in page
-
-
-def test_partner_invites_a_client_who_sees_only_that_engagement(app, authed, two_partners):
-    pia, _, pia_eid, raj_eid = two_partners
-    r = post(pia, f"/engagements/{pia_eid}/access", {"username": "cleo", "password": PW})
-    assert "Added cleo as Client" in r.text
+def test_a_team_shares_its_engagements_and_viewers_only_read(app, partners):
+    _, _, pia_eid, _ = partners
+    pete, vik = sign_in(app, "pete", "partner"), sign_in(app, "vik", "partner")
+    assert "Pia Client Co" in pete.get("/engagements").text
+    assert post(pete, f"/engagements/{pia_eid}/r/tasks", {"title": "x"}).status_code == 200
+    assert vik.get(f"/engagements/{pia_eid}").status_code == 200
+    r = post(vik, f"/engagements/{pia_eid}/r/tasks", {"title": "y"})
+    assert r.status_code == 403 and "read-only" in r.text
+    # Leads: admins and managers on their own work, never viewers.
     with db(app) as conn:
-        assert access.role_of(conn, "cleo") == "client"
+        assert access.leads(conn, "pete", pia_eid) and not access.leads(conn, "vik", pia_eid)
+
+
+def test_customers_cannot_open_staff_pages(app, partners):
+    pia, *_ = partners
+    for path in ("/audit", "/audit.csv", "/data-manager", "/settings/ai"):
+        assert pia.get(path).status_code == 403, path
+    assert pia.get("/settings/api-keys").status_code == 200  # a partner admin may
+    vik = sign_in(app, "vik", "partner")
+    assert vik.get("/settings/api-keys").status_code == 403  # a viewer may not
+
+
+def test_team_page_is_the_organisations_own(app, authed, partners):
+    pia, raj, *_ = partners
+    page = pia.get("/team").text
+    assert "pete" in page and "vik" in page and "raj" not in page
+    assert "Super admin" not in page and "14 day" not in page
+    # The admin invites a teammate; without email the one-time link is shown once.
+    r = post(pia, "/team", {"email": "neha@pia.example", "team_role": "manager"})
+    assert 'id="invite-link"' in r.text and "neha" in r.text
+    with db(app) as conn:
+        neha = access.account(conn, "neha")
+        assert neha.org_name == "pia org" and neha.team_role == "manager"
+    post(pia, "/team/neha/role", {"team_role": "viewer"})
+    with db(app) as conn:
+        assert access.account(conn, "neha").team_role == "viewer"
+    # Another firm's people can't be touched, and the last admin stays.
+    assert post(pia, "/team/raj/role", {"team_role": "viewer"}).status_code == 404
+    assert "Keep at least one admin" in post(pia, "/team/pia/role", {"team_role": "viewer"}).text
+    post(pia, "/team/neha/remove")
+    with db(app) as conn:
+        assert access.account(conn, "neha") is None
+    # Managers and viewers see the team but can't change it.
+    pete = sign_in(app, "pete", "partner")
+    assert "Invite a teammate" not in pete.get("/team").text
+    assert post(pete, "/team", {"email": "x@pia.example"}).status_code == 403
+    # The owner has no customer team: Team & roles takes them to their dashboard.
+    assert authed.get("/team", follow_redirects=False).headers["location"] == "/dashboard"
+
+
+def test_partner_brings_a_clients_person_into_one_engagement(app, partners):
+    pia, _, pia_eid, raj_eid = partners
+    r = post(pia, f"/engagements/{pia_eid}/access", {"email": "cleo@client.example"})
+    assert 'id="invite-link"' in r.text
+    with db(app) as conn:  # as if cleo had set her password from the link
+        conn.execute(
+            "UPDATE users SET password_hash = (SELECT password_hash FROM users "
+            "WHERE username = 'pia') WHERE username = 'cleo'"
+        )
     cleo = sign_in(app, "cleo")
-    # One engagement: the dashboard opens it directly.
     assert cleo.get("/", follow_redirects=False).headers["location"] == f"/engagements/{pia_eid}"
-    assert cleo.get(f"/engagements/{pia_eid}/intake").status_code == 200
     assert cleo.get(f"/engagements/{raj_eid}").status_code == 404
-    for path in ("/team", "/settings/api-keys"):
-        assert cleo.get(path).status_code == 403, path
-    # A client can't make the lead's calls on a partner's engagement, or invite others.
     assert post(cleo, f"/engagements/{pia_eid}/deliver").status_code == 403
-    assert post(cleo, f"/engagements/{pia_eid}/access", {"username": "x9"}).status_code == 403
-    # The partner removes her; she loses it.
+    assert cleo.get("/team").status_code == 404  # no organisation of her own
     post(pia, f"/engagements/{pia_eid}/access/cleo/remove")
     assert cleo.get(f"/engagements/{pia_eid}").status_code == 404
 
 
-def test_partner_cannot_manage_access_to_someone_elses_client(app, two_partners):
-    _, raj, pia_eid, _ = two_partners
-    r = post(raj, f"/engagements/{pia_eid}/access", {"username": "sneaky", "password": PW})
-    assert r.status_code == 404
-    with db(app) as conn:
-        assert access.role_of(conn, "sneaky") == ""
-
-
-def test_admin_cannot_create_or_demote_staff(app, authed):
-    add(authed, "ada", "admin")
-    ada = sign_in(app, "ada")
-    r = post(ada, "/team", {"username": "evil", "password": PW, "role": "super_admin"})
-    assert r.status_code == 403
-    assert "Only a super admin" in post(ada, "/team/harshit/role", {"role": "client"}).text
-    add(ada, "pat", "partner")  # but non-staff roles are fine
-    with db(app) as conn:
-        assert access.role_of(conn, "harshit") == "super_admin"
-
-
-def test_direct_client_runs_their_own_company(app, authed):
-    add(authed, "dina", "client")
+def test_a_company_assesses_itself(app):
+    add_member(app, "dina", kind="client")
     dina = sign_in(app, "dina")
     eid = make(dina, "Dina Retail")
     with db(app) as conn:
-        assert (
-            conn.execute("SELECT audience FROM engagements WHERE id = ?", (eid,)).fetchone()[0]
-            == "self"
-        )
+        row = conn.execute(
+            "SELECT audience, org_id FROM engagements WHERE id = ?", (eid,)
+        ).fetchone()
+        assert row["audience"] == "self" and row["org_id"] is not None
         assert access.leads(conn, "dina", eid)
 
 
-def test_trial_gets_one_engagement_and_ends(app, authed):
-    add(authed, "tara", "trial")
-    tara = sign_in(app, "tara")
-    assert "Free trial: 14 days left" in tara.get("/engagements").text
-    make(tara, "Tara Co")
-    r = post(tara, "/engagements", {"client": "Second Co", "sector": "SaaS"})
-    assert "A trial includes one engagement" in r.text
-    assert tara.get("/settings/api-keys").status_code == 403
+# ---- the hidden super admin dashboard
+
+
+def test_dashboard_is_hidden_from_everyone_but_the_owner(app, authed, partners):
+    pia, *_ = partners
+    assert "Super admin dashboard" in authed.get("/dashboard").text
+    add_member(app, "ada")
     with db(app) as conn:
-        conn.execute(
-            "UPDATE users SET expires_at = '2020-01-01T00:00:00+00:00' WHERE username = 'tara'"
-        )
-    r = tara.get("/engagements", follow_redirects=True)
-    assert "trial has ended" in r.text and r.url.path == "/login"
-    again = TestClient(app)
-    token = csrf(again, "/login")
-    r = again.post("/login", data={"username": "tara", "password": PW, "csrf": token})
-    assert r.status_code == 403 and "trial has ended" in r.text
-    # An admin extends it.
-    post(authed, "/team/tara/extend")
-    assert sign_in(app, "tara").get("/engagements").status_code == 200
+        conn.execute("UPDATE users SET role = 'admin', org_id = NULL WHERE username = 'ada'")
+    for c in (pia, sign_in(app, "ada")):
+        assert c.get("/dashboard").status_code == 404
+        assert post(c, "/dashboard/accounts", {"email": "x@example.com"}).status_code == 404
+    assert TestClient(app).get("/dashboard", follow_redirects=False).status_code == 404
+    for page in ("/", "/engagements"):
+        assert 'href="/dashboard"' not in authed.get(page).text
+    owner = authed.get("/dashboard").text
+    assert "noindex" in owner and 'class="sidebar"' not in owner
+
+
+def test_owner_sets_up_a_poc_of_any_length(app, authed):
+    eid = make(authed, "Prospect Ltd")
+    r = post(
+        authed,
+        "/dashboard/accounts",
+        {
+            "org": "new",
+            "org_name": "Prospect Ltd",
+            "kind": "client",
+            "poc": "1",
+            "poc_days": "45",
+            "email": "neha.k@gmail.com",
+            "team_role": "manager",
+            "engagements": str(eid),
+        },
+    )
+    link = re.search(r'id="invite-link" value="([^"]+)"', r.text).group(1)
+    assert "/invite/" in link
+    with db(app) as conn:
+        neha = access.account(conn, "neha.k")
+        assert neha.org_name == "Prospect Ltd" and neha.team_role == "manager"
+        assert access.days_left(neha.poc_until) == 45
+        assert access.can_see(conn, "neha.k", eid)
+        oid = neha.org_id
+    # Extend by any number of days, from the current end.
+    post(authed, f"/dashboard/orgs/{oid}/poc", {"days": "10"})
+    with db(app) as conn:
+        assert access.days_left(access.account(conn, "neha.k").poc_until) == 55
+    assert "1 to 365" in post(authed, f"/dashboard/orgs/{oid}/poc", {"days": "0"}).text
+    post(authed, f"/dashboard/orgs/{oid}/convert")
+    with db(app) as conn:
+        assert access.account(conn, "neha.k").poc_until == ""
+
+
+def test_an_ended_poc_signs_its_people_out(app, authed, partners):
+    pia, *_ = partners
+    with db(app) as conn:
+        oid = access.account(conn, "pia").org_id
+    post(authed, f"/dashboard/orgs/{oid}/end")
+    r = pia.get("/engagements", follow_redirects=True)
+    assert r.url.path == "/login" and "POC has ended" in r.text
+    c = TestClient(app)
+    token = csrf(c, "/login?as=partner")
+    data = {"username": "pete", "password": PW, "csrf": token, "portal": "partner"}
+    r = c.post("/login", data=data)
+    assert r.status_code == 403 and "POC has ended" in r.text
+    post(authed, f"/dashboard/orgs/{oid}/poc", {"days": "7"})
+    assert sign_in(app, "pete", "partner").get("/engagements").status_code == 200
+
+
+def test_owner_manages_people_and_platform_roles(app, authed, partners):
+    r = post(authed, "/dashboard/accounts", {"org": "staff", "email": "ops@grc-flow.example"})
+    assert "Send them the invite link" in r.text
+    with db(app) as conn:
+        assert access.role_of(conn, "ops") == "admin"
+    post(authed, "/dashboard/people/vik/team-role", {"team_role": "manager"})
+    with db(app) as conn:
+        assert access.account(conn, "vik").team_role == "manager"
+    r = post(authed, "/dashboard/people/harshit/role", {"role": "user"})
+    assert "Keep at least one super admin" in r.text
+    post(authed, "/dashboard/people/vik/remove")
+    with db(app) as conn:
+        assert access.account(conn, "vik") is None
 
 
 def _rpc(c, key, method, params=None):
@@ -157,117 +247,34 @@ def _rpc(c, key, method, params=None):
     return c.post("/mcp", content=json.dumps(body), headers={"Authorization": f"Bearer {key}"})
 
 
-def test_a_partners_mcp_key_reads_only_their_clients(app, two_partners):
-    pia, _, pia_eid, raj_eid = two_partners
+def test_a_partners_mcp_key_reads_only_its_engagements(app, partners):
+    pia, _, pia_eid, raj_eid = partners
     page = post(pia, "/settings/api-keys", {"name": "Claude"}).text
     key = re.search(r'id="new-key">(grcf_[^<]+)<', page).group(1)
     r = _rpc(pia, key, "tools/call", {"name": "list_engagements", "arguments": {}})
     text = r.json()["result"]["content"][0]["text"]
     assert "Pia Client Co" in text and "Raj Client Co" not in text
-    r = _rpc(
-        pia, key, "tools/call", {"name": "get_engagement", "arguments": {"engagement_id": raj_eid}}
-    )
-    assert r.json()["result"]["isError"]
-    # If the partner becomes a client, the key stops working.
-    with db(app) as conn:
-        conn.execute("UPDATE users SET role = 'client' WHERE username = 'pia'")
+    args = {"name": "get_engagement", "arguments": {"engagement_id": raj_eid}}
+    assert _rpc(pia, key, "tools/call", args).json()["result"]["isError"]
+    with db(app) as conn:  # demoted to viewer: the key stops working
+        conn.execute("UPDATE users SET team_role = 'viewer' WHERE username = 'pia'")
     assert _rpc(pia, key, "ping").status_code == 401
 
 
-def test_old_roles_upgrade_and_keep_what_they_saw(app, authed):
+def test_older_roles_become_organisations(app, authed):
     eid = make(authed, "Legacy Co")
     with db(app) as conn:
         conn.execute(
-            "INSERT INTO users (username, password_hash, created_at, role) "
-            "VALUES ('mem', 'x', '2026-01-01', 'member'), ('vie', 'x', '2026-01-01', 'viewer')"
+            "INSERT INTO users (username, password_hash, created_at, role, expires_at) VALUES "
+            "('mem', 'x', '2026-01-01', 'member', ''), ('vie', 'x', '2026-01-01', 'viewer', ''), "
+            "('tri', 'x', '2026-01-01', 'trial', '2030-01-01T00:00:00+00:00')"
         )
+        conn.execute("UPDATE engagements SET created_by = 'mem' WHERE id = ?", (eid,))
     webdb.init_db(app.state.db_path)  # what a restart does
     with db(app) as conn:
-        assert access.role_of(conn, "mem") == "partner"
-        assert access.role_of(conn, "vie") == "client"
+        mem, vie, tri = (access.account(conn, n) for n in ("mem", "vie", "tri"))
+        assert mem.role == "user" and mem.partner and mem.team_role == "admin"
+        assert vie.role == "user" and not vie.partner
+        assert tri.poc_until.startswith("2030-01-01")
         assert access.can_see(conn, "mem", eid) and access.can_see(conn, "vie", eid)
-
-
-# ---- the super admin console at /dashboard
-
-
-def test_only_a_super_admin_opens_the_console(app, authed):
-    assert "Super admin dashboard" in authed.get("/dashboard").text
-    add(authed, "ada", "admin")
-    add(authed, "pat", "partner")
-    for name in ("ada", "pat"):
-        c = sign_in(app, name)
-        # It doesn't exist for them: "not found", not "forbidden".
-        assert c.get("/dashboard").status_code == 404, name
-        assert post(c, "/dashboard/invite", {"email": "x@example.com"}).status_code == 404
-    # Nothing in the tool links to it, even for the super admin; signed out it's not found.
-    for page in ("/", "/engagements", "/team"):
-        assert 'href="/dashboard"' not in authed.get(page).text
-    assert TestClient(app).get("/dashboard", follow_redirects=False).status_code == 404
-    assert "noindex" in authed.get("/dashboard").text
-    assert 'class="sidebar"' not in authed.get("/dashboard").text
-
-
-def test_console_invites_a_poc_with_access_and_shows_the_link(app, authed):
-    eid = make(authed, "Prospect Ltd")
-    r = post(
-        authed,
-        "/dashboard/invite",
-        {"email": "neha.k@gmail.com", "role": "trial", "days": "30", "engagements": str(eid)},
-    )
-    # No email service in tests: the one-time link is shown to share by hand.
-    link = re.search(r'id="invite-link" value="([^"]+)"', r.text).group(1)
-    assert "/invite/" in link and "neha.k" in r.text
-    with db(app) as conn:
-        row = conn.execute("SELECT * FROM users WHERE username = 'neha.k'").fetchone()
-        assert row["role"] == "trial" and row["email"] == "neha.k@gmail.com"
-        assert access.days_left(row["expires_at"]) == 30
-        assert access.can_see(conn, "neha.k", eid)
-    # The link sets a password and lets them in, straight to their client.
-    c = TestClient(app)
-    path = link.split("://", 1)[1].split("/", 1)[1]
-    token = csrf(c, "/" + path)
-    c.post("/" + path, data={"password": PW, "confirm": PW, "csrf": token})
-    c2 = sign_in(app, "neha.k")
-    assert c2.get("/", follow_redirects=False).headers["location"] == f"/engagements/{eid}"
-    # The same email can't be invited twice under another name.
-    r = post(authed, "/dashboard/invite", {"email": "neha.k@gmail.com", "role": "client"})
-    assert "neha.k2" not in r.text
-
-
-def test_console_tracks_extends_converts_and_ends_pocs(app, authed):
-    post(authed, "/dashboard/invite", {"email": "soon@example.com", "role": "trial", "days": "7"})
-    post(authed, "/dashboard/invite", {"email": "later@example.com", "role": "trial", "days": "60"})
-    page = authed.get("/dashboard").text
-    pocs = page.split('id="pocs"')[1].split('id="invite"')[0]
-    assert pocs.index("soon") < pocs.index("later")  # ending soonest first
-    assert "7 days left" in pocs
-    post(authed, "/dashboard/poc/soon/extend", {"days": "14"})
-    with db(app) as conn:
-        assert access.days_left(access_end(conn, "soon")) == 21
-    post(authed, "/dashboard/poc/later/end")
-    with db(app) as conn:
-        assert access.expired(access_end(conn, "later"))
-    post(authed, "/dashboard/poc/soon/convert")
-    with db(app) as conn:
-        assert access.role_of(conn, "soon") == "client" and access_end(conn, "soon") == ""
-
-
-def test_console_gives_and_removes_access(app, authed):
-    a, b = make(authed, "Alpha Co"), make(authed, "Beta Co")
-    add(authed, "pat", "partner")
-    post(authed, "/dashboard/people/pat/grant", {"engagements": str(a)})
-    pat = sign_in(app, "pat")
-    assert pat.get(f"/engagements/{a}").status_code == 200
-    assert pat.get(f"/engagements/{b}").status_code == 404
-    post(authed, f"/dashboard/people/pat/revoke/{a}")
-    assert pat.get(f"/engagements/{a}").status_code == 404
-    # Role changes from the console, and the owner can't remove the last super admin.
-    post(authed, "/dashboard/people/pat/role", {"role": "admin"})
-    assert pat.get(f"/engagements/{b}").status_code == 200
-    r = post(authed, "/dashboard/people/harshit/role", {"role": "client"})
-    assert "Keep at least one super admin" in r.text
-
-
-def access_end(conn, name):
-    return conn.execute("SELECT expires_at FROM users WHERE username = ?", (name,)).fetchone()[0]
+        assert conn.execute("SELECT org_id FROM engagements WHERE id = ?", (eid,)).fetchone()[0]

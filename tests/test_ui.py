@@ -18,12 +18,16 @@ def test_no_placeholder_buttons_for_features_that_do_not_exist():
 
 
 def test_login_page_has_the_new_flow(client):
-    page = client.get("/login").text
-    for text in ('id="reveal"', "Caps Lock is on", "Ask its admin or partner", 'href="/forgot"'):
+    # Step 1: choose the portal; step 2: the sign-in form for it.
+    first = client.get("/login").text
+    assert 'href="/login?as=company"' in first and 'href="/login?as=partner"' in first
+    assert 'name="password"' not in first
+    page = client.get("/login?as=partner").text
+    for text in ('id="reveal"', "Caps Lock is on", "Partner sign in", 'href="/forgot"'):
         assert text in page
+    assert 'name="portal" value="partner"' in page
     assert "Continue with Google" not in page  # not configured in tests
     assert 'id="palette"' not in page  # the search palette is for signed-in users only
-    assert 'name="portal" value="client"' in page and 'name="portal" value="partner"' in page
 
 
 def test_failed_login_keeps_the_username(client):

@@ -1050,13 +1050,17 @@ pre.code { background: var(--hover); border: 1px solid var(--border); border-rad
 .inline-email { display: flex; gap: .35rem; align-items: center; margin-top: .3rem; }
 .inline-email input { max-width: 15rem; padding: .25rem .45rem; font-size: .85rem; }
 
-/* Sign in: company or partner (sets where you start; the account decides access). */
-.portal-choice { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin: .6rem 0 .3rem; }
-.portal-option { display: flex; gap: .5rem; align-items: flex-start; padding: .6rem .7rem; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; }
-.portal-option input { margin-top: .2rem; width: auto; }
-.portal-option span { display: grid; }
-.portal-option small { color: var(--muted); font-size: .8rem; }
-.portal-option:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+/* Log in: step 1 picks the portal (company or partner), step 2 is the form. */
+.portal-card { max-width: 440px; }
+.portal-list { display: grid; gap: .75rem; margin: 1.2rem 0 1rem; }
+.portal-tile { display: grid; grid-template-columns: auto 1fr auto; gap: .9rem; align-items: center; padding: 1rem 1.1rem; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); text-decoration: none; background: var(--surface); transition: border-color .15s, box-shadow .15s, transform .15s; }
+.portal-tile:hover, .portal-tile:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); transform: translateY(-1px); }
+.portal-icon { display: grid; place-items: center; width: 2.6rem; height: 2.6rem; border-radius: 10px; background: var(--accent-soft); color: var(--accent); }
+.portal-icon .icon { width: 1.3rem; height: 1.3rem; }
+.portal-text { display: grid; gap: .15rem; }
+.portal-text small { color: var(--muted); font-size: .85rem; }
+.portal-go { color: var(--muted); }
+.portal-back { display: inline-block; margin-bottom: .6rem; color: var(--muted); }
 
 /* Admin console */
 .invite-link { border-color: var(--accent); }
@@ -1069,3 +1073,44 @@ pre.code { background: var(--hover); border: 1px solid var(--border); border-rad
 .owner-bar .brand-text { display: flex; flex-direction: row; align-items: center; gap: .5rem; font-weight: 700; }
 .owner-bar .brand-text small { display: inline; color: var(--muted); font-weight: 600; font-size: .8rem; }
 .owner-main { max-width: 1280px; margin: 0 auto; }
+
+/* Team & roles */
+.role-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .75rem; margin-bottom: 1rem; }
+.role-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: .9rem 1rem; }
+.role-card p { margin: 0; }
+.role-card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: .35rem !important; }
+.role-card-head strong { font-size: 1.3rem; }
+.role-pill { display: inline-block; padding: .15rem .6rem; border-radius: 999px; font-size: .8rem; font-weight: 700; background: var(--accent-soft); color: var(--accent); }
+.role-pill-manager { background: color-mix(in srgb, var(--good) 16%, transparent); color: var(--good); }
+.role-pill-viewer { background: color-mix(in srgb, var(--muted) 16%, transparent); color: var(--text-2); }
+.member-list { list-style: none; margin: 0; padding: 0; }
+.member { display: grid; grid-template-columns: auto 1fr auto auto; gap: .75rem; align-items: center; padding: .7rem 0; border-top: 1px solid var(--border); }
+.member:first-child { border-top: 0; }
+.member-who { display: grid; min-width: 0; }
+.member-who small { overflow-wrap: anywhere; }
+.member-role select { min-width: 8rem; }
+.member-more { position: relative; }
+.member-more summary { list-style: none; cursor: pointer; padding: .2rem .5rem; border-radius: var(--radius-sm); font-weight: 700; }
+.member-more summary::-webkit-details-marker { display: none; }
+.member-more .menu { position: absolute; right: 0; z-index: 5; min-width: 13rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow-lg); padding: .35rem; }
+.member-more .menu button { display: block; width: 100%; text-align: left; padding: .45rem .6rem; }
+.danger-text { color: var(--critical) !important; }
+@media (max-width: 560px) { .member { grid-template-columns: auto 1fr; } .member-role, .member-more, .member > .role-pill { grid-column: 2; justify-self: start; } }
+.org-list { list-style: none; margin: 0; padding: 0; }
+.org { padding: .9rem 0; border-top: 1px solid var(--border); }
+.org:first-child { border-top: 0; padding-top: 0; }
+.org-head { display: flex; flex-wrap: wrap; gap: .45rem; align-items: center; }
+.org-meta { margin: .35rem 0 .55rem; }
+.org-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.org-actions form { display: flex; gap: .5rem; align-items: center; margin: 0; }
+.org-actions .days-field, label.days-field, span.days-field { display: inline-flex; flex-direction: row; flex: 0 0 auto; align-items: center; gap: .35rem; margin: 0; font-weight: 500; }
+.days-field input[type=number] { width: 5.5rem; margin: 0; }
+.new-org { border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); padding: .8rem; margin: 0; }
+.kind-choice { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+.kind-option { display: flex; gap: .5rem; align-items: flex-start; padding: .55rem .65rem; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; }
+.kind-option input { width: auto; margin-top: .2rem; }
+.kind-option span { display: grid; }
+.kind-option small { color: var(--muted); font-size: .8rem; }
+.kind-option:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.table-scroll { overflow-x: auto; }
+[hidden] { display: none !important; }

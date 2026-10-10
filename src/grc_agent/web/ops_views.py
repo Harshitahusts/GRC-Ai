@@ -40,11 +40,11 @@ from grc_agent.web import (
     datamanager,
     db,
     discovery_views,
+    invites,
     mailer,
     register_views,
 )
 from grc_agent.web.registers import REGISTERS, TASKS
-from grc_agent.web.security import hash_password
 
 CONTROL_STATUSES = {
     "not_started": "Not started",
@@ -59,14 +59,6 @@ CONTROL_BADGE = {
     "needs_review": "badge-warn",
     "implemented": "badge-pass",
     "not_applicable": "badge-none",
-}
-ROLES = access.ROLES
-ROLE_LABELS = {
-    "super_admin": "Super admin",
-    "admin": "Admin",
-    "partner": "Partner",
-    "client": "Client",
-    "trial": "Trial",
 }
 
 EVIDENCE_MAX_BYTES = int(float(os.getenv("GRC_EVIDENCE_MAX_MB", "10")) * 1024 * 1024)
@@ -348,12 +340,12 @@ def register(app: FastAPI) -> None:
         Conn,
         User,
         _summary,
+        current_account,
         flash,
         form_with_csrf,
         get_engagement,
         redirect,
         render,
-        user_role,
     )
 
     def agent_engagement(conn, eid):
@@ -847,210 +839,134 @@ def register(app: FastAPI) -> None:
             ],
         )
 
-    # ---- team
+    # ---- team & roles: an organisation's own people (Admin / Manager / Viewer)
+
+    def my_org(request):
+        acct = current_account(request)
+        if acct.org_id is None:
+            return acct, None
+        return acct, acct.org_id
+
+    def member_of(conn, org_id: int, name: str):
+        row = conn.execute(
+            "SELECT * FROM users WHERE LOWER(username) = LOWER(?) AND org_id = ?",
+            (name, org_id),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="No such person in your team")
+        return row
+
+    def require_team_admin(acct):
+        if not acct.team_admin:
+            raise HTTPException(status_code=403, detail="Only your team's admins can do this.")
 
     @app.get("/team")
     def team_page(request: Request, user: User, conn: Conn):
+        acct, org_id = my_org(request)
+        if org_id is None:
+            # GRC Flow's own staff have no customer team; the owner runs people elsewhere.
+            if acct.role == "super_admin":
+                return redirect("/dashboard")
+            raise HTTPException(status_code=404, detail="Not found")
         rows = conn.execute(
-            "SELECT u.username, u.role, u.created_at, u.email, "
-            "u.expires_at, u.password_hash LIKE '!%' AS no_password, "
+            "SELECT u.username, u.email, u.team_role, u.created_at, "
+            "u.password_hash LIKE '!%' AS invited, "
             "(SELECT COUNT(*) FROM login_identities i "
             " WHERE LOWER(i.username) = LOWER(u.username)) AS sign_ins "
-            "FROM users u ORDER BY u.username"
+            "FROM users u WHERE u.org_id = ? ORDER BY LOWER(u.username)",
+            (org_id,),
         ).fetchall()
+        counts = {k: sum(1 for r in rows if r["team_role"] == k) for k in access.TEAM_ROLES}
         return render(
             request,
             "team.html",
             rows=rows,
-            roles=ROLES,
-            grantable=grantable(user_role(request)),
-            is_admin=access.is_staff(user_role(request)),
+            counts=counts,
+            team_roles=access.TEAM_ROLES,
+            can_manage=acct.team_admin,
             mail_on=mailer.configured(),
-            engagements=conn.execute(
-                "SELECT id, client FROM engagements ORDER BY client"
-            ).fetchall(),
-            days_left=access.days_left,
         )
-
-    def require_admin(request):
-        if not access.is_staff(user_role(request)):
-            raise HTTPException(status_code=403, detail="Only an admin can manage the team.")
-
-    def grantable(role: str) -> list[str]:
-        """Roles this person may give: a super admin any, an admin the non-staff ones."""
-        if role == "super_admin":
-            return list(ROLES)
-        if role == "admin":
-            return [r for r in ROLES if r not in access.STAFF]
-        return []
-
-    async def new_account(
-        request, conn, by: str, name: str, email: str, password: str, role: str
-    ) -> tuple[bool, str]:
-        """Create an account and send its invite. Returns (created, message for the flash)."""
-        if not re.fullmatch(r"[A-Za-z0-9._-]{2,40}", name):
-            return False, "Use 2-40 letters, digits, dots, dashes or underscores for the username."
-        if conn.execute("SELECT 1 FROM users WHERE LOWER(username) = LOWER(?)", (name,)).fetchone():
-            return False, f"{name} already has an account. Pick another username."
-        if problem := auth_views.email_problem(conn, email, name):
-            return False, problem
-        invite = not password
-        if invite and not (email and mailer.configured()):
-            return False, (
-                "Give a starting password, or an email address to send an invite to"
-                + ("." if mailer.configured() else " (email isn't set up on this server yet).")
-            )
-        if password and len(password) < 10:
-            return False, "Give a starting password of at least 10 characters."
-        conn.execute(
-            "INSERT INTO users (username, password_hash, created_at, role, email, expires_at) "
-            "VALUES (?,?,?,?,?,?)",
-            (
-                name,
-                auth_views.NO_PASSWORD if invite else hash_password(password),
-                db.now(),
-                role,
-                email,
-                access.trial_end() if role == "trial" else "",
-            ),
-        )
-        db.audit(conn, by, "user_created", None, {"username": name, "role": role})
-        label = ROLE_LABELS.get(role, role)
-        if invite:
-            try:
-                auth_views.send_invite(conn, request, name, email, by)
-            except mailer.MailError as exc:
-                return True, (
-                    f"Added {name}, but the invite email didn't send: {exc} "
-                    "Use “Send invite” on Team & roles to try again."
-                )
-            return True, f"Added {name} as {label} and emailed an invite to {email}."
-        return True, f"Added {name} as {label}. Share the starting password privately."
 
     @app.post("/team")
-    async def team_add(request: Request, user: User, conn: Conn):
+    async def team_invite(request: Request, user: User, conn: Conn):
         form = await form_with_csrf(request)
-        require_admin(request)
-        role = str(form.get("role", "partner"))
-        if role not in grantable(user_role(request)):
-            raise HTTPException(status_code=403, detail="You can't give that role.")
-        name = str(form.get("username", "")).strip()
-        ok, message = await new_account(
-            request,
-            conn,
-            user,
-            name,
-            str(form.get("email", "")).strip(),
-            str(form.get("password", "")),
-            role,
+        acct, org_id = my_org(request)
+        require_team_admin(acct)
+        team_role = str(form.get("team_role", "viewer"))
+        if team_role not in access.TEAM_ROLES:
+            raise HTTPException(status_code=400, detail="Unknown role")
+        email = str(form.get("email", ""))
+        result = invites.invite(
+            conn, request, user, email, role="user", org_id=org_id, team_role=team_role
         )
-        if ok:
-            eid = str(form.get("engagement", "")).strip()
-            if (
-                eid.isdigit()
-                and conn.execute("SELECT 1 FROM engagements WHERE id = ?", (int(eid),)).fetchone()
-            ):
-                access.grant(conn, int(eid), name, user)
-                db.audit(conn, user, "access_granted", int(eid), {"username": name})
-        flash(request, message, "info" if ok else "error")
+        invites.remember_link(request, result, email)
+        flash(request, result.message, "info" if result.ok else "error")
         return redirect("/team")
 
-    @app.post("/team/{name}/email")
-    async def team_email(name: str, request: Request, user: User, conn: Conn):
+    @app.post("/team/{name}/role")
+    async def team_change_role(name: str, request: Request, user: User, conn: Conn):
         form = await form_with_csrf(request)
-        require_admin(request)
-        row = conn.execute(
-            "SELECT username FROM users WHERE LOWER(username) = LOWER(?)", (name,)
-        ).fetchone()
-        if row is None:
-            raise HTTPException(status_code=404, detail="No such user")
-        email = str(form.get("email", "")).strip()
-        if problem := auth_views.email_problem(conn, email, row["username"]):
-            flash(request, problem, "error")
+        acct, org_id = my_org(request)
+        require_team_admin(acct)
+        row = member_of(conn, org_id, name)
+        team_role = str(form.get("team_role", ""))
+        if team_role not in access.TEAM_ROLES:
+            raise HTTPException(status_code=400, detail="Unknown role")
+        admins = conn.execute(
+            "SELECT COUNT(*) FROM users WHERE org_id = ? AND team_role = 'admin'", (org_id,)
+        ).fetchone()[0]
+        if row["team_role"] == "admin" and team_role != "admin" and admins <= 1:
+            flash(request, "Keep at least one admin in your team.", "error")
             return redirect("/team")
-        conn.execute("UPDATE users SET email = ? WHERE LOWER(username) = LOWER(?)", (email, name))
-        db.audit(
-            conn, user, "email_changed", None, {"username": row["username"], "set": bool(email)}
+        conn.execute(
+            "UPDATE users SET team_role = ? WHERE username = ?", (team_role, row["username"])
         )
-        flash(request, f"Saved the email for {row['username']}.")
+        # The analyst's tools depend on the role, so it starts afresh with the new one.
+        for key in [k for k in request.app.state.agents if k.lower() == name.lower()]:
+            request.app.state.agents.pop(key, None)
+        db.audit(
+            conn, user, "team_role_changed", None, {"username": row["username"], "to": team_role}
+        )
+        flash(request, f"{row['username']} is now {access.TEAM_ROLES[team_role].split(':')[0]}.")
+        return redirect("/team")
+
+    @app.post("/team/{name}/remove")
+    async def team_remove(name: str, request: Request, user: User, conn: Conn):
+        await form_with_csrf(request)
+        acct, org_id = my_org(request)
+        require_team_admin(acct)
+        row = member_of(conn, org_id, name)
+        if row["username"].lower() == user.lower():
+            flash(request, "You can't remove yourself.", "error")
+            return redirect("/team")
+        invites.remove_account(conn, row["username"], user)
+        flash(request, f"Removed {row['username']} from your team.")
         return redirect("/team")
 
     @app.post("/team/{name}/send-link")
     async def team_send_link(name: str, request: Request, user: User, conn: Conn):
         await form_with_csrf(request)
-        require_admin(request)
-        row = conn.execute(
-            "SELECT * FROM users WHERE LOWER(username) = LOWER(?)", (name,)
-        ).fetchone()
-        if row is None:
-            raise HTTPException(status_code=404, detail="No such user")
-        if not row["email"]:
-            flash(request, f"Add an email for {row['username']} first.", "error")
-            return redirect("/team")
-        invite = not auth_views.has_password(row)
-        try:
-            if invite:
-                auth_views.send_invite(conn, request, row["username"], row["email"], user)
-            else:
+        acct, org_id = my_org(request)
+        require_team_admin(acct)
+        row = member_of(conn, org_id, name)
+        if auth_views.has_password(row):
+            if not (mailer.configured() and row["email"]):
+                flash(request, "Email isn't set up, so a reset link can't be sent.", "error")
+                return redirect("/team")
+            try:
                 auth_views.send_reset(conn, request, row["username"], row["email"], user)
-        except mailer.MailError as exc:
-            flash(request, f"The email didn't send: {exc}", "error")
+            except mailer.MailError as exc:
+                flash(request, f"The email didn't send: {exc}", "error")
+                return redirect("/team")
+            flash(request, f"Emailed a password-reset link to {row['email']}.")
             return redirect("/team")
-        flash(
-            request,
-            f"Emailed {'an invite' if invite else 'a password-reset link'} to {row['email']}.",
-        )
+        result = invites.send(conn, request, user, row["username"], row["email"])
+        invites.remember_link(request, result, row["email"])
+        flash(request, result.message, "info" if result.ok else "error")
         return redirect("/team")
 
-    @app.post("/team/{name}/role")
-    async def team_role(name: str, request: Request, user: User, conn: Conn):
-        form = await form_with_csrf(request)
-        require_admin(request)
-        role = str(form.get("role", ""))
-        if role not in ROLES:
-            raise HTTPException(status_code=400, detail="Unknown role")
-        row = conn.execute(
-            "SELECT role FROM users WHERE LOWER(username) = LOWER(?)", (name,)
-        ).fetchone()
-        if row is None:
-            raise HTTPException(status_code=404, detail="No such user")
-        allowed = grantable(user_role(request))
-        if role not in allowed or row["role"] not in allowed:
-            flash(request, "Only a super admin can change an admin's role.", "error")
-            return redirect("/team")
-        owners = conn.execute("SELECT COUNT(*) FROM users WHERE role = 'super_admin'").fetchone()[0]
-        if row["role"] == "super_admin" and role != "super_admin" and owners <= 1:
-            flash(request, "Keep at least one super admin.", "error")
-            return redirect("/team")
-        # A trial gets a fresh end date; any other role has none.
-        conn.execute(
-            "UPDATE users SET role = ?, expires_at = ? WHERE LOWER(username) = LOWER(?)",
-            (role, access.trial_end() if role == "trial" else "", name),
-        )
-        # The analyst's tools depend on the role, so it starts afresh with the new one.
-        for key in [k for k in request.app.state.agents if k.lower() == name.lower()]:
-            request.app.state.agents.pop(key, None)
-        db.audit(conn, user, "role_changed", None, {"username": name, "role": role})
-        flash(request, f"{name} is now {ROLE_LABELS.get(role, role)}.")
-        return redirect("/team")
-
-    @app.post("/team/{name}/extend")
-    async def team_extend(name: str, request: Request, user: User, conn: Conn):
-        """Give a trial another TRIAL_DAYS from today."""
-        await form_with_csrf(request)
-        require_admin(request)
-        row = conn.execute(
-            "SELECT username, role FROM users WHERE LOWER(username) = LOWER(?)", (name,)
-        ).fetchone()
-        if row is None or row["role"] != "trial":
-            raise HTTPException(status_code=404, detail="No such trial account")
-        end = access.trial_end()
-        conn.execute("UPDATE users SET expires_at = ? WHERE username = ?", (end, row["username"]))
-        db.audit(conn, user, "trial_extended", None, {"username": row["username"], "until": end})
-        flash(request, f"{row['username']}'s trial now ends {end[:10]}.")
-        return redirect("/team")
-
-    # ---- who can open an engagement (partners and staff bring a client's people in)
+    # ---- who can open an engagement: its lead brings in people from outside the team,
+    # usually the client's own staff when a partner runs it
 
     def require_lead(conn, user, eid):
         if not access.leads(conn, user, eid):
@@ -1060,24 +976,29 @@ def register(app: FastAPI) -> None:
 
     @app.post("/engagements/{eid}/access")
     async def access_invite(eid: int, request: Request, user: User, conn: Conn):
-        """Create an account for someone at this client and give them this engagement."""
+        """Create an account for someone outside the team, with this engagement only."""
         form = await form_with_csrf(request)
         get_engagement(conn, eid)
         require_lead(conn, user, eid)
-        name = str(form.get("username", "")).strip()
-        ok, message = await new_account(
-            request,
+        team_role = str(form.get("team_role", "viewer"))
+        if team_role not in ("manager", "viewer"):
+            raise HTTPException(status_code=400, detail="Pick Manager or Viewer")
+        email = str(form.get("email", ""))
+        result = invites.invite(
             conn,
+            request,
             user,
-            name,
-            str(form.get("email", "")).strip(),
-            str(form.get("password", "")),
-            "client",
+            email,
+            username=str(form.get("username", "")),
+            role="user",
+            org_id=None,
+            team_role=team_role,
         )
-        if ok:
-            access.grant(conn, eid, name, user)
-            db.audit(conn, user, "access_granted", eid, {"username": name})
-        flash(request, message, "info" if ok else "error")
+        if result.ok:
+            access.grant(conn, eid, result.username, user)
+            db.audit(conn, user, "access_granted", eid, {"username": result.username})
+        invites.remember_link(request, result, email)
+        flash(request, result.message, "info" if result.ok else "error")
         return redirect(f"/engagements/{eid}#access")
 
     @app.post("/engagements/{eid}/access/grant")
@@ -1085,7 +1006,8 @@ def register(app: FastAPI) -> None:
         """Staff only: give an existing account this engagement."""
         form = await form_with_csrf(request)
         get_engagement(conn, eid)
-        require_admin(request)
+        if not current_account(request).staff:
+            raise HTTPException(status_code=403, detail="Only GRC Flow staff can do this.")
         row = conn.execute(
             "SELECT username FROM users WHERE LOWER(username) = LOWER(?)",
             (str(form.get("username", "")).strip(),),

@@ -61,31 +61,30 @@
 
 <section class="card" id="access">
   <div class="card-head"><h2>People with access</h2></div>
-  <p class="muted small">Besides admins and <strong>{{ eng.created_by }}</strong>, who set this up, only these people can open {{ eng.client }}. Nobody here sees any other client.</p>
+  <p class="muted small">{% if eng.org_id %}Your team{% else %}<strong>{{ eng.created_by }}</strong>, who set this up,{% endif %} and these people can open {{ eng.client }}. People added here see this engagement only, nothing else.</p>
+  {% if is_admin %}{% include "_invite_link.html" %}{% endif %}
   {% if people_with_access %}
-  <table class="table">
-    <thead><tr><th>Account</th><th>Role</th><th class="hide-sm">Added</th>{% if is_admin %}<th></th>{% endif %}</tr></thead>
-    <tbody>
-      {% for p in people_with_access %}
-      <tr>
-        <td><strong>{{ p.username }}</strong>{% if p.email %}<br><span class="small muted">{{ p.email }}</span>{% endif %}</td>
-        <td>{{ role_names[p.role] or "Removed" }}</td>
-        <td class="hide-sm small muted">{{ p.granted_at[:10] }} by {{ p.granted_by }}</td>
-        {% if is_admin %}<td class="nowrap">{% if p.username != user %}<form method="post" action="/engagements/{{ eng.id }}/access/{{ p.username|urlencode }}/remove"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="link small">Remove</button></form>{% endif %}</td>{% endif %}
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% else %}<p class="muted small">Nobody else yet.</p>{% endif %}
+  <ul class="member-list">
+    {% for p in people_with_access %}
+    <li class="member">
+      <span class="avatar" aria-hidden="true">{{ p.username[:1]|upper }}</span>
+      <span class="member-who"><strong>{{ p.username }}</strong><small class="muted">{{ p.email or "No email" }} · added {{ p.granted_at[:10] }} by {{ p.granted_by }}</small></span>
+      <span class="role-pill role-pill-{{ p.team_role or 'viewer' }}">{{ team_role_names[p.team_role] if p.team_role else "Removed" }}</span>
+      {% if is_admin and p.username != user %}<form method="post" action="/engagements/{{ eng.id }}/access/{{ p.username|urlencode }}/remove"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="link small">Remove</button></form>{% else %}<span></span>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}<p class="muted small">Nobody from outside the team yet.</p>{% endif %}
   {% if is_admin %}
   <details class="small">
     <summary>Invite someone from {{ eng.client }}</summary>
     <form method="post" action="/engagements/{{ eng.id }}/access" class="stack">
       <input type="hidden" name="csrf" value="{{ csrf }}">
-      <p class="muted">They get a <strong>Client</strong> account that opens this engagement only: they can answer the intake, upload evidence and work the registers.</p>
-      <label>Username <input name="username" required maxlength="40" pattern="[A-Za-z0-9._\-]{2,40}" autocomplete="off"></label>
-      <label>Email {% if not mail_on %}<span class="muted small">(optional)</span>{% endif %}<input name="email" type="email" maxlength="254" autocomplete="off" placeholder="name@{{ eng.client|lower|replace(' ', '') }}.com"></label>
-      <label>Starting password {% if mail_on %}<span class="muted small">(optional: leave empty to email an invite)</span>{% endif %}<input name="password" type="password" {% if not mail_on %}required{% endif %} minlength="10" autocomplete="new-password"></label>
+      <label>Email <input name="email" type="email" required maxlength="254" autocomplete="off" placeholder="name@company.com"></label>
+      <label>Role
+        <select name="team_role"><option value="manager">Manager: answers the intake, uploads evidence, works the registers</option><option value="viewer" selected>Viewer: reads, changes nothing</option></select>
+      </label>
+      <p class="muted">{% if mail_on %}They get an email to set a password.{% else %}You'll get a one-time link to send them.{% endif %}</p>
       <p><button type="submit" class="primary">{{ icon("i-plus") }} Invite</button></p>
     </form>
   </details>

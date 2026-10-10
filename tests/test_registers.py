@@ -5,7 +5,7 @@ from html import escape
 from pathlib import Path
 
 import pytest
-from helpers import PASSWORD, create, csrf, login, post
+from helpers import PASSWORD, add_member, create, csrf, login, post
 
 from grc_agent.web import db as webdb
 from grc_agent.web.registers import REGISTERS, clean, status_problems
@@ -331,16 +331,11 @@ def test_work_queue_and_audit_log(authed):
     )
 
 
-def test_client_sees_only_their_engagement_and_last_super_admin_stays(app, authed, client):
-    r = post(authed, "/team", {"username": "vera", "password": "client-pass-123", "role": "client"})
-    assert "Added vera as Client" in r.text
-    assert (
-        "Keep at least one super admin"
-        in post(authed, "/team/harshit/role", {"role": "partner"}).text
-    )
+def test_guest_sees_only_the_engagement_given_and_viewers_read_only(app, authed, client):
+    add_member(app, "vera", team_role="manager", password="client-pass-123")
     eid = create(authed)
     authed.cookies.clear()
-    token = csrf(client, "/login")
+    token = csrf(client, "/login?as=company")
     client.post("/login", data={"username": "vera", "password": "client-pass-123", "csrf": token})
     # Not given the engagement yet: it doesn't exist for her.
     assert client.get(f"/engagements/{eid}").status_code == 404
@@ -354,17 +349,15 @@ def test_client_sees_only_their_engagement_and_last_super_admin_stays(app, authe
         )
     assert client.get(f"/engagements/{eid}/r/tasks").status_code == 200
     r = post(client, f"/engagements/{eid}/r/tasks", {"title": "x", "priority": "low"})
-    assert r.status_code == 200  # clients work their own registers
-    assert (
-        post(
-            client, "/team", {"username": "x2", "password": "0123456789", "role": "admin"}
-        ).status_code
-        == 403
-    )
+    assert r.status_code == 200  # a manager works the registers
+    with db(app) as conn:
+        conn.execute("UPDATE users SET team_role = 'viewer' WHERE username = 'vera'")
+    r = post(client, f"/engagements/{eid}/r/tasks", {"title": "y", "priority": "low"})
+    assert r.status_code == 403 and "read-only" in r.text
 
 
 def test_only_the_lead_marks_not_applicable(app, authed, client):
-    post(authed, "/team", {"username": "mona", "password": "client-pass-123", "role": "client"})
+    add_member(app, "mona", team_role="manager", password="client-pass-123")
     eid = create(authed)
     with db(app) as conn:
         conn.execute(
@@ -373,7 +366,7 @@ def test_only_the_lead_marks_not_applicable(app, authed, client):
             (eid,),
         )
     authed.cookies.clear()
-    token = csrf(client, "/login")
+    token = csrf(client, "/login?as=company")
     client.post("/login", data={"username": "mona", "password": "client-pass-123", "csrf": token})
     r = post(
         client,

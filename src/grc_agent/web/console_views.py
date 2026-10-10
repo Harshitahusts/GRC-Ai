@@ -1,57 +1,41 @@
-"""The super admin console at /dashboard: invite people, run POCs, hand out access.
+"""The super admin dashboard at /dashboard: organisations, POCs, people and access.
 
-One page for the workspace owner to bring someone in by email with a role, see whose
-proof of concept (a trial account) is about to end, extend or convert it, and give or
-take away access to clients, without going engagement by engagement. Only a super
-admin can open it (access.OWNER_PATHS).
+A hidden page for the workspace owner (access.OWNER_PATHS; anyone else gets "not
+found"). From here the owner sets up a customer organisation (a company or a partner),
+decides whether it is a POC and for how many days, invites its people with their team
+role (Admin / Manager / Viewer), and gives or takes away access to engagements. The
+platform roles (super admin, GRC Flow admin) are only ever set here.
 """
-
-import re
 
 from fastapi import FastAPI, HTTPException, Request
 
-from grc_agent.web import access, auth_views, db, mailer
+from grc_agent.web import access, db, invites, mailer
 
-ROLE_CHOICES = {
-    "client": "Client: their own company",
-    "trial": "POC / trial: ends on a date",
-    "partner": "Partner: runs DPDP for their clients",
-    "admin": "Admin: every client and the team",
-    "super_admin": "Super admin: owns the workspace",
-}
-POC_DAYS = (7, 14, 30, 60, 90)
 ENDING_SOON_DAYS = 7
+MAX_POC_DAYS = 365
 
 
-def username_from_email(conn, email: str) -> str:
-    """A free username made from the part of the email before the @."""
-    base = re.sub(r"[^A-Za-z0-9._-]", "", email.split("@", 1)[0])[:34] or "user"
-    if len(base) < 2:
-        base = f"{base}-user"
-    name, n = base, 1
-    while conn.execute("SELECT 1 FROM users WHERE LOWER(username) = LOWER(?)", (name,)).fetchone():
-        n += 1
-        name = f"{base}{n}"
-    return name
-
-
-def poc_status(expires_at: str) -> str:
-    left = access.days_left(expires_at)
+def poc_status(poc_until: str) -> str:
+    if not poc_until:
+        return "permanent"
+    left = access.days_left(poc_until)
     if not left:
         return "ended"
     return "ending" if left <= ENDING_SOON_DAYS else "active"
 
 
+def days_from(value) -> int | None:
+    """A POC length typed by the owner: a whole number of days, 1 to MAX_POC_DAYS."""
+    text = str(value or "").strip()
+    if not text.isdigit():
+        return None
+    days = int(text)
+    return days if 1 <= days <= MAX_POC_DAYS else None
+
+
 def overview(conn) -> dict:
-    users = [
-        dict(u)
-        for u in conn.execute(
-            "SELECT username, email, role, expires_at, created_at, "
-            "password_hash LIKE '!%' AS no_password FROM users ORDER BY LOWER(username)"
-        ).fetchall()
-    ]
     engagements = conn.execute(
-        "SELECT id, client, created_by FROM engagements ORDER BY LOWER(client)"
+        "SELECT id, client, created_by, org_id FROM engagements ORDER BY LOWER(client)"
     ).fetchall()
     names = {e["id"]: e["client"] for e in engagements}
     granted: dict[str, list[dict]] = {}
@@ -60,28 +44,40 @@ def overview(conn) -> dict:
             granted.setdefault(a["username"].lower(), []).append(
                 {"id": a["engagement_id"], "client": names[a["engagement_id"]]}
             )
-    owned: dict[str, list[dict]] = {}
-    for e in engagements:
-        owned.setdefault(e["created_by"].lower(), []).append({"id": e["id"], "client": e["client"]})
+    users = [
+        dict(u)
+        for u in conn.execute(
+            "SELECT username, email, role, org_id, team_role, created_at, "
+            "password_hash LIKE '!%' AS invited FROM users ORDER BY LOWER(username)"
+        ).fetchall()
+    ]
     for u in users:
-        key = u["username"].lower()
-        u["granted"] = sorted(granted.get(key, []), key=lambda e: e["client"].lower())
-        u["owned"] = owned.get(key, [])
-        if u["role"] == "trial":
-            u["days_left"] = access.days_left(u["expires_at"])
-            u["status"] = poc_status(u["expires_at"])
-    pocs = sorted(
-        (u for u in users if u["role"] == "trial"), key=lambda u: u["expires_at"] or "9999"
-    )
-    counts = {r: sum(1 for u in users if u["role"] == r) for r in access.ROLES}
+        u["granted"] = sorted(granted.get(u["username"].lower(), []), key=lambda e: e["client"])
+    orgs = []
+    for o in conn.execute("SELECT * FROM orgs ORDER BY LOWER(name)").fetchall():
+        org = dict(o)
+        org["members"] = [u for u in users if u["org_id"] == o["id"]]
+        org["engagements"] = [e for e in engagements if e["org_id"] == o["id"]]
+        org["status"] = poc_status(o["poc_until"])
+        org["days_left"] = access.days_left(o["poc_until"])
+        orgs.append(org)
+    org_names = {o["id"]: o["name"] for o in orgs}
+    for u in users:
+        u["org_name"] = org_names.get(u["org_id"], "")
+    pocs = [o for o in orgs if o["status"] != "permanent"]
+    # POCs first, ending soonest; then the rest by name.
+    orgs.sort(key=lambda o: (o["status"] == "permanent", o["poc_until"] or "", o["name"].lower()))
     return {
+        "orgs": orgs,
         "users": users,
-        "pocs": pocs,
-        "counts": counts,
-        "poc_active": sum(1 for u in pocs if u["status"] != "ended"),
-        "poc_ending": sum(1 for u in pocs if u["status"] == "ending"),
-        "poc_ended": sum(1 for u in pocs if u["status"] == "ended"),
+        "staff": [u for u in users if u["role"] in access.STAFF],
+        "guests": [u for u in users if u["role"] not in access.STAFF and u["org_id"] is None],
         "engagements": engagements,
+        "companies": sum(1 for o in orgs if o["kind"] == "client"),
+        "partners": sum(1 for o in orgs if o["kind"] == "partner"),
+        "poc_active": sum(1 for o in pocs if o["status"] in ("active", "ending")),
+        "poc_ending": sum(1 for o in pocs if o["status"] == "ending"),
+        "poc_ended": sum(1 for o in pocs if o["status"] == "ended"),
     }
 
 
@@ -93,18 +89,26 @@ def register(app: FastAPI) -> None:
             request,
             "console.html",
             **overview(conn),
-            role_choices=ROLE_CHOICES,
-            poc_days=POC_DAYS,
+            team_roles=access.TEAM_ROLES,
+            platform_roles=access.PLATFORM_ROLES,
+            org_kinds=access.ORG_KINDS,
+            max_poc_days=MAX_POC_DAYS,
             mail_on=mailer.configured(),
             **extra,
         )
 
-    def account(conn, name: str):
+    def account_row(conn, name: str):
         row = conn.execute(
             "SELECT * FROM users WHERE LOWER(username) = LOWER(?)", (name,)
         ).fetchone()
         if row is None:
             raise HTTPException(status_code=404, detail="No such account")
+        return row
+
+    def org_row(conn, oid: int):
+        row = conn.execute("SELECT * FROM orgs WHERE id = ?", (oid,)).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="No such organisation")
         return row
 
     def engagement_ids(conn, values) -> list[int]:
@@ -116,102 +120,132 @@ def register(app: FastAPI) -> None:
             if conn.execute("SELECT 1 FROM engagements WHERE id = ?", (i,)).fetchone()
         ]
 
+    def drop_agent(request, name: str) -> None:
+        # The analyst's tools depend on the person's access, so it starts afresh.
+        for key in [k for k in request.app.state.agents if k.lower() == name.lower()]:
+            request.app.state.agents.pop(key, None)
+
     @app.get("/dashboard")
     def console(request: Request, user: User, conn: Conn):
         return page(request, conn)
 
-    @app.post("/dashboard/invite")
-    async def console_invite(request: Request, user: User, conn: Conn):
-        """Create an account with a role and send (or show) its one-time invite link."""
+    @app.post("/dashboard/accounts")
+    async def console_add(request: Request, user: User, conn: Conn):
+        """Add a person: into a new organisation, an existing one, or GRC Flow's staff."""
         form = await form_with_csrf(request)
-        email = str(form.get("email", "")).strip()
-        role = str(form.get("role", "client"))
-        if role not in access.ROLES:
-            raise HTTPException(status_code=400, detail="Unknown role")
-        if not email or "@" not in email:
-            flash(request, "Enter the person's email address.", "error")
-            return redirect("/dashboard")
-        name = str(form.get("username", "")).strip() or username_from_email(conn, email)
-        if not re.fullmatch(r"[A-Za-z0-9._-]{2,40}", name):
-            flash(request, "Use 2-40 letters, digits, dots, dashes or underscores.", "error")
-            return redirect("/dashboard")
-        if conn.execute("SELECT 1 FROM users WHERE LOWER(username) = LOWER(?)", (name,)).fetchone():
-            flash(request, f"{name} already has an account.", "error")
-            return redirect("/dashboard")
-        if problem := auth_views.email_problem(conn, email, name):
-            flash(request, problem, "error")
-            return redirect("/dashboard")
-        days = (
-            int(form.get("days", access.TRIAL_DAYS)) if str(form.get("days", "")).isdigit() else 0
+        target = str(form.get("org", "new"))
+        email = str(form.get("email", ""))
+        team_role = str(form.get("team_role", "admin"))
+        if team_role not in access.TEAM_ROLES:
+            raise HTTPException(status_code=400, detail="Unknown team role")
+        role, org_id, created = "user", None, ""
+        if target == "staff":
+            role, team_role = "admin", "admin"
+        elif target == "new":
+            name = str(form.get("org_name", "")).strip()[:120]
+            kind = str(form.get("kind", "client"))
+            if not name or kind not in access.ORG_KINDS:
+                flash(request, "Give the organisation a name and say what it is.", "error")
+                return redirect("/dashboard#add")
+            days = None
+            if form.get("poc"):
+                days = days_from(form.get("poc_days"))
+                if days is None:
+                    flash(request, f"Give the POC 1 to {MAX_POC_DAYS} days.", "error")
+                    return redirect("/dashboard#add")
+            org_id = access.new_org(conn, name, kind, days, user)
+            db.audit(conn, user, "org_created", None, {"org": name, "kind": kind, "poc_days": days})
+            created = name
+        elif target.isdigit():
+            org_id = org_row(conn, int(target))["id"]
+        else:
+            raise HTTPException(status_code=400, detail="Pick an organisation")
+        result = invites.invite(
+            conn,
+            request,
+            user,
+            email,
+            username=str(form.get("username", "")),
+            role=role,
+            org_id=org_id,
+            team_role=team_role,
         )
-        days = days if days in POC_DAYS else access.TRIAL_DAYS
-        conn.execute(
-            "INSERT INTO users (username, password_hash, created_at, role, email, expires_at) "
-            "VALUES (?,?,?,?,?,?)",
-            (
-                name,
-                auth_views.NO_PASSWORD,
-                db.now(),
-                role,
-                email,
-                access.trial_end(days) if role == "trial" else "",
-            ),
-        )
-        db.audit(conn, user, "user_created", None, {"username": name, "role": role})
+        if not result.ok:
+            if created:  # don't leave an empty organisation behind
+                conn.execute("DELETE FROM orgs WHERE id = ?", (org_id,))
+            flash(request, result.message, "error")
+            return redirect("/dashboard#add")
         for eid in engagement_ids(conn, form.get("engagements")):
-            access.grant(conn, eid, name, user)
-            db.audit(conn, user, "access_granted", eid, {"username": name})
-        what = f"{name} ({ROLE_CHOICES[role].split(':')[0]})"
-        if mailer.configured():
-            try:
-                auth_views.send_invite(conn, request, name, email, user)
-            except mailer.MailError as exc:
-                flash(request, f"Added {what}, but the email didn't send: {exc}", "error")
-                return redirect("/dashboard")
-            flash(request, f"Added {what} and emailed an invite to {email}.")
-            return redirect("/dashboard")
-        # No email service yet: show the link once so it can be shared another way.
-        token = auth_views.issue_token(conn, name, "invite", user)
-        db.audit(conn, user, "invite_link_shown", None, {"username": name})
-        return page(
-            request,
-            conn,
-            new_link=f"{auth_views.app_url(request)}/invite/{token}",
-            new_name=name,
-            new_email=email,
-        )
+            access.grant(conn, eid, result.username, user)
+            db.audit(conn, user, "access_granted", eid, {"username": result.username})
+        invites.remember_link(request, result, email)
+        flash(request, (f"Created {created}. " if created else "") + result.message)
+        return redirect("/dashboard")
 
-    @app.post("/dashboard/people/{name}/resend")
-    async def console_resend(name: str, request: Request, user: User, conn: Conn):
+    # ---- organisations and POCs
+
+    @app.post("/dashboard/orgs/{oid}/poc")
+    async def console_poc(oid: int, request: Request, user: User, conn: Conn):
+        """Set or extend a POC by any number of days: from its current end while it's
+        running, else from today (which also turns a permanent organisation into a POC)."""
+        form = await form_with_csrf(request)
+        org = org_row(conn, oid)
+        days = days_from(form.get("days"))
+        if days is None:
+            flash(request, f"Give 1 to {MAX_POC_DAYS} days.", "error")
+            return redirect("/dashboard#orgs")
+        left = access.days_left(org["poc_until"]) or 0
+        end = access.end_after(left + days)
+        conn.execute("UPDATE orgs SET poc_until = ? WHERE id = ?", (end, oid))
+        db.audit(conn, user, "poc_extended", None, {"org": org["name"], "until": end})
+        flash(request, f"{org['name']}'s POC now ends {end[:10]}.")
+        return redirect("/dashboard#orgs")
+
+    @app.post("/dashboard/orgs/{oid}/convert")
+    async def console_convert(oid: int, request: Request, user: User, conn: Conn):
+        """The POC became a customer: no end date; its people and work stay as they are."""
         await form_with_csrf(request)
-        row = account(conn, name)
-        if auth_views.has_password(row):
-            flash(request, f"{row['username']} has already set a password.", "error")
-            return redirect("/dashboard")
-        if mailer.configured() and row["email"]:
-            try:
-                auth_views.send_invite(conn, request, row["username"], row["email"], user)
-            except mailer.MailError as exc:
-                flash(request, f"The email didn't send: {exc}", "error")
-                return redirect("/dashboard")
-            flash(request, f"Emailed a new invite to {row['email']}.")
-            return redirect("/dashboard")
-        token = auth_views.issue_token(conn, row["username"], "invite", user)
-        db.audit(conn, user, "invite_link_shown", None, {"username": row["username"]})
-        return page(
-            request,
-            conn,
-            new_link=f"{auth_views.app_url(request)}/invite/{token}",
-            new_name=row["username"],
-            new_email=row["email"],
+        org = org_row(conn, oid)
+        conn.execute("UPDATE orgs SET poc_until = '' WHERE id = ?", (oid,))
+        db.audit(conn, user, "poc_converted", None, {"org": org["name"]})
+        flash(request, f"{org['name']} is now a customer, with no end date.")
+        return redirect("/dashboard#orgs")
+
+    @app.post("/dashboard/orgs/{oid}/end")
+    async def console_end(oid: int, request: Request, user: User, conn: Conn):
+        await form_with_csrf(request)
+        org = org_row(conn, oid)
+        conn.execute("UPDATE orgs SET poc_until = ? WHERE id = ?", (db.now(), oid))
+        db.audit(conn, user, "poc_ended", None, {"org": org["name"]})
+        flash(request, f"Ended {org['name']}'s access. Their data stays; extend to reopen it.")
+        return redirect("/dashboard#orgs")
+
+    # ---- people
+
+    @app.post("/dashboard/people/{name}/team-role")
+    async def console_team_role(name: str, request: Request, user: User, conn: Conn):
+        form = await form_with_csrf(request)
+        row = account_row(conn, name)
+        team_role = str(form.get("team_role", ""))
+        if team_role not in access.TEAM_ROLES:
+            raise HTTPException(status_code=400, detail="Unknown team role")
+        conn.execute(
+            "UPDATE users SET team_role = ? WHERE username = ?", (team_role, row["username"])
         )
+        drop_agent(request, row["username"])
+        db.audit(
+            conn, user, "team_role_changed", None, {"username": row["username"], "to": team_role}
+        )
+        flash(request, f"{row['username']} is now {team_role}.")
+        return redirect("/dashboard#people")
 
     @app.post("/dashboard/people/{name}/role")
-    async def console_role(name: str, request: Request, user: User, conn: Conn):
+    async def console_platform_role(name: str, request: Request, user: User, conn: Conn):
+        """Platform roles: customer, GRC Flow admin, super admin. Only ever set here."""
         form = await form_with_csrf(request)
-        row = account(conn, name)
+        row = account_row(conn, name)
         role = str(form.get("role", ""))
-        if role not in access.ROLES:
+        if role not in access.PLATFORM_ROLES:
             raise HTTPException(status_code=400, detail="Unknown role")
         if row["role"] == "super_admin" and role != "super_admin":
             owners = conn.execute(
@@ -219,69 +253,41 @@ def register(app: FastAPI) -> None:
             ).fetchone()[0]
             if owners <= 1:
                 flash(request, "Keep at least one super admin.", "error")
-                return redirect("/dashboard")
-        keep_end = row["role"] == "trial" and role == "trial"
-        conn.execute(
-            "UPDATE users SET role = ?, expires_at = ? WHERE username = ?",
-            (
-                role,
-                row["expires_at"] if keep_end else access.trial_end() if role == "trial" else "",
-                row["username"],
-            ),
-        )
-        for key in [k for k in request.app.state.agents if k.lower() == name.lower()]:
-            request.app.state.agents.pop(key, None)
+                return redirect("/dashboard#people")
+        conn.execute("UPDATE users SET role = ? WHERE username = ?", (role, row["username"]))
+        drop_agent(request, row["username"])
         db.audit(conn, user, "role_changed", None, {"username": row["username"], "role": role})
-        flash(request, f"{row['username']} is now {ROLE_CHOICES[role].split(':')[0]}.")
+        flash(request, f"{row['username']}: {access.PLATFORM_ROLES[role].split(':')[0]}.")
         return redirect("/dashboard#people")
 
-    @app.post("/dashboard/poc/{name}/extend")
-    async def console_extend(name: str, request: Request, user: User, conn: Conn):
-        """Push a POC's end date out, from today or from its current end, whichever is later."""
-        form = await form_with_csrf(request)
-        row = account(conn, name)
-        if row["role"] != "trial":
-            raise HTTPException(status_code=400, detail="Not a POC account")
-        days = int(form.get("days", 14)) if str(form.get("days", "")).isdigit() else 14
-        days = days if days in POC_DAYS else 14
-        left = access.days_left(row["expires_at"]) or 0
-        end = access.trial_end(left + days)
-        conn.execute("UPDATE users SET expires_at = ? WHERE username = ?", (end, row["username"]))
-        db.audit(conn, user, "trial_extended", None, {"username": row["username"], "until": end})
-        flash(request, f"{row['username']}'s POC now ends {end[:10]}.")
-        return redirect("/dashboard#pocs")
-
-    @app.post("/dashboard/poc/{name}/convert")
-    async def console_convert(name: str, request: Request, user: User, conn: Conn):
-        """The POC became a customer: a client account with no end date, same access."""
+    @app.post("/dashboard/people/{name}/resend")
+    async def console_resend(name: str, request: Request, user: User, conn: Conn):
         await form_with_csrf(request)
-        row = account(conn, name)
-        conn.execute(
-            "UPDATE users SET role = 'client', expires_at = '' WHERE username = ?",
-            (row["username"],),
-        )
-        db.audit(conn, user, "role_changed", None, {"username": row["username"], "role": "client"})
-        flash(
-            request, f"{row['username']} is now a client. Their work and access stay as they were."
-        )
-        return redirect("/dashboard#pocs")
+        row = account_row(conn, name)
+        if not str(row["password_hash"]).startswith("!"):
+            flash(request, f"{row['username']} has already set a password.", "error")
+            return redirect("/dashboard#people")
+        result = invites.send(conn, request, user, row["username"], row["email"])
+        invites.remember_link(request, result, row["email"])
+        flash(request, result.message, "info" if result.ok else "error")
+        return redirect("/dashboard")
 
-    @app.post("/dashboard/poc/{name}/end")
-    async def console_end(name: str, request: Request, user: User, conn: Conn):
+    @app.post("/dashboard/people/{name}/remove")
+    async def console_remove(name: str, request: Request, user: User, conn: Conn):
         await form_with_csrf(request)
-        row = account(conn, name)
-        if row["role"] != "trial":
-            raise HTTPException(status_code=400, detail="Not a POC account")
-        end = db.now()
-        conn.execute("UPDATE users SET expires_at = ? WHERE username = ?", (end, row["username"]))
-        db.audit(conn, user, "trial_ended", None, {"username": row["username"]})
-        flash(request, f"Ended {row['username']}'s POC. Their data stays; extend it to reopen.")
-        return redirect("/dashboard#pocs")
+        row = account_row(conn, name)
+        if row["username"].lower() == user.lower():
+            flash(request, "You can't remove yourself.", "error")
+            return redirect("/dashboard#people")
+        invites.remove_account(conn, row["username"], user)
+        drop_agent(request, row["username"])
+        flash(request, f"Removed {row['username']}.")
+        return redirect("/dashboard#people")
 
     @app.post("/dashboard/people/{name}/grant")
     async def console_grant(name: str, request: Request, user: User, conn: Conn):
         form = await form_with_csrf(request)
-        row = account(conn, name)
+        row = account_row(conn, name)
         added = [
             eid
             for eid in engagement_ids(conn, form.get("engagements"))
@@ -291,9 +297,9 @@ def register(app: FastAPI) -> None:
             db.audit(conn, user, "access_granted", eid, {"username": row["username"]})
         flash(
             request,
-            f"{row['username']} can now open {len(added)} more client(s)."
+            f"{row['username']} can now open {len(added)} more engagement(s)."
             if added
-            else "Pick a client they don't have yet.",
+            else "Pick an engagement they don't have yet.",
             "info" if added else "error",
         )
         return redirect("/dashboard#people")
@@ -301,7 +307,7 @@ def register(app: FastAPI) -> None:
     @app.post("/dashboard/people/{name}/revoke/{eid}")
     async def console_revoke(name: str, eid: int, request: Request, user: User, conn: Conn):
         await form_with_csrf(request)
-        row = account(conn, name)
+        row = account_row(conn, name)
         access.revoke(conn, eid, row["username"])
         db.audit(conn, user, "access_removed", eid, {"username": row["username"]})
         flash(request, f"Removed {row['username']}'s access.")
